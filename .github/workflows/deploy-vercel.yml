@@ -48,6 +48,7 @@ jobs:
             PROJ_ID=$(echo "$PROJ_RES" | jq -r '.id')
           fi
           echo "Vercel Project ID: $PROJ_ID"
+          export VERCEL_PROJECT_ID="$PROJ_ID"
           mkdir -p .vercel
           echo "{\"orgId\":\"${VERCEL_ORG_ID}\",\"projectId\":\"${PROJ_ID}\"}" > .vercel/project.json
           npx --yes vercel deploy --prod --token="${VERCEL_TOKEN}" --yes
