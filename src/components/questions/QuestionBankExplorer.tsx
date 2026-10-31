@@ -192,12 +192,17 @@ export const QuestionBankExplorer: React.FC<QuestionBankExplorerProps> = ({
                   value={selectedModel}
                   onChange={(e) => setSelectedModel(e.target.value)}
                   style={{
-                    padding: "4px 10px",
+                    padding: "5px 14px",
                     borderRadius: "var(--r-pill)",
                     border: "1px solid var(--ln)",
                     background: "var(--sf2)",
                     color: "var(--ink)",
-                    fontSize: "0.82rem"
+                    fontSize: "0.84rem",
+                    outline: "none",
+                    cursor: "pointer",
+                    WebkitAppearance: "none",
+                    appearance: "none",
+                    boxShadow: "0 1px 3px rgba(0,0,0,0.1)"
                   }}
                 >
                   <option value="all">جميع النماذج</option>

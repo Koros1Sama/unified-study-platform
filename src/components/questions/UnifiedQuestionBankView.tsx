@@ -804,8 +804,10 @@ export const UnifiedQuestionBankView: React.FC<UnifiedQuestionBankViewProps> = (
           ))}
         </div>
 
-        <div className="manual-q-input">
-          <Icons.List size={14} />
+        <div className="manual-q-input" title="تصفية البنك بأرقام أسئلة محددة أو نطاق (مثال: 1-25 أو 3,7,12)">
+          <span className="manual-q-ic">
+            <Icons.List size={14} />
+          </span>
           <input
             type="text"
             value={manualFilter}

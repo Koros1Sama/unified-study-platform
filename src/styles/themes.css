@@ -18,10 +18,10 @@
   --warn: #f59e0b;
   --warn-g: color-mix(in srgb, var(--warn) 16%, transparent);
 
-  /* Radius */
-  --r-s: 6px;
-  --r-m: 10px;
-  --r-l: 16px;
+  /* Radius — Smooth Organic Curvature System */
+  --r-s: 10px;
+  --r-m: 16px;
+  --r-l: 22px;
   --r-pill: 9999px;
 
   /* Font */

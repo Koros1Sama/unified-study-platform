@@ -348,7 +348,7 @@ export const GlobalSearchModal: React.FC<GlobalSearchModalProps> = ({
               cursor: "pointer",
               width: "28px",
               height: "28px",
-              borderRadius: "6px",
+              borderRadius: "50%",
               display: "inline-grid",
               placeItems: "center",
               flexShrink: 0
@@ -362,7 +362,7 @@ export const GlobalSearchModal: React.FC<GlobalSearchModalProps> = ({
             style={{
               fontSize: "0.72rem",
               padding: "2px 7px",
-              borderRadius: "var(--r-s)",
+              borderRadius: "var(--r-pill)",
               background: "var(--sf)",
               border: "1px solid var(--ln)",
               color: "var(--ink-m)",

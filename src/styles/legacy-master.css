@@ -7291,7 +7291,7 @@ button.ref-chip {
         gap: 10px;
         background: var(--sf);
         border: 1px solid var(--ln);
-        border-radius: var(--r-pill);
+        border-radius: 9999px !important;
         padding: 8px 18px;
         margin-bottom: 14px;
         box-shadow: 0 1px 4px rgba(0, 0, 0, 0.18);
@@ -7311,6 +7311,16 @@ button.ref-chip {
         color: var(--ink);
         font-size: 0.88rem;
         font-family: var(--fa);
+        -webkit-appearance: none;
+        appearance: none;
+        border-radius: 0;
+      }
+      .unified-search-box input:focus {
+        outline: none;
+      }
+      .unified-search-box input::-webkit-search-decoration,
+      .unified-search-box input::-webkit-search-cancel-button {
+        display: none;
       }
       .unified-search-box input::placeholder {
         color: var(--ink-f);

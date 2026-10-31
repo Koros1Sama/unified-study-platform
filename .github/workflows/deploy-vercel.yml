@@ -32,11 +32,22 @@ jobs:
         run: npm run build
 
       - name: Deploy to Vercel
-        uses: amondnet/vercel-action@v25
-        id: vercel-deployment
-        with:
-          vercel-token: ${{ secrets.VERCEL_TOKEN }}
-          vercel-org-id: ${{ secrets.VERCEL_ORG_ID }}
-          vercel-project-name: 'unified-study-platform'
-          vercel-args: '--prod'
-          working-directory: ./
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+        run: |
+          echo "Connecting to Vercel API..."
+          PROJ_RES=$(curl -s -X POST "https://api.vercel.com/v9/projects?teamId=${VERCEL_ORG_ID}" \
+            -H "Authorization: Bearer ${VERCEL_TOKEN}" \
+            -H "Content-Type: application/json" \
+            -d '{"name": "unified-study-platform", "framework": "vite"}')
+          PROJ_ID=$(echo "$PROJ_RES" | jq -r '.id // empty')
+          if [ -z "$PROJ_ID" ]; then
+            PROJ_RES=$(curl -s "https://api.vercel.com/v9/projects/unified-study-platform?teamId=${VERCEL_ORG_ID}" \
+              -H "Authorization: Bearer ${VERCEL_TOKEN}")
+            PROJ_ID=$(echo "$PROJ_RES" | jq -r '.id')
+          fi
+          echo "Vercel Project ID: $PROJ_ID"
+          mkdir -p .vercel
+          echo "{\"orgId\":\"${VERCEL_ORG_ID}\",\"projectId\":\"${PROJ_ID}\"}" > .vercel/project.json
+          npx --yes vercel deploy --prod --token="${VERCEL_TOKEN}" --yes
