@@ -1,0 +1,49 @@
+{
+  "name": "المنصة التعليمية الموحدة — كلية الحاسوب",
+  "short_name": "Study Platform",
+  "description": "المنصة الأكاديمية الشاملة والموحدة لجميع المقررات الدراسية — ملخصات، سلايدات، جداول مقارنة، وبنوك أسئلة متطورة",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#0b0e17",
+  "theme_color": "#0b0e17",
+  "dir": "rtl",
+  "lang": "ar",
+  "categories": ["education", "productivity"],
+  "icons": [
+    {
+      "src": "/icons/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    },
+    {
+      "src": "/icons/icon-32.png",
+      "sizes": "32x32",
+      "type": "image/png"
+    },
+    {
+      "src": "/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/favicon.ico",
+      "sizes": "64x64 32x32 24x24 16x16",
+      "type": "image/x-icon"
+    }
+  ]
+}

@@ -1,0 +1,358 @@
+/* ==============================================================================
+   المنصة التعليمية الموحدة — نظام الثيمات الـ 11 والنمط المزدوج
+   11 Themes (Light & Night Modes) · Two-Tone Swatches (135deg)
+   Zero Emojis Standard
+   ============================================================================== */
+
+:root {
+  /* Dynamic Palette */
+  --acc-b: color-mix(in srgb, var(--acc) 80%, #fff);
+  --acc-d: color-mix(in srgb, var(--acc) 18%, #000);
+  --acc-g: color-mix(in srgb, var(--acc) 16%, transparent);
+  --ink-f: color-mix(in srgb, var(--ink-m) 40%, transparent);
+  --sh: 0 4px 20px rgba(0, 0, 0, 0.35);
+  --ok: #10b981;
+  --ok-g: color-mix(in srgb, var(--ok) 16%, transparent);
+  --err: #ef4444;
+  --err-g: color-mix(in srgb, var(--err) 16%, transparent);
+  --warn: #f59e0b;
+  --warn-g: color-mix(in srgb, var(--warn) 16%, transparent);
+
+  /* Radius */
+  --r-s: 6px;
+  --r-m: 10px;
+  --r-l: 16px;
+  --r-pill: 9999px;
+
+  /* Font */
+  --font-main: "Cairo", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+}
+
+/* ------------------------------------------------------------------------------
+   1. DARK / NIGHT MODES (النمط المسائي الافتراضي)
+   ------------------------------------------------------------------------------ */
+
+[data-theme="amber"],
+html:not([data-theme]) {
+  --bg: #0c0d10;
+  --bg-s: #13151b;
+  --sf: #191c24;
+  --sf2: #212530;
+  --ln: #2d3342;
+  --ln-s: #242936;
+  --ink: #f0f3f8;
+  --ink-m: #9ba7be;
+  --acc: #f5b13d;
+}
+
+[data-theme="amber-classic"] {
+  --bg: #0d0c0a;
+  --bg-s: #16140f;
+  --sf: #1c1914;
+  --sf2: #25211a;
+  --ln: #34302a;
+  --ln-s: #28241f;
+  --ink: #f4ede0;
+  --ink-m: #a89e8c;
+  --acc: #d4a24c;
+}
+
+[data-theme="obsidian"] {
+  --bg: #090a0f;
+  --bg-s: #10121a;
+  --sf: #161924;
+  --sf2: #1e2230;
+  --ln: #2a3044;
+  --ln-s: #212638;
+  --ink: #f8fafc;
+  --ink-m: #94a3b8;
+  --acc: #38bdf8;
+}
+
+[data-theme="emerald"] {
+  --bg: #070d0d;
+  --bg-s: #0d1616;
+  --sf: #131f1f;
+  --sf2: #1a2b2b;
+  --ln: #263e3e;
+  --ln-s: #1d3030;
+  --ink: #edf8f8;
+  --ink-m: #8eb0b0;
+  --acc: #34d399;
+}
+
+[data-theme="ocean"] {
+  --bg: #070d14;
+  --bg-s: #0d151f;
+  --sf: #121e2c;
+  --sf2: #1a2a3c;
+  --ln: #24384e;
+  --ln-s: #1c2d3f;
+  --ink: #eef6fd;
+  --ink-m: #8fa9c4;
+  --acc: #5b9bff;
+}
+
+[data-theme="amethyst"] {
+  --bg: #0b0813;
+  --bg-s: #120e20;
+  --sf: #19142b;
+  --sf2: #221b3b;
+  --ln: #352c59;
+  --ln-s: #292246;
+  --ink: #f3f0fc;
+  --ink-m: #a59dc4;
+  --acc: #a78bfa;
+}
+
+[data-theme="crimson"] {
+  --bg: #0f090b;
+  --bg-s: #180e12;
+  --sf: #211419;
+  --sf2: #2c1b22;
+  --ln: #452835;
+  --ln-s: #361f2a;
+  --ink: #faedf1;
+  --ink-m: #b89aa5;
+  --acc: #fb7185;
+}
+
+[data-theme="neon"] {
+  --bg: #0a0a0f;
+  --bg-s: #111119;
+  --sf: #171722;
+  --sf2: #1f1f2e;
+  --ln: #2e2e44;
+  --ln-s: #25253a;
+  --ink: #f2f2fa;
+  --ink-m: #9d9db8;
+  --acc: #22d3ee;
+}
+
+[data-theme="mist"] {
+  --bg: #0e1013;
+  --bg-s: #15181d;
+  --sf: #1c2026;
+  --sf2: #242932;
+  --ln: #333a45;
+  --ln-s: #292f39;
+  --ink: #eef1f5;
+  --ink-m: #a0aab8;
+  --acc: #c9d4e3;
+}
+
+[data-theme="sage"] {
+  --bg: #0c0f0b;
+  --bg-s: #131711;
+  --sf: #1a2017;
+  --sf2: #232b1f;
+  --ln: #37422f;
+  --ln-s: #2c3526;
+  --ink: #f0f4ec;
+  --ink-m: #a3b298;
+  --acc: #a3b18a;
+}
+
+[data-theme="rose"] {
+  --bg: #100b0e;
+  --bg-s: #181114;
+  --sf: #20171c;
+  --sf2: #2a1e25;
+  --ln: #47303c;
+  --ln-s: #3a2731;
+  --ink: #fbf0f3;
+  --ink-m: #bda0ac;
+  --acc: #f0a6c8;
+}
+
+/* ------------------------------------------------------------------------------
+   2. LIGHT MODES (النمط النهاري العالي التباين)
+   ------------------------------------------------------------------------------ */
+
+html[data-mode="light"] {
+  --acc-b: color-mix(in srgb, var(--acc) 80%, #000);
+  --acc-d: color-mix(in srgb, var(--acc) 18%, #fff);
+  --acc-g: color-mix(in srgb, var(--acc) 14%, transparent);
+  --ink-f: color-mix(in srgb, var(--ink-m) 50%, transparent);
+  --sh: 0 1px 3px rgba(0, 0, 0, 0.06), 0 10px 25px -8px rgba(0, 0, 0, 0.10);
+  --ok: #15803d;
+  --ok-g: color-mix(in srgb, var(--ok) 14%, transparent);
+  --err: #dc2626;
+  --err-g: color-mix(in srgb, var(--err) 12%, transparent);
+  --warn: #d97706;
+  --warn-g: color-mix(in srgb, var(--warn) 14%, transparent);
+}
+
+html[data-mode="light"][data-theme="amber"],
+html[data-mode="light"]:not([data-theme]) {
+  --bg: #faf7f2;
+  --bg-s: #f2ece0;
+  --sf: #ffffff;
+  --sf2: #ede5d5;
+  --ln: #ded3be;
+  --ln-s: #eae0ce;
+  --ink: #1e1913;
+  --ink-m: #6b5f4d;
+  --acc: #b47814;
+}
+
+html[data-mode="light"][data-theme="amber-classic"] {
+  --bg: #f9f6ef;
+  --bg-s: #f0e9dc;
+  --sf: #ffffff;
+  --sf2: #eae0cf;
+  --ln: #d8cbb2;
+  --ln-s: #e5dac3;
+  --ink: #221c12;
+  --ink-m: #6e5f48;
+  --acc: #9e6b18;
+}
+
+html[data-mode="light"][data-theme="obsidian"] {
+  --bg: #f5f8fc;
+  --bg-s: #ebf1f8;
+  --sf: #ffffff;
+  --sf2: #e1ebf5;
+  --ln: #cbd9e8;
+  --ln-s: #dce5f0;
+  --ink: #0d1522;
+  --ink-m: #4b5d73;
+  --acc: #0284c7;
+}
+
+html[data-mode="light"][data-theme="emerald"] {
+  --bg: #f3faf6;
+  --bg-s: #e6f5ee;
+  --sf: #ffffff;
+  --sf2: #dcf0e5;
+  --ln: #c1e2d1;
+  --ln-s: #d4ecdf;
+  --ink: #092118;
+  --ink-m: #3e6655;
+  --acc: #059669;
+}
+
+html[data-mode="light"][data-theme="ocean"] {
+  --bg: #f3f7fd;
+  --bg-s: #e7effb;
+  --sf: #ffffff;
+  --sf2: #dce7f7;
+  --ln: #c3d7f2;
+  --ln-s: #d8e5f8;
+  --ink: #0a1728;
+  --ink-m: #415977;
+  --acc: #2563eb;
+}
+
+html[data-mode="light"][data-theme="amethyst"] {
+  --bg: #f9f6fd;
+  --bg-s: #f1eafb;
+  --sf: #ffffff;
+  --sf2: #e9def7;
+  --ln: #d7c4f0;
+  --ln-s: #e6d9f8;
+  --ink: #190f2b;
+  --ink-m: #5a4675;
+  --acc: #7c3aed;
+}
+
+html[data-mode="light"][data-theme="crimson"] {
+  --bg: #fdf5f7;
+  --bg-s: #f9e9ec;
+  --sf: #ffffff;
+  --sf2: #f5dde2;
+  --ln: #eac1c9;
+  --ln-s: #f3d4da;
+  --ink: #260e15;
+  --ink-m: #75414d;
+  --acc: #e11d48;
+}
+
+html[data-mode="light"][data-theme="neon"] {
+  --bg: #f1fbfd;
+  --bg-s: #e1f6fa;
+  --sf: #ffffff;
+  --sf2: #d2f1f7;
+  --ln: #b1e5ee;
+  --ln-s: #caedf3;
+  --ink: #071f25;
+  --ink-m: #335e68;
+  --acc: #0891b2;
+}
+
+html[data-mode="light"][data-theme="mist"] {
+  --bg: #f8fafc;
+  --bg-s: #eff3f7;
+  --sf: #ffffff;
+  --sf2: #e2e8f0;
+  --ln: #cbd5e1;
+  --ln-s: #dce3eb;
+  --ink: #182230;
+  --ink-m: #596779;
+  --acc: #475569;
+}
+
+html[data-mode="light"][data-theme="sage"] {
+  --bg: #f5f8f3;
+  --bg-s: #eaf1e7;
+  --sf: #ffffff;
+  --sf2: #dfebdc;
+  --ln: #c4d7bf;
+  --ln-s: #d7e4d3;
+  --ink: #141f11;
+  --ink-m: #475f42;
+  --acc: #4d7c0f;
+}
+
+html[data-mode="light"][data-theme="rose"] {
+  --bg: #fdf6f9;
+  --bg-s: #faebf2;
+  --sf: #ffffff;
+  --sf2: #f5deea;
+  --ln: #ecc3d5;
+  --ln-s: #f4d6e4;
+  --ink: #260f1c;
+  --ink-m: #75445d;
+  --acc: #db2777;
+}
+
+/* ------------------------------------------------------------------------------
+   3. TWO-TONE SWATCHES (دوائر الثيم المقسومة بزاوية 135 درجة)
+   ------------------------------------------------------------------------------ */
+
+.tdot {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  border: 2px solid var(--ln);
+  cursor: pointer;
+  transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1), border-color 0.2s;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+  display: inline-block;
+  padding: 0;
+}
+
+.tdot:hover {
+  transform: scale(1.18);
+  border-color: var(--ink);
+}
+
+.tdot.active {
+  transform: scale(1.15);
+  border-color: var(--ink);
+  outline: 2px solid var(--acc);
+  outline-offset: 2px;
+}
+
+.tdot-amber { background: linear-gradient(135deg, #b47814 50%, #f5b13d 50%); }
+.tdot-amber-classic { background: linear-gradient(135deg, #9e6b18 50%, #d4a24c 50%); }
+.tdot-obsidian { background: linear-gradient(135deg, #0284c7 50%, #38bdf8 50%); }
+.tdot-emerald { background: linear-gradient(135deg, #059669 50%, #34d399 50%); }
+.tdot-ocean { background: linear-gradient(135deg, #2563eb 50%, #5b9bff 50%); }
+.tdot-amethyst { background: linear-gradient(135deg, #7c3aed 50%, #a78bfa 50%); }
+.tdot-crimson { background: linear-gradient(135deg, #e11d48 50%, #fb7185 50%); }
+.tdot-neon { background: linear-gradient(135deg, #0891b2 50%, #22d3ee 50%); }
+.tdot-mist { background: linear-gradient(135deg, #475569 50%, #c9d4e3 50%); }
+.tdot-sage { background: linear-gradient(135deg, #4d7c0f 50%, #a3b18a 50%); }
+.tdot-rose { background: linear-gradient(135deg, #db2777 50%, #f0a6c8 50%); }
