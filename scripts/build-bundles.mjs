@@ -68,7 +68,7 @@ const SUBJECTS = {
     professor_name: "د. منصور نعمان",
     accent_color: "#eab308",
     icon_name: "award",
-    term: 1
+    term: 2
   }
 };
 

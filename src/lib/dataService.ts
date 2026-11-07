@@ -122,7 +122,7 @@ export const DataService = {
         code: "pm",
         name_ar: "إدارة المشاريع",
         name_en: "Project Management",
-        term: 1,
+        term: 2,
         professor_name: "د. منصور نعمان",
         accent_color: "#eab308",
         icon_name: "award",
