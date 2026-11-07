@@ -1108,7 +1108,7 @@
 
 .exam-setup {
   background: var(--bg-s); border: 1px solid var(--ln);
-  border-radius: var(--r-l); padding: 20px 22px; max-width: 880px; margin: 0 auto;
+  border-radius: var(--r-l); padding: 20px 22px; max-width: 1040px; margin: 0 auto;
 }
 .exam-setup-head { display: flex; gap: 13px; align-items: flex-start; margin-bottom: 18px; }
 .exam-setup-icon {
@@ -1366,8 +1366,60 @@
 }
 
 @media (max-width: 680px) {
-  .def-hero { padding: 16px 16px 16px 20px; }
-  .def-hero-stats { grid-template-columns: 1fr 1fr; }
+  .exam-setup {
+    padding: 14px 14px !important;
+    border-radius: var(--r-m) !important;
+  }
+  .def-hero-stats,
+  .gloss-hero-stats,
+  .pat-hero-stats {
+    display: flex !important;
+    overflow-x: auto !important;
+    -webkit-overflow-scrolling: touch !important;
+    scrollbar-width: none !important;
+    gap: 8px !important;
+    margin-top: 10px !important;
+    padding-bottom: 4px !important;
+  }
+  .def-hero-stats::-webkit-scrollbar,
+  .gloss-hero-stats::-webkit-scrollbar,
+  .pat-hero-stats::-webkit-scrollbar {
+    display: none !important;
+  }
+  .def-stat {
+    flex: 0 0 auto !important;
+    min-width: 105px !important;
+    padding: 7px 10px !important;
+    border-radius: var(--r-s) !important;
+  }
+  .def-stat b {
+    font-size: 0.98rem !important;
+  }
+  .def-stat span {
+    font-size: 0.68rem !important;
+  }
+  .def-card {
+    padding: 12px 14px !important;
+    border-radius: var(--r-m) !important;
+    gap: 8px !important;
+  }
+  .def-term-title {
+    font-size: 1rem !important;
+  }
+  .def-term-ar {
+    font-size: 0.84rem !important;
+  }
+  .def-body-en {
+    font-size: 0.88rem !important;
+    line-height: 1.5 !important;
+  }
+  .def-body-ar {
+    font-size: 0.84rem !important;
+  }
+  .def-extra {
+    padding: 8px 10px !important;
+  }
+  .def-hero { padding: 14px 14px; }
   .def-toolbar { flex-direction: column; align-items: stretch; }
   .def-search { min-width: 0; }
   .def-tool-actions { justify-content: flex-start; }
@@ -1683,6 +1735,142 @@
 .fchip-danger:hover {
   background: rgba(239, 68, 68, 0.15) !important;
 }
+
+/* ==============================================================================
+   مستكشف بنك الأسئلة الأكاديمي (.explorer-results-grid, .explorer-card)
+   ============================================================================== */
+.explorer-results-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 280px), 1fr));
+  gap: 12px;
+}
+
+.explorer-card {
+  background: var(--sf);
+  border: 1px solid var(--ln);
+  border-radius: var(--r-m);
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  transition: border-color var(--dur) var(--ease), box-shadow var(--dur) var(--ease);
+}
+
+.explorer-card:hover {
+  border-color: color-mix(in srgb, var(--acc) 50%, var(--ln));
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.2);
+}
+
+@media (max-width: 680px) {
+  .explorer-results-grid {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+}
+
+/* ==============================================================================
+   لوحة الإعدادات المنظمة بالأكورديون (.set-acc-list)
+   ============================================================================== */
+.set-acc-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.set-acc-item {
+  border: 1px solid var(--ln);
+  border-radius: var(--r-m);
+  background: var(--sf);
+  overflow: hidden;
+  transition: border-color var(--dur) var(--ease), box-shadow var(--dur) var(--ease);
+}
+
+.set-acc-item.is-open {
+  border-color: color-mix(in srgb, var(--acc) 45%, var(--ln));
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.2);
+}
+
+.set-acc-head {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 11px 14px;
+  background: transparent;
+  border: none;
+  color: var(--ink);
+  cursor: pointer;
+  text-align: start;
+  transition: background var(--dur) var(--ease);
+}
+
+.set-acc-head:hover {
+  background: color-mix(in srgb, var(--acc) 8%, transparent);
+}
+
+.set-acc-head-title {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  font-size: 0.86rem;
+  font-weight: 800;
+  color: var(--ink);
+}
+
+.set-acc-head-title .svg-ic {
+  color: var(--acc);
+  flex-shrink: 0;
+}
+
+.set-acc-head-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.set-acc-badge {
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--ink-m);
+  background: var(--sf2);
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--ln-s);
+  white-space: nowrap;
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.set-acc-chevron {
+  color: var(--ink-m);
+  transition: transform 0.25s var(--ease);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.set-acc-item.is-open .set-acc-chevron {
+  transform: rotate(180deg);
+  color: var(--acc);
+}
+
+.set-acc-body {
+  padding: 12px 14px 16px;
+  border-top: 1px solid var(--ln-s);
+  background: color-mix(in srgb, var(--bg-s) 60%, var(--sf));
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  animation: rise 0.2s var(--ease);
+}
+
+.set-acc-body .setgroup {
+  margin-bottom: 0;
+}
+
 
 
 

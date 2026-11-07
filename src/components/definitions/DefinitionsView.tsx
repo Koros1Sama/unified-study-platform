@@ -103,20 +103,12 @@ export const DefinitionsView: React.FC<DefinitionsViewProps> = ({
       if (categoryFilter !== "all" && item.category !== categoryFilter) return false;
       if (tierFilter !== "all" && getDefinitionTier(item.importance) !== tierFilter) return false;
       if (!q) return true;
-      const haystack = [
-        item.term_en,
-        item.term_ar,
-        item.category,
-        item.def_en,
-        item.def_ar,
-        item.lec,
-        item.ref,
-        ...(item.triggers || []).flatMap((t) => [t.en, t.ar]),
-        item.exam_pitfall?.en || "",
-        item.exam_pitfall?.ar || ""
-      ]
-        .join(" ")
-        .toLowerCase();
+
+      const triggersText = (item.triggers || []).map((t) => `${t.en} ${t.ar || ""}`).join(" ");
+      const pitfallText = item.exam_pitfall ? `${item.exam_pitfall.en || ""} ${item.exam_pitfall.ar || ""}` : "";
+      const haystack = normalize(
+        `${item.term_en} ${item.term_ar || ""} ${item.def_en} ${item.def_ar || ""} ${item.category || ""} ${triggersText} ${pitfallText}`
+      );
       return haystack.includes(q);
     });
   }, [items, query, lectureFilter, categoryFilter, tierFilter]);
@@ -177,7 +169,7 @@ export const DefinitionsView: React.FC<DefinitionsViewProps> = ({
           <h3 className="def-term-title" dir="ltr">
             {item.term_en}
           </h3>
-          <div className="def-term-ar">{item.term_ar}</div>
+          {item.term_ar && <div className="def-term-ar">{item.term_ar}</div>}
         </div>
 
         <div className="def-body">
@@ -223,7 +215,7 @@ export const DefinitionsView: React.FC<DefinitionsViewProps> = ({
           </div>
         )}
 
-        <div className="def-footer">
+        <div className="def-card-actions">
           {item.ref && (
             <button
               type="button"
@@ -274,41 +266,45 @@ export const DefinitionsView: React.FC<DefinitionsViewProps> = ({
 
   return (
     <div id="definitionsView" className={`def-view ${flashcardMode ? "def-flashcard-mode" : ""}`}>
-      <div className="def-hero">
-        <div className="def-kicker">
+      {/* الترويسة الأصيلة الكانونية (.headline) المتطابقة مع السلايدات والملخص */}
+      <div className="headline">
+        <div className="kicker">
           <span className="dot" />
           <span>بنك التعاريف والمصطلحات الامتحانية</span>
         </div>
-        <h1 className="def-title">{data?.title_ar || "بنك التعاريف والمصطلحات"}</h1>
-        {data?.sub_ar && <p className="def-sub">{data.sub_ar}</p>}
+        <h1>{data?.title_ar || "بنك التعاريف والمصطلحات الأكاديمية"}</h1>
+        <p className="sub">
+          {data?.sub_ar || "مصطلحات منتقاة ومصنفة بنظام الأهمية الثلاثي (حتمي، داعم، تكميلي) وفق السلايدات والامتحانات الرسمية."}
+        </p>
+      </div>
 
-        <div className="def-hero-stats">
-          <div className="def-stat">
-            <b>{items.length}</b>
-            <span>مصطلحاً بنكياً</span>
-          </div>
-          <div className="def-stat">
-            <b>{tierCounts[1]}</b>
-            <span>درجة أولى (حتمي)</span>
-          </div>
-          <div className="def-stat">
-            <b>{tierCounts[2]}</b>
-            <span>درجة ثانية (داعم)</span>
-          </div>
-          <div className="def-stat">
-            <b>{tierCounts[3]}</b>
-            <span>درجة ثالثة (تكميلي)</span>
-          </div>
-          <div className="def-stat">
-            <b>{lectures.length}</b>
-            <span>محاضرات مغطاة</span>
-          </div>
-          <div className="def-stat">
-            <b>
-              {masteredCount} / {items.length}
-            </b>
-            <span>مصطلحات أتقنتها</span>
-          </div>
+      {/* بطاقات الإحصاءات السريعة بتجاوب أفقي سلس */}
+      <div className="def-hero-stats">
+        <div className="def-stat">
+          <b>{items.length}</b>
+          <span>مصطلحاً بنكياً</span>
+        </div>
+        <div className="def-stat">
+          <b>{tierCounts[1]}</b>
+          <span>درجة أولى (حتمي)</span>
+        </div>
+        <div className="def-stat">
+          <b>{tierCounts[2]}</b>
+          <span>درجة ثانية (داعم)</span>
+        </div>
+        <div className="def-stat">
+          <b>{tierCounts[3]}</b>
+          <span>درجة ثالثة (تكميلي)</span>
+        </div>
+        <div className="def-stat">
+          <b>{lectures.length}</b>
+          <span>محاضرات مغطاة</span>
+        </div>
+        <div className="def-stat">
+          <b>
+            {masteredCount} / {items.length}
+          </b>
+          <span>مصطلحات أتقنتها</span>
         </div>
       </div>
 

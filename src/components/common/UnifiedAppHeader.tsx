@@ -104,26 +104,18 @@ export const UnifiedAppHeader: React.FC<UnifiedAppHeaderProps> = ({
 }) => {
   const [isHidden, setIsHidden] = useState(false);
   const [isSetOpen, setIsSetOpen] = useState(false);
-  const [isMoreOpen, setIsMoreOpen] = useState(false);
+  const [openSettingGroup, setOpenSettingGroup] = useState<string | null>(null);
   const [theme, setTheme] = useState<string>(() => localStorage.getItem("unified_theme") || "amber");
   const [mode, setMode] = useState<"dark" | "light">(() => (localStorage.getItem("unified_mode") as "dark" | "light") || "dark");
   const lastScrollY = useRef(0);
-  const moreRef = useRef<HTMLDivElement>(null);
   const setPanelRef = useRef<HTMLDivElement>(null);
   const btnSetRef = useRef<HTMLButtonElement>(null);
 
   const can = (view: ActiveView) => availableViews?.[view] !== false;
 
-  useEffect(() => {
-    if (!isMoreOpen) return;
-    const handleClick = (event: MouseEvent) => {
-      if (moreRef.current && !moreRef.current.contains(event.target as Node)) {
-        setIsMoreOpen(false);
-      }
-    };
-    document.addEventListener("mousedown", handleClick);
-    return () => document.removeEventListener("mousedown", handleClick);
-  }, [isMoreOpen]);
+  const toggleSettingGroup = (group: string) => {
+    setOpenSettingGroup((curr) => (curr === group ? null : group));
+  };
 
   // تحديث الثيم والنمط على مستوى مستند الـ HTML
   useEffect(() => {
@@ -186,6 +178,9 @@ export const UnifiedAppHeader: React.FC<UnifiedAppHeaderProps> = ({
     setMode((prev) => (prev === "dark" ? "light" : "dark"));
   };
 
+  const currentThemeObj = THEME_LIST.find((t) => t.id === theme);
+  const currentThemeName = currentThemeObj ? currentThemeObj.name : theme;
+
   return (
     <div className={`topbar ${isHidden ? "topbar-hidden" : ""}`}>
       <div className="topbar-in">
@@ -217,7 +212,7 @@ export const UnifiedAppHeader: React.FC<UnifiedAppHeaderProps> = ({
           </span>
         </div>
 
-        {/* Central Segmented Pills Navigation */}
+        {/* Central Segmented Pills Navigation — كل الأقسام معروضة مباشرة بدون قائمة المزيد */}
         <div className="top-nav-wrap">
           <div className="seg-pills">
             <button
@@ -227,11 +222,7 @@ export const UnifiedAppHeader: React.FC<UnifiedAppHeaderProps> = ({
               onClick={() => onSelectView("slides")}
               title="عرض سلايدات المحاضرات والشروح"
             >
-              <svg className="svg-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                <rect x="2" y="3" width="20" height="14" rx="2"/>
-                <path d="M8 21h8"/>
-                <path d="M12 17v4"/>
-              </svg>
+              <Icons.Slides size={16} />
               <span>السلايدات</span>
             </button>
 
@@ -242,12 +233,7 @@ export const UnifiedAppHeader: React.FC<UnifiedAppHeaderProps> = ({
               onClick={() => onSelectView("summary")}
               title="الملخص النظري الشامل"
             >
-              <svg className="svg-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-                <polyline points="14 2 14 8 20 8"/>
-                <line x1="16" y1="13" x2="8" y2="13"/>
-                <line x1="16" y1="17" x2="8" y2="17"/>
-              </svg>
+              <Icons.Summary size={16} />
               <span>الملخص</span>
             </button>
 
@@ -258,9 +244,7 @@ export const UnifiedAppHeader: React.FC<UnifiedAppHeaderProps> = ({
               onClick={() => onSelectView("emergency")}
               title="ملخص الملخص — الكبسولات المركزة واختبار الفخاخ"
             >
-              <svg className="svg-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
-              </svg>
+              <Icons.Emergency size={16} />
               <span>ملخص الملخص</span>
             </button>
 
@@ -271,12 +255,7 @@ export const UnifiedAppHeader: React.FC<UnifiedAppHeaderProps> = ({
               onClick={() => onSelectView("tables")}
               title="جداول المقارنات الشارحة المفصلة"
             >
-              <svg className="svg-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                <rect x="3" y="3" width="18" height="18" rx="2"/>
-                <path d="M3 9h18"/>
-                <path d="M3 15h18"/>
-                <path d="M9 3v18"/>
-              </svg>
+              <Icons.Table size={16} />
               <span>الجداول</span>
             </button>
 
@@ -287,88 +266,93 @@ export const UnifiedAppHeader: React.FC<UnifiedAppHeaderProps> = ({
               onClick={() => onSelectView("questions")}
               title="بنك النماذج والأسئلة"
             >
-              <svg className="svg-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/>
-                <rect x="8" y="2" width="8" height="4" rx="1" ry="1"/>
-                <path d="M9 14l2 2 4-4"/>
-              </svg>
+              <Icons.Questions size={16} />
               <span>النماذج</span>
             </button>
 
-            {can("interactive") && (
-            <button
-              type="button"
-              className={`seg-pill ${activeView === "interactive" ? "active" : ""}`}
-              onClick={() => onSelectView("interactive")}
-              title="الاستوديوهات والمحاكيات التفاعلية"
-            >
-              <svg className="svg-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                <polygon points="12 2 2 7 12 12 22 7 12 2"/>
-                <polyline points="2 17 12 22 22 17"/>
-                <polyline points="2 12 12 17 22 12"/>
-              </svg>
-              <span>التفاعلي</span>
-            </button>
-            )}
-
-            {/* قائمة الأدوات الإضافية: المستكشف، الاختبار، التعاريف، المعجم، الأنماط، المعمل */}
-            <div className="more-wrap" ref={moreRef}>
+            {can("explorer") && (
               <button
                 type="button"
-                className={`seg-pill ${["explorer", "exam", "definitions", "glossary", "patterns", "lab"].includes(activeView) ? "active" : ""}`}
-                onClick={() => setIsMoreOpen(!isMoreOpen)}
-                aria-expanded={isMoreOpen}
-                title="أدوات الدراسة الإضافية"
+                className={`seg-pill ${activeView === "explorer" ? "active" : ""}`}
+                onClick={() => onSelectView("explorer")}
+                title="مستكشف وباحث بنك الأسئلة المتقدم"
               >
-                <svg className="svg-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                  <circle cx="5" cy="12" r="1.6"/>
-                  <circle cx="12" cy="12" r="1.6"/>
-                  <circle cx="19" cy="12" r="1.6"/>
-                </svg>
-                <span>المزيد</span>
+                <Icons.Explorer size={16} />
+                <span>المستكشف</span>
               </button>
+            )}
 
-              {isMoreOpen && (
-                <div className="more-menu">
-                  {can("explorer") && (
-                    <button type="button" className={`more-item ${activeView === "explorer" ? "active" : ""}`} onClick={() => { onSelectView("explorer"); setIsMoreOpen(false); }}>
-                      <Icons.Explorer size={16} />
-                      <span><b>المستكشف</b><small>بحث متقدم في بنك الأسئلة</small></span>
-                    </button>
-                  )}
-                  {can("exam") && (
-                    <button type="button" className={`more-item ${activeView === "exam" ? "active" : ""}`} onClick={() => { onSelectView("exam"); setIsMoreOpen(false); }}>
-                      <Icons.Exam size={16} />
-                      <span><b>الاختبار</b><small>محاكي بدرجة وتقدير وزمن</small></span>
-                    </button>
-                  )}
-                  {can("definitions") && (
-                    <button type="button" className={`more-item ${activeView === "definitions" ? "active" : ""}`} onClick={() => { onSelectView("definitions"); setIsMoreOpen(false); }}>
-                      <Icons.Definitions size={16} />
-                      <span><b>بنك التعاريف</b><small>Terms · Triggers · Pitfalls</small></span>
-                    </button>
-                  )}
-                  {can("glossary") && (
-                    <button type="button" className={`more-item ${activeView === "glossary" ? "active" : ""}`} onClick={() => { onSelectView("glossary"); setIsMoreOpen(false); }}>
-                      <Icons.Glossary size={16} />
-                      <span><b>المعجم</b><small>مصطلحات وعبارات ثنائية اللغة</small></span>
-                    </button>
-                  )}
-                  {can("patterns") && (
-                    <button type="button" className={`more-item ${activeView === "patterns" ? "active" : ""}`} onClick={() => { onSelectView("patterns"); setIsMoreOpen(false); }}>
-                      <Icons.Patterns size={16} />
-                      <span><b>مختبر الأنماط</b><small>قواعد الحسم والاستثناءات</small></span>
-                    </button>
-                  )}
-                  {can("lab") && (
-                    <button type="button" className={`more-item ${activeView === "lab" ? "active" : ""}`} onClick={() => { onSelectView("lab"); setIsMoreOpen(false); }}>
-                      <Icons.Lab size={16} />
-                      <span><b>الملحق العملي</b><small>معمل معزول عن النظري</small></span>
-                    </button>
-                  )}
-                </div>
-              )}
-            </div>
+            {can("exam") && (
+              <button
+                type="button"
+                className={`seg-pill ${activeView === "exam" ? "active" : ""}`}
+                onClick={() => onSelectView("exam")}
+                title="محاكي الاختبار النهائي بوقت ودرجة"
+              >
+                <Icons.Exam size={16} />
+                <span>الاختبار</span>
+              </button>
+            )}
+
+            {can("definitions") && (
+              <button
+                type="button"
+                className={`seg-pill ${activeView === "definitions" ? "active" : ""}`}
+                onClick={() => onSelectView("definitions")}
+                title="بنك التعاريف والمصطلحات ونظام الأهمية الثلاثي"
+              >
+                <Icons.Definitions size={16} />
+                <span>التعاريف</span>
+              </button>
+            )}
+
+            {can("glossary") && (
+              <button
+                type="button"
+                className={`seg-pill ${activeView === "glossary" ? "active" : ""}`}
+                onClick={() => onSelectView("glossary")}
+                title="المعجم الأكاديمي ثنائي اللغة"
+              >
+                <Icons.Glossary size={16} />
+                <span>المعجم</span>
+              </button>
+            )}
+
+            {can("patterns") && (
+              <button
+                type="button"
+                className={`seg-pill ${activeView === "patterns" ? "active" : ""}`}
+                onClick={() => onSelectView("patterns")}
+                title="مختبر الأنماط وقواعد الحسم السريع"
+              >
+                <Icons.Patterns size={16} />
+                <span>الأنماط</span>
+              </button>
+            )}
+
+            {can("interactive") && (
+              <button
+                type="button"
+                className={`seg-pill ${activeView === "interactive" ? "active" : ""}`}
+                onClick={() => onSelectView("interactive")}
+                title="الاستوديوهات والمحاكيات التفاعلية"
+              >
+                <Icons.Interactive size={16} />
+                <span>التفاعلي</span>
+              </button>
+            )}
+
+            {can("lab") && (
+              <button
+                type="button"
+                className={`seg-pill ${activeView === "lab" ? "active" : ""}`}
+                onClick={() => onSelectView("lab")}
+                title="الملحق العملي المعزول"
+              >
+                <Icons.Lab size={16} />
+                <span>العملي</span>
+              </button>
+            )}
           </div>
 
           {/* أدوات السلايدات المساعدة في التوبار */}
@@ -565,7 +549,7 @@ export const UnifiedAppHeader: React.FC<UnifiedAppHeaderProps> = ({
         </div>
       </div>
 
-      {/* لوحة الإعدادات المنسدلة (.setwrap) المطابقة للأصل */}
+      {/* لوحة الإعدادات المنسدلة المنظمة بقوائم أكورديون قابلة للطي (.setwrap) */}
       {isSetOpen && (
         <div
           ref={setPanelRef}
@@ -573,398 +557,528 @@ export const UnifiedAppHeader: React.FC<UnifiedAppHeaderProps> = ({
           id="setPanel"
           onClick={(e) => e.stopPropagation()}
         >
-          {/* نمط الإضاءة */}
-          <div className="setgroup">
-            <div className="setlabel">
-              <svg className="svg-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <circle cx="12" cy="12" r="5"/>
-                <line x1="12" y1="1" x2="12" y2="3"/>
-                <line x1="12" y1="21" x2="12" y2="23"/>
-              </svg>
-              <span>نمط الإضاءة (نهاري / مسائي)</span>
-            </div>
-            <div className="setopts">
+          <div className="set-acc-list">
+            {/* 1. المظهر والثيمات والخطوط */}
+            <div className={`set-acc-item ${openSettingGroup === "appearance" ? "is-open" : ""}`}>
               <button
                 type="button"
-                className={`set-opt ${mode === "dark" ? "on" : ""}`}
-                onClick={() => setMode("dark")}
+                className="set-acc-head"
+                onClick={() => toggleSettingGroup("appearance")}
+                aria-expanded={openSettingGroup === "appearance"}
               >
-                <svg className="svg-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
-                </svg>
-                <span>مسائي (داكن)</span>
-              </button>
-              <button
-                type="button"
-                className={`set-opt ${mode === "light" ? "on" : ""}`}
-                onClick={() => setMode("light")}
-              >
-                <svg className="svg-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <circle cx="12" cy="12" r="5"/>
-                  <line x1="12" y1="1" x2="12" y2="3"/>
-                  <line x1="12" y1="21" x2="12" y2="23"/>
-                </svg>
-                <span>نهاري (فاتح)</span>
-              </button>
-            </div>
-          </div>
-
-          {/* الثيمات الـ 11 مع الأقراص المقسومة 135 درجة */}
-          <div className="setgroup">
-            <div className="setlabel">
-              <svg className="svg-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <circle cx="12" cy="12" r="10"/>
-                <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
-              </svg>
-              <span>الثيم — 11 ثيماً</span>
-            </div>
-            <div className="setopts" id="themeRow">
-              {THEME_LIST.map((t) => (
-                <button
-                  key={t.id}
-                  type="button"
-                  className={`set-opt ${theme === t.id ? "on" : ""}`}
-                  data-t={t.id}
-                  onClick={() => setTheme(t.id)}
-                >
-                  <span className="tdot" data-t={t.id}></span>
-                  <span>{t.name}</span>
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* لغة أسئلة البنك */}
-          <div className="setgroup">
-            <div className="setlabel">
-              <svg className="svg-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <circle cx="12" cy="12" r="10"/>
-                <line x1="2" y1="12" x2="22" y2="12"/>
-              </svg>
-              <span>لغة أسئلة البنك</span>
-            </div>
-            <div className="setopts">
-              <button
-                type="button"
-                className={`set-opt ${languageMode === "ar" ? "on" : ""}`}
-                onClick={() => onLanguageChange("ar")}
-              >
-                عربي
-              </button>
-              <button
-                type="button"
-                className={`set-opt ${languageMode === "en" ? "on" : ""}`}
-                onClick={() => onLanguageChange("en")}
-              >
-                English
-              </button>
-              <button
-                type="button"
-                className={`set-opt ${languageMode === "both" ? "on" : ""}`}
-                onClick={() => onLanguageChange("both")}
-              >
-                الاثنين
-              </button>
-              <button
-                type="button"
-                className={`set-opt ${languageMode === "smart" ? "on" : ""}`}
-                onClick={() => onLanguageChange("smart")}
-              >
-                <svg className="svg-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M9.5 2A2.5 2.5 0 0 1 12 4.5v15a2.5 2.5 0 0 1-4.96.44 2.5 2.5 0 0 1-2.96-3.08 3 3 0 0 1-.34-5.58 2.5 2.5 0 0 1 1.32-4.24 2.5 2.5 0 0 1 4.44-2.04z"/>
-                  <path d="M14.5 2A2.5 2.5 0 0 0 12 4.5v15a2.5 2.5 0 0 0 4.96.44 2.5 2.5 0 0 0 2.96-3.08 3 3 0 0 0 .34-5.58 2.5 2.5 0 0 0-1.32-4.24 2.5 2.5 0 0 0-4.44-2.04z"/>
-                </svg>
-                <span>ذكي (مرّر يظهر العربي)</span>
-              </button>
-            </div>
-          </div>
-
-          {/* عرض السلايدات */}
-          <div className="setgroup">
-            <div className="setlabel">
-              <Icons.Slides size={16} />
-              <span>عرض السلايدات</span>
-            </div>
-            <div className="setopts">
-              <button
-                type="button"
-                className={`set-opt ${autoTranslateSlides ? "on" : ""}`}
-                onClick={onToggleAutoTranslate}
-              >
-                <Icons.Translate size={14} />
-                <span>ترجمة تلقائية</span>
-              </button>
-              <button
-                type="button"
-                className={`set-opt ${autoExplainSlides ? "on" : ""}`}
-                onClick={onToggleAutoExplain}
-              >
-                <Icons.Tip size={14} />
-                <span>شرح تلقائي</span>
-              </button>
-            </div>
-          </div>
-
-          {/* الترتيب واللخبطة العشوائية */}
-          <div className="setgroup">
-            <div className="setlabel">
-              <Icons.Shuffle size={16} />
-              <span>الترتيب واللخبطة العشوائية</span>
-            </div>
-            <div className="setopts" style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
-              <button
-                type="button"
-                className={`set-opt ${shuffleChoices ? "on" : ""}`}
-                onClick={onToggleShuffleChoices}
-                title="خلط ترتيب خيارات كل سؤال عشوائياً لمقاومة الحفظ المكاني"
-              >
-                <Icons.Shuffle size={14} />
-                <span>لخبطة خيارات السؤال عشوائياً</span>
-              </button>
-              <button
-                type="button"
-                className={`set-opt ${shuffleQuestions ? "on" : ""}`}
-                onClick={onToggleShuffleQuestions}
-                title="ترتيب عشوائي للأسئلة يتغير تلقائياً مع كل إعادة تشغيل، مع إبقاء الأسئلة المحلولة في البداية بنفس ترتيبها المستقر"
-              >
-                <Icons.List size={14} />
-                <span>ترتيب عشوائي للأسئلة (المحلولة أولاً)</span>
+                <div className="set-acc-head-title">
+                  <Icons.Sun size={17} />
+                  <span>المظهر والثيمات والخطوط</span>
+                </div>
+                <div className="set-acc-head-meta">
+                  <span className="set-acc-badge">
+                    {mode === "dark" ? "مسائي" : "نهاري"} · {currentThemeName} · {fontScale}%
+                  </span>
+                  <span className="set-acc-chevron">
+                    <Icons.ChevronDown size={15} />
+                  </span>
+                </div>
               </button>
 
-              {shuffleQuestions && onReshuffle && (
-                <div style={{ paddingInlineStart: "6px", marginTop: "2px" }}>
-                  <button
-                    type="button"
-                    className="fchip"
-                    onClick={onReshuffle}
-                    style={{ fontSize: "0.76rem" }}
-                    title="توليد خلط عشوائي جديد الآن لبقية الأسئلة غير المحلولة"
-                  >
-                    <Icons.Rotate size={13} />
-                    <span>إعادة خلط الأسئلة الآن</span>
-                  </button>
+              {openSettingGroup === "appearance" && (
+                <div className="set-acc-body">
+                  {/* نمط الإضاءة */}
+                  <div className="setgroup">
+                    <div className="setlabel">
+                      <svg className="svg-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <circle cx="12" cy="12" r="5"/>
+                        <line x1="12" y1="1" x2="12" y2="3"/>
+                        <line x1="12" y1="21" x2="12" y2="23"/>
+                      </svg>
+                      <span>نمط الإضاءة (نهاري / مسائي)</span>
+                    </div>
+                    <div className="setopts">
+                      <button
+                        type="button"
+                        className={`set-opt ${mode === "dark" ? "on" : ""}`}
+                        onClick={() => setMode("dark")}
+                      >
+                        <svg className="svg-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+                        </svg>
+                        <span>مسائي (داكن)</span>
+                      </button>
+                      <button
+                        type="button"
+                        className={`set-opt ${mode === "light" ? "on" : ""}`}
+                        onClick={() => setMode("light")}
+                      >
+                        <svg className="svg-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <circle cx="12" cy="12" r="5"/>
+                          <line x1="12" y1="1" x2="12" y2="3"/>
+                          <line x1="12" y1="21" x2="12" y2="23"/>
+                        </svg>
+                        <span>نهاري (فاتح)</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* الثيمات الـ 11 مع الأقراص المقسومة 135 درجة */}
+                  <div className="setgroup">
+                    <div className="setlabel">
+                      <svg className="svg-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <circle cx="12" cy="12" r="10"/>
+                        <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
+                      </svg>
+                      <span>الثيم — 11 ثيماً أصيلاً</span>
+                    </div>
+                    <div className="setopts" id="themeRow">
+                      {THEME_LIST.map((t) => (
+                        <button
+                          key={t.id}
+                          type="button"
+                          className={`set-opt ${theme === t.id ? "on" : ""}`}
+                          data-t={t.id}
+                          onClick={() => setTheme(t.id)}
+                        >
+                          <span className="tdot" data-t={t.id}></span>
+                          <span>{t.name}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* مقياس وحجم الخط */}
+                  <div className="setgroup">
+                    <div className="setlabel">
+                      <Icons.Pen size={16} />
+                      <span>مقياس وحجم الخط</span>
+                    </div>
+                    <div className="setopts">
+                      {[
+                        { val: 85, label: "85% (أصغر)" },
+                        { val: 95, label: "95% (مدمج)" },
+                        { val: 100, label: "100% (افتراضي)" },
+                        { val: 110, label: "110% (مريح)" },
+                        { val: 120, label: "120% (كبير)" }
+                      ].map((opt) => (
+                        <button
+                          key={opt.val}
+                          type="button"
+                          className={`set-opt ${fontScale === opt.val ? "on" : ""}`}
+                          onClick={() => onChangeFontScale && onChangeFontScale(opt.val)}
+                        >
+                          <span>{opt.label}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
                 </div>
               )}
             </div>
-          </div>
 
-          {/* تثبيت تطبيق المنصة (PWA) */}
-          <div className="setgroup" id="setGroupPwa">
-            <div className="setlabel">
-              <Icons.Download size={16} />
-              <span>تطبيق المنصة (PWA)</span>
-            </div>
-            <div className="setopts">
-              {isPwaInstalled ? (
-                <div style={{ display: "flex", alignItems: "center", gap: "8px", padding: "8px 12px", background: "color-mix(in srgb, #10b981 12%, transparent)", border: "1px solid #10b981", borderRadius: "8px", color: "var(--ink)", width: "100%" }}>
-                  <Icons.Check size={16} style={{ color: "#10b981" }} />
-                  <span style={{ fontSize: "0.82rem", fontWeight: 700 }}>التطبيق مثبت على جهازك ويعمل أوفلاين</span>
+            {/* 2. تجربة بنك الأسئلة والحل */}
+            <div className={`set-acc-item ${openSettingGroup === "qbank" ? "is-open" : ""}`}>
+              <button
+                type="button"
+                className="set-acc-head"
+                onClick={() => toggleSettingGroup("qbank")}
+                aria-expanded={openSettingGroup === "qbank"}
+              >
+                <div className="set-acc-head-title">
+                  <Icons.Questions size={17} />
+                  <span>تجربة بنك الأسئلة والحل</span>
                 </div>
-              ) : (
-                <button
-                  type="button"
-                  className="btn btn-sm btn-primary"
-                  style={{ display: "inline-flex", alignItems: "center", gap: "8px", width: "100%", justifyContent: "center", padding: "8px 14px", borderRadius: "var(--r-pill)", fontWeight: 800 }}
-                  onClick={onPromptPwaInstall}
-                  title={isDesktop ? "تثبيت المنصة على اللابتوب (PWA)" : isIos ? "طريقة تثبيت المنصة على الشاشة الرئيسية للآيفون والآيباد" : "تثبيت المنصة كتطبيق أصيل على جهازك"}
-                >
-                  <Icons.Download size={15} />
-                  <span>{isDesktop ? "تثبيت المنصة على اللابتوب (PWA)" : isIos ? "طريقة التثبيت على الآيفون والآيباد" : "تثبيت المنصة كتطبيق على جهازك (PWA)"}</span>
-                </button>
+                <div className="set-acc-head-meta">
+                  <span className="set-acc-badge">
+                    {languageMode === "smart" ? "ذكي" : languageMode === "en" ? "English" : languageMode === "ar" ? "عربي" : "الاثنين"} · {expMode === "always" ? "شرح دائم" : expMode === "wrong_only" ? "عند الخطأ" : "يدوي"}
+                  </span>
+                  <span className="set-acc-chevron">
+                    <Icons.ChevronDown size={15} />
+                  </span>
+                </div>
+              </button>
+
+              {openSettingGroup === "qbank" && (
+                <div className="set-acc-body">
+                  {/* لغة أسئلة البنك */}
+                  <div className="setgroup">
+                    <div className="setlabel">
+                      <Icons.Translate size={16} />
+                      <span>لغة أسئلة البنك</span>
+                    </div>
+                    <div className="setopts">
+                      <button
+                        type="button"
+                        className={`set-opt ${languageMode === "ar" ? "on" : ""}`}
+                        onClick={() => onLanguageChange("ar")}
+                      >
+                        عربي
+                      </button>
+                      <button
+                        type="button"
+                        className={`set-opt ${languageMode === "en" ? "on" : ""}`}
+                        onClick={() => onLanguageChange("en")}
+                      >
+                        English
+                      </button>
+                      <button
+                        type="button"
+                        className={`set-opt ${languageMode === "both" ? "on" : ""}`}
+                        onClick={() => onLanguageChange("both")}
+                      >
+                        الاثنين
+                      </button>
+                      <button
+                        type="button"
+                        className={`set-opt ${languageMode === "smart" ? "on" : ""}`}
+                        onClick={() => onLanguageChange("smart")}
+                      >
+                        <svg className="svg-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M9.5 2A2.5 2.5 0 0 1 12 4.5v15a2.5 2.5 0 0 1-4.96.44 2.5 2.5 0 0 1-2.96-3.08 3 3 0 0 1-.34-5.58 2.5 2.5 0 0 1 1.32-4.24 2.5 2.5 0 0 1 4.44-2.04z"/>
+                          <path d="M14.5 2A2.5 2.5 0 0 0 12 4.5v15a2.5 2.5 0 0 0 4.96.44 2.5 2.5 0 0 0 2.96-3.08 3 3 0 0 0 .34-5.58 2.5 2.5 0 0 0-1.32-4.24 2.5 2.5 0 0 0-4.44-2.04z"/>
+                        </svg>
+                        <span>ذكي (مرّر يظهر العربي)</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* ظهور الشرح والتعليل في البنك */}
+                  <div className="setgroup" id="setGroupExp">
+                    <div className="setlabel">
+                      <Icons.Eye size={16} />
+                      <span>ظهور الشرح والتعليل في البنك</span>
+                    </div>
+                    <div className="setopts" id="expModeOpts">
+                      <button
+                        type="button"
+                        className={`set-opt ${expMode === "always" ? "on" : ""}`}
+                        onClick={() => onChangeExpMode && onChangeExpMode("always")}
+                        title="يفتح الشرح والتعليل تلقائياً فور الإجابة سواء كانت صائبة أو خاطئة"
+                      >
+                        <Icons.Check size={14} />
+                        <span>دائماً (صواب وخطأ) [افتراضي]</span>
+                      </button>
+                      <button
+                        type="button"
+                        className={`set-opt ${expMode === "wrong_only" ? "on" : ""}`}
+                        onClick={() => onChangeExpMode && onChangeExpMode("wrong_only")}
+                        title="يعرض نتيجة الحل فوراً، ويفتح الشرح المفصل تلقائياً فقط إذا كانت الإجابة خاطئة"
+                      >
+                        <Icons.Cross size={14} />
+                        <span>عند الخطأ فقط</span>
+                      </button>
+                      <button
+                        type="button"
+                        className={`set-opt ${expMode === "manual" ? "on" : ""}`}
+                        onClick={() => onChangeExpMode && onChangeExpMode("manual")}
+                        title="يكتفي بعرض صح/خطأ فوراً، ويبقى الشرح مغلقاً حتى تضغط زر عرض الشرح"
+                      >
+                        <Icons.Eye size={14} />
+                        <span>يدوي فقط (عند النقر)</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* الترتيب واللخبطة العشوائية */}
+                  <div className="setgroup">
+                    <div className="setlabel">
+                      <Icons.Shuffle size={16} />
+                      <span>الترتيب واللخبطة العشوائية</span>
+                    </div>
+                    <div className="setopts" style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+                      <button
+                        type="button"
+                        className={`set-opt ${shuffleChoices ? "on" : ""}`}
+                        onClick={onToggleShuffleChoices}
+                        title="خلط ترتيب خيارات كل سؤال عشوائياً لمقاومة الحفظ المكاني"
+                      >
+                        <Icons.Shuffle size={14} />
+                        <span>لخبطة خيارات السؤال عشوائياً</span>
+                      </button>
+                      <button
+                        type="button"
+                        className={`set-opt ${shuffleQuestions ? "on" : ""}`}
+                        onClick={onToggleShuffleQuestions}
+                        title="ترتيب عشوائي للأسئلة يتغير تلقائياً مع كل إعادة تشغيل، مع إبقاء الأسئلة المحلولة في البداية بنفس ترتيبها المستقر"
+                      >
+                        <Icons.List size={14} />
+                        <span>ترتيب عشوائي للأسئلة (المحلولة أولاً)</span>
+                      </button>
+
+                      {shuffleQuestions && onReshuffle && (
+                        <div style={{ paddingInlineStart: "6px", marginTop: "2px" }}>
+                          <button
+                            type="button"
+                            className="fchip"
+                            onClick={onReshuffle}
+                            style={{ fontSize: "0.76rem" }}
+                            title="توليد خلط عشوائي جديد الآن لبقية الأسئلة غير المحلولة"
+                          >
+                            <Icons.Rotate size={13} />
+                            <span>إعادة خلط الأسئلة الآن</span>
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* ميزة العلامات الملونة (Bookmarks) */}
+                  <div className="setgroup" id="setGroupBookmarks">
+                    <div className="setlabel">
+                      <Icons.Bookmark size={16} />
+                      <span>ميزة العلامات الملونة (Bookmarks)</span>
+                    </div>
+                    <div className="setopts" id="bmModeOpts">
+                      <button
+                        type="button"
+                        className={`set-opt ${showBookmarks ? "on" : ""}`}
+                        onClick={() => onToggleShowBookmarks && onToggleShowBookmarks(true)}
+                      >
+                        <Icons.Check size={14} />
+                        <span>إظهار العلامات (مفعلة)</span>
+                      </button>
+                      <button
+                        type="button"
+                        className={`set-opt ${!showBookmarks ? "on" : ""}`}
+                        onClick={() => onToggleShowBookmarks && onToggleShowBookmarks(false)}
+                      >
+                        <Icons.Cross size={14} />
+                        <span>إخفاء العلامات (واجهة مبسطة)</span>
+                      </button>
+                    </div>
+                    {onOpenBmLabelModal && (
+                      <div style={{ marginTop: "8px" }}>
+                        <button
+                          type="button"
+                          className="fchip"
+                          onClick={onOpenBmLabelModal}
+                          style={{ fontSize: "0.75rem" }}
+                        >
+                          <Icons.Pen size={12} style={{ marginInlineEnd: 4 }} />
+                          <span>تخصيص أسماء ألوان العلامات (أحمر، أصفر، أخضر، أزرق)</span>
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </div>
               )}
             </div>
-          </div>
 
-          {/* ميزة العلامات الملونة (Bookmarks) */}
-          <div className="setgroup" id="setGroupBookmarks">
-            <div className="setlabel">
-              <Icons.Bookmark size={16} />
-              <span>ميزة العلامات الملونة (Bookmarks)</span>
-            </div>
-            <div className="setopts" id="bmModeOpts">
+            {/* 3. خيارات السلايدات والشروح */}
+            <div className={`set-acc-item ${openSettingGroup === "slides" ? "is-open" : ""}`}>
               <button
                 type="button"
-                className={`set-opt ${showBookmarks ? "on" : ""}`}
-                onClick={() => onToggleShowBookmarks && onToggleShowBookmarks(true)}
+                className="set-acc-head"
+                onClick={() => toggleSettingGroup("slides")}
+                aria-expanded={openSettingGroup === "slides"}
               >
-                <Icons.Check size={14} />
-                <span>إظهار العلامات (مفعلة)</span>
+                <div className="set-acc-head-title">
+                  <Icons.Slides size={17} />
+                  <span>خيارات السلايدات والشروح</span>
+                </div>
+                <div className="set-acc-head-meta">
+                  <span className="set-acc-badge">
+                    {autoTranslateSlides ? "ترجمة تلقائية" : "الأصل الإنجليزي"} · {autoExplainSlides ? "شرح تلقائي" : "شرح يدوي"}
+                  </span>
+                  <span className="set-acc-chevron">
+                    <Icons.ChevronDown size={15} />
+                  </span>
+                </div>
               </button>
-              <button
-                type="button"
-                className={`set-opt ${!showBookmarks ? "on" : ""}`}
-                onClick={() => onToggleShowBookmarks && onToggleShowBookmarks(false)}
-              >
-                <Icons.Cross size={14} />
-                <span>إخفاء العلامات (واجهة مبسطة)</span>
-              </button>
-            </div>
-            {onOpenBmLabelModal && (
-              <div style={{ marginTop: "8px" }}>
-                <button
-                  type="button"
-                  className="fchip"
-                  onClick={onOpenBmLabelModal}
-                  style={{ fontSize: "0.75rem" }}
-                >
-                  <Icons.Pen size={12} style={{ marginInlineEnd: 4 }} />
-                  <span>تخصيص أسماء ألوان العلامات (أحمر، أصفر، أخضر، أزرق)</span>
-                </button>
-              </div>
-            )}
-          </div>
 
-          {/* ظهور الشرح والتعليل في البنك */}
-          <div className="setgroup" id="setGroupExp">
-            <div className="setlabel">
-              <Icons.Eye size={16} />
-              <span>ظهور الشرح والتعليل في البنك</span>
-            </div>
-            <div className="setopts" id="expModeOpts">
-              <button
-                type="button"
-                className={`set-opt ${expMode === "always" ? "on" : ""}`}
-                onClick={() => onChangeExpMode && onChangeExpMode("always")}
-                title="يفتح الشرح والتعليل تلقائياً فور الإجابة سواء كانت صائبة أو خاطئة"
-              >
-                <Icons.Check size={14} />
-                <span>دائماً (صواب وخطأ) [افتراضي]</span>
-              </button>
-              <button
-                type="button"
-                className={`set-opt ${expMode === "wrong_only" ? "on" : ""}`}
-                onClick={() => onChangeExpMode && onChangeExpMode("wrong_only")}
-                title="يعرض نتيجة الحل فوراً، ويفتح الشرح المفصل تلقائياً فقط إذا كانت الإجابة خاطئة"
-              >
-                <Icons.Cross size={14} />
-                <span>عند الخطأ فقط</span>
-              </button>
-              <button
-                type="button"
-                className={`set-opt ${expMode === "manual" ? "on" : ""}`}
-                onClick={() => onChangeExpMode && onChangeExpMode("manual")}
-                title="يكتفي بعرض صح/خطأ فوراً، ويبقى الشرح مغلقاً حتى تضغط زر عرض الشرح"
-              >
-                <Icons.Eye size={14} />
-                <span>يدوي فقط (عند النقر)</span>
-              </button>
-            </div>
-            <div style={{ fontSize: "0.73rem", color: "var(--ink-m)", marginTop: "6px", lineHeight: 1.5 }}>
-              التحكم بالفتح التلقائي للتعليل العلمي وتحليل الخيارات فور الحل؛ يمكنك دائماً طي الشرح أو فتحه في أي سؤال بزر مستقل.
-            </div>
-          </div>
-
-          {/* مقياس وحجم الخط */}
-          <div className="setgroup">
-            <div className="setlabel">
-              <Icons.Pen size={16} />
-              <span>مقياس وحجم الخط</span>
-            </div>
-            <div className="setopts">
-              {[
-                { val: 85, label: "85% (أصغر)" },
-                { val: 95, label: "95% (مدمج)" },
-                { val: 100, label: "100% (افتراضي)" },
-                { val: 110, label: "110% (مريح)" },
-                { val: 120, label: "120% (كبير)" }
-              ].map((opt) => (
-                <button
-                  key={opt.val}
-                  type="button"
-                  className={`set-opt ${fontScale === opt.val ? "on" : ""}`}
-                  onClick={() => onChangeFontScale && onChangeFontScale(opt.val)}
-                >
-                  <span>{opt.label}</span>
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* أدوات مساعدة: الأوفلاين والاختصارات */}
-          <div className="setgroup">
-            <div className="setlabel">
-              <Icons.Layers size={16} />
-              <span>أدوات مساعدة وإضافات</span>
-            </div>
-            <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
-              {onOpenOfflineModal && (
-                <button
-                  type="button"
-                  className="fchip"
-                  onClick={onOpenOfflineModal}
-                  style={{ fontSize: "0.8rem", padding: "6px 12px" }}
-                >
-                  <Icons.Download size={14} style={{ marginInlineEnd: 4 }} />
-                  <span>حزمة الدراسة بدون إنترنت (Offline Pack)</span>
-                </button>
-              )}
-              {onOpenShortcuts && (
-                <button
-                  type="button"
-                  className="fchip"
-                  onClick={onOpenShortcuts}
-                  style={{ fontSize: "0.8rem", padding: "6px 12px" }}
-                >
-                  <Icons.Tip size={14} style={{ marginInlineEnd: 4 }} />
-                  <span>دليل اختصارات لوحة المفاتيح (?)</span>
-                </button>
-              )}
-              {onExportProgress && (
-                <button
-                  type="button"
-                  className="fchip"
-                  onClick={onExportProgress}
-                  style={{ fontSize: "0.8rem", padding: "6px 12px" }}
-                >
-                  <Icons.Share size={14} style={{ marginInlineEnd: 4 }} />
-                  <span>تصدير نسخة احتياطية من التقدم (JSON)</span>
-                </button>
+              {openSettingGroup === "slides" && (
+                <div className="set-acc-body">
+                  <div className="setgroup">
+                    <div className="setlabel">
+                      <Icons.Slides size={16} />
+                      <span>عرض وتخصيص السلايدات</span>
+                    </div>
+                    <div className="setopts">
+                      <button
+                        type="button"
+                        className={`set-opt ${autoTranslateSlides ? "on" : ""}`}
+                        onClick={onToggleAutoTranslate}
+                      >
+                        <Icons.Translate size={14} />
+                        <span>ترجمة تلقائية</span>
+                      </button>
+                      <button
+                        type="button"
+                        className={`set-opt ${autoExplainSlides ? "on" : ""}`}
+                        onClick={onToggleAutoExplain}
+                      >
+                        <Icons.Tip size={14} />
+                        <span>شرح تلقائي</span>
+                      </button>
+                    </div>
+                  </div>
+                </div>
               )}
             </div>
-          </div>
 
-          {/* شريط التقدم وتصفير المحفوظات */}
-          <div className="setgroup">
-            <div className="setlabel">
-              <Icons.Target size={16} />
-              <span>التقدم الإجمالي</span>
-            </div>
-            <div className="progress-line">
-              <div className="progress-bar">
-                <i style={{ width: `${Math.min(100, Math.max(0, progressPct))}%` }} />
-              </div>
-              <span className="progress-txt">{Math.round(progressPct)}%</span>
-              {onResetProgress && (
-                <button
-                  type="button"
-                  className="set-opt set-danger"
-                  onClick={() => {
-                    if (window.confirm("هل أنت متأكد من تصفير كافة إجابات البنك والمحفوظات وعلامات المراجعة لهذا المقرر؟")) {
-                      onResetProgress();
-                    }
-                  }}
-                  title="تصفير كل المحفوظات وعلامات المراجعة"
-                >
-                  <Icons.Reset size={14} />
-                  <span>تصفير التقدم</span>
-                </button>
+            {/* 4. تطبيق المنصة والأوفلاين */}
+            <div className={`set-acc-item ${openSettingGroup === "app" ? "is-open" : ""}`}>
+              <button
+                type="button"
+                className="set-acc-head"
+                onClick={() => toggleSettingGroup("app")}
+                aria-expanded={openSettingGroup === "app"}
+              >
+                <div className="set-acc-head-title">
+                  <Icons.Download size={17} />
+                  <span>تطبيق المنصة والأوفلاين</span>
+                </div>
+                <div className="set-acc-head-meta">
+                  <span className="set-acc-badge">
+                    {isPwaInstalled ? "مثبت أوفلاين" : "تطبيق PWA"}
+                  </span>
+                  <span className="set-acc-chevron">
+                    <Icons.ChevronDown size={15} />
+                  </span>
+                </div>
+              </button>
+
+              {openSettingGroup === "app" && (
+                <div className="set-acc-body">
+                  {/* تثبيت تطبيق المنصة (PWA) */}
+                  <div className="setgroup" id="setGroupPwa">
+                    <div className="setlabel">
+                      <Icons.Download size={16} />
+                      <span>تطبيق المنصة (PWA)</span>
+                    </div>
+                    <div className="setopts">
+                      {isPwaInstalled ? (
+                        <div style={{ display: "flex", alignItems: "center", gap: "8px", padding: "8px 12px", background: "color-mix(in srgb, #10b981 12%, transparent)", border: "1px solid #10b981", borderRadius: "8px", color: "var(--ink)", width: "100%" }}>
+                          <Icons.Check size={16} style={{ color: "#10b981" }} />
+                          <span style={{ fontSize: "0.82rem", fontWeight: 700 }}>التطبيق مثبت على جهازك ويعمل أوفلاين</span>
+                        </div>
+                      ) : (
+                        <button
+                          type="button"
+                          className="btn btn-sm btn-primary"
+                          style={{ display: "inline-flex", alignItems: "center", gap: "8px", width: "100%", justifyContent: "center", padding: "8px 14px", borderRadius: "var(--r-pill)", fontWeight: 800 }}
+                          onClick={onPromptPwaInstall}
+                          title={isDesktop ? "تثبيت المنصة على اللابتوب (PWA)" : isIos ? "طريقة تثبيت المنصة على الشاشة الرئيسية للآيفون والآيباد" : "تثبيت المنصة كتطبيق أصيل على جهازك"}
+                        >
+                          <Icons.Download size={15} />
+                          <span>{isDesktop ? "تثبيت المنصة على اللابتوب (PWA)" : isIos ? "طريقة التثبيت على الآيفون والآيباد" : "تثبيت المنصة كتطبيق على جهازك (PWA)"}</span>
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* أدوات مساعدة: الأوفلاين والاختصارات والنسخ الاحتياطي */}
+                  <div className="setgroup">
+                    <div className="setlabel">
+                      <Icons.Layers size={16} />
+                      <span>حزم الأوفلاين والنسخ الاحتياطي</span>
+                    </div>
+                    <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+                      {onOpenOfflineModal && (
+                        <button
+                          type="button"
+                          className="fchip"
+                          onClick={onOpenOfflineModal}
+                          style={{ fontSize: "0.8rem", padding: "6px 12px" }}
+                        >
+                          <Icons.Download size={14} style={{ marginInlineEnd: 4 }} />
+                          <span>حزمة الدراسة بدون إنترنت (Offline Pack)</span>
+                        </button>
+                      )}
+                      {onOpenShortcuts && (
+                        <button
+                          type="button"
+                          className="fchip"
+                          onClick={onOpenShortcuts}
+                          style={{ fontSize: "0.8rem", padding: "6px 12px" }}
+                        >
+                          <Icons.Tip size={14} style={{ marginInlineEnd: 4 }} />
+                          <span>دليل اختصارات لوحة المفاتيح (?)</span>
+                        </button>
+                      )}
+                      {onExportProgress && (
+                        <button
+                          type="button"
+                          className="fchip"
+                          onClick={onExportProgress}
+                          style={{ fontSize: "0.8rem", padding: "6px 12px" }}
+                        >
+                          <Icons.Share size={14} style={{ marginInlineEnd: 4 }} />
+                          <span>تصدير نسخة احتياطية من التقدم (JSON)</span>
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
               )}
             </div>
-          </div>
 
-          {/* معلومات المنصة والمطور */}
-          <div className="setgroup">
-            <div className="setlabel">
-              <Icons.Definitions size={16} />
-              <span>عن المنصة</span>
-            </div>
-            <div className="about-box">
-              <span>المنصة التعليمية الموحدة · {currentSubject.name_ar} ({currentSubject.code.toUpperCase()})</span>
-              <br />
-              <span>إعداد وتطوير: </span>
-              <a href="https://t.me/KorosSama" target="_blank" rel="noopener noreferrer">
-                <b>عبدالرحمن اسماعيل المخلافي</b>
-              </a>
+            {/* 5. التقدم الإجمالي والبيانات */}
+            <div className={`set-acc-item ${openSettingGroup === "progress" ? "is-open" : ""}`}>
+              <button
+                type="button"
+                className="set-acc-head"
+                onClick={() => toggleSettingGroup("progress")}
+                aria-expanded={openSettingGroup === "progress"}
+              >
+                <div className="set-acc-head-title">
+                  <Icons.Target size={17} />
+                  <span>التقدم الإجمالي وعن المنصة</span>
+                </div>
+                <div className="set-acc-head-meta">
+                  <span className="set-acc-badge">
+                    {Math.round(progressPct)}%
+                  </span>
+                  <span className="set-acc-chevron">
+                    <Icons.ChevronDown size={15} />
+                  </span>
+                </div>
+              </button>
+
+              {openSettingGroup === "progress" && (
+                <div className="set-acc-body">
+                  {/* شريط التقدم وتصفير المحفوظات */}
+                  <div className="setgroup">
+                    <div className="setlabel">
+                      <Icons.Target size={16} />
+                      <span>التقدم الإجمالي للمقرر</span>
+                    </div>
+                    <div className="progress-line">
+                      <div className="progress-bar">
+                        <i style={{ width: `${Math.min(100, Math.max(0, progressPct))}%` }} />
+                      </div>
+                      <span className="progress-txt">{Math.round(progressPct)}%</span>
+                      {onResetProgress && (
+                        <button
+                          type="button"
+                          className="set-opt set-danger"
+                          onClick={() => {
+                            if (window.confirm("هل أنت متأكد من تصفير كافة إجابات البنك والمحفوظات وعلامات المراجعة لهذا المقرر؟")) {
+                              onResetProgress();
+                            }
+                          }}
+                          title="تصفير كل المحفوظات وعلامات المراجعة"
+                        >
+                          <Icons.Reset size={14} />
+                          <span>تصفير التقدم</span>
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* معلومات المنصة والمطور */}
+                  <div className="setgroup">
+                    <div className="setlabel">
+                      <Icons.Definitions size={16} />
+                      <span>عن المنصة</span>
+                    </div>
+                    <div className="about-box">
+                      <span>المنصة التعليمية الموحدة · {currentSubject.name_ar} ({currentSubject.code.toUpperCase()})</span>
+                      <br />
+                      <span>إعداد وتطوير: </span>
+                      <a href="https://t.me/KorosSama" target="_blank" rel="noopener noreferrer">
+                        <b>عبدالرحمن اسماعيل المخلافي</b>
+                      </a>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -972,4 +1086,3 @@ export const UnifiedAppHeader: React.FC<UnifiedAppHeaderProps> = ({
     </div>
   );
 };
-

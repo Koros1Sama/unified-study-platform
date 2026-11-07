@@ -1,4 +1,4 @@
-﻿// ==============================================================================
+// ==============================================================================
 // المنصة التعليمية الموحدة — محاكي الاختبار (Exam Simulator)
 // Bank scope · timed/stopwatch · flagging · palette statuses · grade · history ·
 // weak-area review. Zero Emojis.
@@ -136,115 +136,129 @@ export const ExamSimulator: React.FC<ExamSimulatorProps> = ({
 
   if (examState === "setup") {
     return (
-      <div className="exam-setup">
-        <div className="exam-setup-head">
-          <div className="exam-setup-icon"><Icons.Exam size={24} /></div>
-          <div>
-            <h1>محاكي الاختبار النهائي</h1>
-            <p>اختبر جاهزيتك تحت ضغط زمني واقعي مع لوحة أسئلة وأعلام مراجعة ودرجة تقديرية.</p>
+      <div id="examView">
+        {/* الترويسة الأكاديمية الكانونية (.headline) المتناغمة مع باقي المنصة */}
+        <div className="headline">
+          <div className="kicker">
+            <span className="dot"></span>
+            <span>محاكي الاختبار النهائي</span>
           </div>
+          <h1>محاكي الاختبار التجريبي</h1>
+          <p className="sub">
+            اختبر جاهزيتك تحت ضغط زمني واقعي مع لوحة أسئلة تفاعلية وأعلام مراجعة ودرجة تقديرية فورية.
+          </p>
         </div>
 
-        <div className="exam-setup-grid">
-          <div className="exam-field">
-            <label>نطاق الأسئلة (البنك)</label>
-            <select value={scope} onChange={(e) => setScope(e.target.value)}>
-              <option value="all">البنك الشامل ({questions.length})</option>
-              {models.map((m) => {
-                const count = questions.filter((q) => q.model_id === m.id).length;
-                return <option key={m.id} value={m.id}>{m.short_label || m.id.toUpperCase()} · {m.title_ar} ({count})</option>;
-              })}
-            </select>
-          </div>
-
-          <div className="exam-field">
-            <label>عدد الأسئلة</label>
-            <div className="exam-pills">
-              {[10, 20, 30, 50, 100]
-                .filter((n) => n <= pool.length || n === 10)
-                .map((n) => (
-                  <button
-                    key={n}
-                    type="button"
-                    className={`fchip ${questionCount === n ? "on" : ""}`}
-                    onClick={() => setQuestionCount(Math.min(n, pool.length))}
-                  >
-                    {Math.min(n, pool.length)} سؤالاً
-                  </button>
-                ))}
+        <div className="exam-setup">
+          <div className="exam-setup-head">
+            <div className="exam-setup-icon"><Icons.Exam size={22} /></div>
+            <div>
+              <h2 style={{ fontSize: "1.05rem", fontWeight: 800, color: "var(--ink)", margin: 0 }}>تخصيص جلسة الاختبار</h2>
+              <p style={{ margin: "2px 0 0", fontSize: "0.82rem", color: "var(--ink-m)" }}>اختر النطاق وعدد الأسئلة ونمط المؤقت للبدء فوراً.</p>
             </div>
           </div>
 
-          <div className="exam-field">
-            <label>نمط المؤقت</label>
-            <div className="exam-pills">
-              <button
-                type="button"
-                className={`fchip ${timerMode === "countdown" ? "on" : ""}`}
-                onClick={() => setTimerMode("countdown")}
-              >
-                <Icons.Clock size={13} />
-                عد تنازلي
-              </button>
-              <button
-                type="button"
-                className={`fchip ${timerMode === "stopwatch" ? "on" : ""}`}
-                onClick={() => setTimerMode("stopwatch")}
-              >
-                <Icons.Clock size={13} />
-                ساعة إيقاف
-              </button>
-            </div>
-          </div>
-
-          {timerMode === "countdown" && (
+          <div className="exam-setup-grid">
             <div className="exam-field">
-              <label>المدة الزمنية</label>
+              <label>نطاق الأسئلة (البنك)</label>
+              <select value={scope} onChange={(e) => setScope(e.target.value)}>
+                <option value="all">البنك الشامل ({questions.length})</option>
+                {models.map((m) => {
+                  const count = questions.filter((q) => q.model_id === m.id).length;
+                  return <option key={m.id} value={m.id}>{m.short_label || m.id.toUpperCase()} · {m.title_ar} ({count})</option>;
+                })}
+              </select>
+            </div>
+
+            <div className="exam-field">
+              <label>عدد الأسئلة</label>
               <div className="exam-pills">
-                {[10, 20, 30, 45, 60].map((m) => (
-                  <button
-                    key={m}
-                    type="button"
-                    className={`fchip ${timeLimitMinutes === m ? "on" : ""}`}
-                    onClick={() => setTimeLimitMinutes(m)}
-                  >
-                    {m} دقيقة
-                  </button>
-                ))}
+                {[10, 20, 30, 50, 100]
+                  .filter((n) => n <= pool.length || n === 10)
+                  .map((n) => (
+                    <button
+                      key={n}
+                      type="button"
+                      className={`fchip ${questionCount === n ? "on" : ""}`}
+                      onClick={() => setQuestionCount(Math.min(n, pool.length))}
+                    >
+                      {Math.min(n, pool.length)} سؤالاً
+                    </button>
+                  ))}
+              </div>
+            </div>
+
+            <div className="exam-field">
+              <label>نمط المؤقت</label>
+              <div className="exam-pills">
+                <button
+                  type="button"
+                  className={`fchip ${timerMode === "countdown" ? "on" : ""}`}
+                  onClick={() => setTimerMode("countdown")}
+                >
+                  <Icons.Clock size={13} />
+                  عد تنازلي
+                </button>
+                <button
+                  type="button"
+                  className={`fchip ${timerMode === "stopwatch" ? "on" : ""}`}
+                  onClick={() => setTimerMode("stopwatch")}
+                >
+                  <Icons.Clock size={13} />
+                  ساعة إيقاف
+                </button>
+              </div>
+            </div>
+
+            {timerMode === "countdown" && (
+              <div className="exam-field">
+                <label>المدة الزمنية</label>
+                <div className="exam-pills">
+                  {[10, 20, 30, 45, 60].map((m) => (
+                    <button
+                      key={m}
+                      type="button"
+                      className={`fchip ${timeLimitMinutes === m ? "on" : ""}`}
+                      onClick={() => setTimeLimitMinutes(m)}
+                    >
+                      {m} دقيقة
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+
+          <button type="button" className="btn btn-primary exam-start-btn" onClick={startExam}>
+            بدء جلسة الامتحان الآن ({Math.min(questionCount, pool.length)} سؤالاً)
+          </button>
+
+          {examHistory.length > 0 && (
+            <div className="exam-mini-history">
+              <div className="exam-mini-history-head">
+                <Icons.Award size={15} />
+                <span>آخر المحاولات</span>
+              </div>
+              <div className="exam-mini-history-list">
+                {examHistory.slice(0, 5).map((entry, idx) => {
+                  const pct = entry.total > 0 ? Math.round((entry.score / entry.total) * 100) : 0;
+                  const g = gradeFor(pct);
+                  return (
+                    <div key={idx} className="exam-history-row">
+                      <span className={`grade-badge ${g.cls}`}>{g.label}</span>
+                      <span>{entry.score} / {entry.total}</span>
+                      <b>{pct}%</b>
+                      <span className="exam-history-mode">{entry.mode}</span>
+                      <span className="exam-history-date">
+                        {new Date(entry.date).toLocaleDateString("ar-EG")}
+                      </span>
+                    </div>
+                  );
+                })}
               </div>
             </div>
           )}
         </div>
-
-        <button type="button" className="btn btn-primary exam-start-btn" onClick={startExam}>
-          بدء جلسة الامتحان الآن ({Math.min(questionCount, pool.length)} سؤالاً)
-        </button>
-
-        {examHistory.length > 0 && (
-          <div className="exam-mini-history">
-            <div className="exam-mini-history-head">
-              <Icons.Award size={15} />
-              <span>آخر المحاولات</span>
-            </div>
-            <div className="exam-mini-history-list">
-              {examHistory.slice(0, 5).map((entry, idx) => {
-                const pct = entry.total > 0 ? Math.round((entry.score / entry.total) * 100) : 0;
-                const g = gradeFor(pct);
-                return (
-                  <div key={idx} className="exam-history-row">
-                    <span className={`grade-badge ${g.cls}`}>{g.label}</span>
-                    <span>{entry.score} / {entry.total}</span>
-                    <b>{pct}%</b>
-                    <span className="exam-history-mode">{entry.mode}</span>
-                    <span className="exam-history-date">
-                      {new Date(entry.date).toLocaleDateString("ar-EG")}
-                    </span>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        )}
       </div>
     );
   }
@@ -256,7 +270,7 @@ export const ExamSimulator: React.FC<ExamSimulatorProps> = ({
     const urgent = timerMode === "countdown" && secondsRemaining <= 300;
 
     return (
-      <div>
+      <div id="examRunningView">
         <div className="card exam-hud">
           <div className="exam-hud-left">
             <span className="exam-hud-progress">السؤال {currentIdx + 1} من {examQuestions.length}</span>
@@ -369,7 +383,7 @@ export const ExamSimulator: React.FC<ExamSimulatorProps> = ({
   });
 
   return (
-    <div>
+    <div id="examResultsView">
       <div className="exam-result-card">
         <div className="exam-result-score">
           <div className={`score-circle ${grade.cls}`}>
@@ -442,4 +456,3 @@ export const ExamSimulator: React.FC<ExamSimulatorProps> = ({
     </div>
   );
 };
-
