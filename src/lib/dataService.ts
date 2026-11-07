@@ -119,6 +119,16 @@ export const DataService = {
         is_active: true
       },
       {
+        code: "pm",
+        name_ar: "إدارة المشاريع",
+        name_en: "Project Management",
+        term: 1,
+        professor_name: "د. منصور نعمان",
+        accent_color: "#eab308",
+        icon_name: "award",
+        is_active: true
+      },
+      {
         code: "ap",
         name_ar: "البرمجة المتقدمة",
         name_en: "Advanced Programming",

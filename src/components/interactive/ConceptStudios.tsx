@@ -72,6 +72,23 @@ const SE_STUDIOS: StudioMeta[] = [
   }
 ];
 
+const PM_STUDIOS: StudioMeta[] = [
+  {
+    id: "pm_approach",
+    title: "مستشار مناهج التطوير الخمسة",
+    desc: "حدد استقرار المتطلبات ووتيرة التغيير وطبيعة التسليم لاكتشاف المنهج الأنسب مع السند العلمي.",
+    ref: "L1-S013",
+    tabs: ["approach"]
+  },
+  {
+    id: "pm_principles",
+    title: "مختبر المبادئ الستة لـ PMBOK 8",
+    desc: "محاكي المبادئ وسلسلة خلق القيمة وفحص التطبيق الحقيقي مقابل الشكلي مع سيناريوهات عملية.",
+    ref: "L2-S002",
+    tabs: ["principles", "value_chain"]
+  }
+];
+
 function caesar(text: string, shift: number): string {
   return text.replace(/[a-z]/gi, (char) => {
     const base = char <= "Z" ? 65 : 97;
@@ -127,6 +144,10 @@ function normalizeStudioForSubject(subjectCode: string, id?: string): string | u
     if (/l8|mccabe|cyclomatic/.test(lower)) return "se_mccabe";
     return "se_process";
   }
+  if (subjectCode === "pm") {
+    if (/l2|principle|value|authentic|hospital/.test(lower)) return "pm_principles";
+    return "pm_approach";
+  }
   return undefined;
 }
 
@@ -138,7 +159,9 @@ function normalizeTabForStudio(tab: string | undefined, tabs: string[]): string 
     "bell-lapadula": "blp",
     "acm-matrix": "acm",
     "buffer-overflow": "stack",
-    "malware-matrix": "matrix"
+    "malware-matrix": "matrix",
+    "value-chain": "value_chain",
+    "hospital-case": "principles"
   };
   const mapped = map[tab] || tab;
   return tabs.includes(mapped) ? mapped : tabs[0] || "";
@@ -150,7 +173,14 @@ export const ConceptStudios: React.FC<ConceptStudiosProps> = ({
   initialTabId,
   onReturnToSummary
 }) => {
-  const studios = subjectCode === "sec" ? SEC_STUDIOS : subjectCode === "se" ? SE_STUDIOS : [];
+  const studios =
+    subjectCode === "sec"
+      ? SEC_STUDIOS
+      : subjectCode === "se"
+      ? SE_STUDIOS
+      : subjectCode === "pm"
+      ? PM_STUDIOS
+      : [];
   const normalizedId = normalizeStudioForSubject(subjectCode, initialStudioId);
   const initial = studios.find((studio) => studio.id === normalizedId) || studios[0];
   const initialTab = normalizeTabForStudio(initialTabId, initial?.tabs || []);
@@ -240,6 +270,9 @@ export const ConceptStudios: React.FC<ConceptStudiosProps> = ({
         {activeStudio === "se_mccabe" && <McCabeStudio />}
         {activeStudio === "se_verify" && <VerifyStudio />}
         {activeStudio === "se_risk" && <RiskStudio />}
+        {activeStudio === "pm_approach" && <PmApproachStudio />}
+        {activeStudio === "pm_principles" && activeTab === "principles" && <PmPrinciplesStudio />}
+        {activeStudio === "pm_principles" && activeTab === "value_chain" && <PmValueChainStudio />}
       </div>
     </div>
   );
@@ -258,7 +291,10 @@ function studioTabLabel(tab: string): string {
     recommend: "التوصية",
     mccabe: "حاسبة McCabe",
     verify: "V & V",
-    risk: "مصفوفة المخاطر"
+    risk: "مصفوفة المخاطر",
+    approach: "مستشار المناهج الخمسة",
+    principles: "المبادئ وسيناريوهات الفحص",
+    value_chain: "سلسلة خلق القيمة"
   };
   return map[tab] || tab;
 }
@@ -901,6 +937,507 @@ function RiskStudio() {
 
       <div className="studio-note">
         <b>خطة التعامل: </b>{mitigation}
+      </div>
+    </div>
+  );
+}
+
+function PmApproachStudio() {
+  const [stability, setStability] = useState(75);
+  const [changeRate, setChangeRate] = useState(20);
+  const [risk, setRisk] = useState(30);
+  const [delivery, setDelivery] = useState(25);
+
+  const recommendation = useMemo(() => {
+    if (stability >= 70 && changeRate <= 35 && delivery <= 40) {
+      return {
+        approach_ar: "النهج التنبؤي (Predictive / Waterfall)",
+        curve: "منحنى خطي متسلسل: تكلفة التغيير ترتفع باطراد كلما تقدم الوقت",
+        characteristics: [
+          "تخطيط كامل ومسبق للنطاق والجدول والميزانية قبل بدء التنفيذ.",
+          "تسليم المخرج النهائي كدفعة واحدة في نهاية دورة حياة المشروع.",
+          "يناسب المشاريع ذات المتطلبات الثابتة والحلول التقنية المجربة والمعروفة مسبقا."
+        ],
+        ref: "L1-S013",
+        badge: "شلالي خطي"
+      };
+    }
+    if (changeRate >= 65 || (delivery >= 65 && stability < 50)) {
+      return {
+        approach_ar: "النهج التكيفي / الرشيق (Adaptive / Agile)",
+        curve: "منحنى تكرارات قصيرة (1-4 أسابيع): تكلفة التغيير تظل منخفضة ومسطحة",
+        characteristics: [
+          "تكرارات ودورات تسليم قصيرة جدا تسمح بالتغذية الراجعة اللحظية من العميل.",
+          "النطاق يتطور باستمرار، بينما الوقت والتكلفة محكومان بالصناديق الزمنية (Timeboxes).",
+          "يناسب المشاريع ذات عدم اليقين العالي والابتكار والتحول الرقمي السريع."
+        ],
+        ref: "L1-S013",
+        badge: "رشيق متكيف"
+      };
+    }
+    if (delivery >= 60 && stability >= 50) {
+      return {
+        approach_ar: "النهج التزايدي (Incremental)",
+        curve: "منحنى تسليم الدفعات: قيمة ملموسة متاحة للاستخدام مبكرا مع كل إصدار",
+        characteristics: [
+          "تقسيم النظام الكلي إلى أجزاء ومكونات وظيفية مكتملة تسلم على دفعات متعاقبة.",
+          "كل دفعة تضيف ميزات جديدة صالحة للاستخدام المباشر لدى المستفيد.",
+          "يحقق عائدا مبكرا على الاستثمار (Early ROI) ويقلل مخاطر الانتظار الطويل."
+        ],
+        ref: "L1-S013",
+        badge: "تزايدي تراكمي"
+      };
+    }
+    if (stability < 50 && changeRate <= 50) {
+      return {
+        approach_ar: "النهج التكراري (Iterative)",
+        curve: "منحنى تحسين النموذج: تعميق الفهم عبر تكرارات النمذجة المتعاقبة",
+        characteristics: [
+          "تطوير حل المشكلة وتحسينه عبر جولات مراجعة متعاقبة وملاحظات المستفيدين.",
+          "التسليم الفعلي للنظام يكتمل في نهاية الدورات بعد استقرار وتأكيد التصميم.",
+          "يناسب المشاريع المعقدة التي تحتاج لاكتشاف الحل واختباره بالنماذج الأولية."
+        ],
+        ref: "L1-S013",
+        badge: "تكراري استكشافي"
+      };
+    }
+    return {
+      approach_ar: "النهج الهجين (Hybrid Approach)",
+      curve: "منحنى مركب: يجمع بين استقرار التخطيط التنبؤي ومرونة التنفيذ التكيفي",
+      characteristics: [
+        "مزج مدروس بين العناصر التنبؤية والتكيفية وفق مقتضيات كل حزمة عمل في المشروع.",
+        "تخطيط تنبؤي للبنية التحتية والمتطلبات التنظيمية الصارمة مع تطوير رشيق للميزات المتغيرة.",
+        "النهج الأكثر شيوعا في المؤسسات الحديثة لملاءمته للمشاريع المتشابكة."
+      ],
+      ref: "L1-S013",
+      badge: "هجين متوازن"
+    };
+  }, [stability, changeRate, risk, delivery]);
+
+  return (
+    <div className="studio-body">
+      <div className="studio-controls studio-two-col">
+        <Slider label="استقرار ووضوح المتطلبات" value={stability} min={0} max={100} onChange={setStability} suffix="%" />
+        <Slider label="وتيرة التغيير المتوقعة" value={changeRate} min={0} max={100} onChange={setChangeRate} suffix="%" />
+        <Slider label="مستوى المخاطر والتعقيد التقني" value={risk} min={0} max={100} onChange={setRisk} suffix="%" />
+        <Slider label="الحاجة لتسليم قيمة مبكرة على دفعات" value={delivery} min={0} max={100} onChange={setDelivery} suffix="%" />
+      </div>
+
+      <div className="studio-result ok" style={{ flexDirection: "column", alignItems: "flex-start", gap: 8 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, width: "100%", justifyContent: "space-between" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <Icons.Target size={18} />
+            <span style={{ fontSize: "1.05rem", fontWeight: 800 }}>المنهج الموصى به: {recommendation.approach_ar}</span>
+          </div>
+          <span className="ref-chip">{recommendation.badge} · {recommendation.ref}</span>
+        </div>
+        <p style={{ margin: 0, fontSize: "0.88rem", opacity: 0.9 }}>{recommendation.curve}</p>
+        <ul style={{ margin: "4px 0 0", paddingRight: 20, fontSize: "0.85rem", display: "grid", gap: 4 }}>
+          {recommendation.characteristics.map((c, i) => (
+            <li key={i}>{c}</li>
+          ))}
+        </ul>
+      </div>
+
+      <div className="studio-compare">
+        <div className="studio-compare-col">
+          <h4>التنبؤي (Predictive)</h4>
+          <p>متطلبات واضحة، تخطيط شامل، تسليم دفعة واحدة في النهاية.</p>
+        </div>
+        <div className="studio-compare-col">
+          <h4>التكراري (Iterative)</h4>
+          <p>تكرار للتعلم وتحسين الحل، تسليم نهائي بعد نضج النموذج.</p>
+        </div>
+        <div className="studio-compare-col">
+          <h4>التزايدي (Incremental)</h4>
+          <p>تسليم مكونات مكتملة على دفعات؛ كل دفعة تضيف قيمة مباشرة.</p>
+        </div>
+        <div className="studio-compare-col">
+          <h4>التكيفي (Adaptive)</h4>
+          <p>دورات قصيرة 1-4 أسابيع، ترحيب بالتغيير، وتغذية راجعة فورية.</p>
+        </div>
+        <div className="studio-compare-col">
+          <h4>الهجين (Hybrid)</h4>
+          <p>دمج مدروس بين التنبؤي للأجزاء الثابتة والتكيفي للمتغيرات.</p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+const PM_PRINCIPLES_DATA = [
+  {
+    id: "systems",
+    name_ar: "الشمولية (Systems View)",
+    core: "رؤية المشروع كعنصر داخل نظام كلي يتفاعل مع بيئته وأهدافه الاستراتيجية.",
+    authentic: "دراسة أثر قرارات المشروع على باقي أقسام المنظمة وتجنب التحسين المحلي الضار.",
+    superficial: "عزل فريق المشروع والتركيز على إنجاز المهام الذاتية حتى لو أضرت بسير العمل العام.",
+    domain: "الحوكمة وأصحاب المصلحة",
+    ref: "L2-S004"
+  },
+  {
+    id: "value",
+    name_ar: "التركيز على القيمة (Focus on Value)",
+    core: "القيمة هي الغاية الكبرى، والمخرجات مجرد وسيلة لتحقيق النتائج والفوائد.",
+    authentic: "تقييم كل مهمة بمدى مساهمتها في تقديم منفعة صافية قابلة للقياس للمستفيد.",
+    superficial: "الافتخار بتسليم مخرجات مطابقة للجدول رغم عدم استخدام المستفيدين لها أو زوال جدواها.",
+    domain: "المالية والنطاق",
+    ref: "L2-S008"
+  },
+  {
+    id: "quality",
+    name_ar: "تضمين الجودة (Embed Quality)",
+    core: "بناء الجودة في صلب العمليات عبر الوقاية المستمرة لا الفحص المتأخر.",
+    authentic: "مراجعات النظراء، الاختبارات الآلية، والتحقق الدوري من معايير القبول أولا بأول.",
+    superficial: "تأجيل اختبار الجودة لمرحلة التسليم النهائي والاعتماد على ترقيع العيوب تحت ضغط الوقت.",
+    domain: "النطاق والموارد",
+    ref: "L2-S011"
+  },
+  {
+    id: "accountability",
+    name_ar: "القيادة بمساءلة (Lead with Accountability)",
+    core: "تحديد ملكية القرارات بنزاهة وشفافية وتطبيق مصفوفة RACI بحزم.",
+    authentic: "المساءلة عن النتائج وليس مجرد الحضور، والشفافية التامة في نقل الحقائق للراعي بلا إخفاء.",
+    superficial: "تبادل اللوم عند تعثر المشروع، أو احتكار القرارات مع التهرب من المسؤولية عند الإخفاق.",
+    domain: "الحوكمة وأصحاب المصلحة",
+    ref: "L2-S015"
+  },
+  {
+    id: "sustainability",
+    name_ar: "دمج الاستدامة (Integrate Sustainability)",
+    core: "مراعاة المحصلة الثلاثية (البيئة، المجتمع، الاقتصاد) ودورة حياة المنتج الكاملة.",
+    authentic: "حساب تكلفة التشغيل والصيانة والأثر البيئي لعشر سنوات قادمة وليس تكلفة البناء فقط.",
+    superficial: "تقليص تكاليف البناء بحلول رديئة تضاعف تكاليف الصيانة وتستهلك طاقة مفرطة لاحقا.",
+    domain: "الموارد والمالية",
+    ref: "L2-S019"
+  },
+  {
+    id: "teams",
+    name_ar: "تمكين الفرق (Build Empowered Teams)",
+    core: "توفير الأمان النفسي وتفويض الصلاحيات الفنية وتشجيع التنظيم الذاتي.",
+    authentic: "القيادة الخادمة، تفويض الصلاحيات، وتشجيع التجربة والتعلم من الأخطاء بأمان.",
+    superficial: "الرقابة الدقيقة الخانقة (Micro-management) واشتراط موافقة المدير على كل جزئية بسيطة.",
+    domain: "الموارد والجدول",
+    ref: "L2-S023"
+  }
+];
+
+const PM_SCENARIOS = [
+  {
+    id: 1,
+    principle: "التركيز على القيمة",
+    scenario: "مدير مشروع سلم منصة برمجية في موعدها وضمن الميزانية، لكن الطلاب لم يستخدموها لتعقيد واجهتها. اعتبر المدير مشروعه ناجحا بنسبة 100%.",
+    isAuthentic: false,
+    explanation: "تطبيق شكلي؛ فالمشروع وسيلة لتقديم القيمة، وتوليد مخرجات لا تحقق فوائد عملية للمستفيدين يعتبر فشلا في تحقيق غاية المشروع."
+  },
+  {
+    id: 2,
+    principle: "تضمين الجودة",
+    scenario: "فريق برمجي ينفذ مراجعة النظراء واختبارات الوحدة يوميا قبل دمج أي كود لاكتشاف الأخطاء مبكرا بدلا من انتظار فحص نهاية المشروع.",
+    isAuthentic: true,
+    explanation: "تطبيق حقيقي؛ يجسد بناء الجودة بالوقاية والتحقق المستمر (Prevention over Inspection) ويقلل تكلفة إصلاح العيوب."
+  },
+  {
+    id: 3,
+    principle: "تمكين الفرق",
+    scenario: "مدير يلزم كل مبرمج بطلب إذنه الخطي قبل تغيير سطر واحد في الكود، ويرفض تفويض أي قرار تقني لأعضاء الفريق.",
+    isAuthentic: false,
+    explanation: "تطبيق شكلي وخانق؛ يمثل الرقابة الدقيقة (Micro-management) ويهدم الأمان النفسي والمبادرة والتمكين."
+  },
+  {
+    id: 4,
+    principle: "دمج الاستدامة",
+    scenario: "مستشفى اختار نظاما شمسيا عالي التكلفة التأسيسية لأنه يقلل تكاليف الكهرباء والانبعاثات على مدار 15 عاما قادمة.",
+    isAuthentic: true,
+    explanation: "تطبيق حقيقي لمبدأ الاستدامة؛ يراعي دورة حياة المنتج الكاملة (Whole Life Cycle) والمحصلة الثلاثية للأثر."
+  }
+];
+
+function PmPrinciplesStudio() {
+  const [selectedPrinciple, setSelectedPrinciple] = useState(PM_PRINCIPLES_DATA[0].id);
+  const [userAnswers, setUserAnswers] = useState<Record<number, boolean>>({});
+  const [checked, setChecked] = useState(false);
+
+  const current = PM_PRINCIPLES_DATA.find((p) => p.id === selectedPrinciple) || PM_PRINCIPLES_DATA[0];
+
+  const handleSelectAnswer = (scenarioId: number, answer: boolean) => {
+    setUserAnswers((prev) => ({ ...prev, [scenarioId]: answer }));
+    setChecked(false);
+  };
+
+  const score = useMemo(() => {
+    return PM_SCENARIOS.filter((s) => userAnswers[s.id] === s.isAuthentic).length;
+  }, [userAnswers]);
+
+  return (
+    <div className="studio-body">
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: 8, marginBottom: 16 }}>
+        {PM_PRINCIPLES_DATA.map((p) => (
+          <button
+            key={p.id}
+            type="button"
+            className={`btn btn-sm ${p.id === selectedPrinciple ? "btn-primary" : ""}`}
+            onClick={() => setSelectedPrinciple(p.id)}
+            style={{ textAlign: "center", padding: "8px 6px", fontSize: "0.82rem" }}
+          >
+            {p.name_ar.split(" ")[0]}
+          </button>
+        ))}
+      </div>
+
+      <div className="card" style={{ padding: 16, background: "var(--sf2)", border: "1px solid var(--ln)", marginBottom: 20 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+          <h3 style={{ margin: 0, fontSize: "1.05rem", fontWeight: 800, color: "var(--ink)" }}>{current.name_ar}</h3>
+          <span className="ref-chip">{current.ref} · مجال: {current.domain}</span>
+        </div>
+        <p style={{ fontSize: "0.9rem", color: "var(--ink-m)", marginBottom: 12 }}>{current.core}</p>
+
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+          <div style={{ padding: 12, borderRadius: "var(--r-s)", background: "color-mix(in srgb, #22c55e 10%, var(--sf))", border: "1px solid #22c55e" }}>
+            <h4 style={{ margin: "0 0 6px", fontSize: "0.85rem", fontWeight: 700, color: "#16a34a" }}>التطبيق الحقيقي الصادق</h4>
+            <p style={{ margin: 0, fontSize: "0.82rem", lineHeight: 1.45 }}>{current.authentic}</p>
+          </div>
+          <div style={{ padding: 12, borderRadius: "var(--r-s)", background: "color-mix(in srgb, #ef4444 10%, var(--sf))", border: "1px solid #ef4444" }}>
+            <h4 style={{ margin: "0 0 6px", fontSize: "0.85rem", fontWeight: 700, color: "#dc2626" }}>التطبيق الشكلي الزائف</h4>
+            <p style={{ margin: 0, fontSize: "0.82rem", lineHeight: 1.45 }}>{current.superficial}</p>
+          </div>
+        </div>
+      </div>
+
+      <div className="headline" style={{ marginTop: 24, marginBottom: 12 }}>
+        <h4 style={{ margin: 0, fontSize: "0.95rem", fontWeight: 700 }}>اختبار تشخيص الممارسة: حقيقي أم شكلي؟</h4>
+        <p className="sub" style={{ fontSize: "0.82rem" }}>صنف الممارسات التالية لتتأكد من إتقانك لمعايير الدكتور منصور نعمان في الامتحان.</p>
+      </div>
+
+      <div style={{ display: "grid", gap: 12 }}>
+        {PM_SCENARIOS.map((s) => {
+          const selected = userAnswers[s.id];
+          const isCorrect = selected === s.isAuthentic;
+          return (
+            <div key={s.id} className="card" style={{ padding: 12, border: "1px solid var(--ln)" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
+                <span style={{ fontSize: "0.78rem", fontWeight: 700, color: "var(--acc)" }}>المبدأ: {s.principle}</span>
+                {checked && (
+                  <span style={{ fontSize: "0.78rem", fontWeight: 700, color: isCorrect ? "#16a34a" : "#dc2626" }}>
+                    {isCorrect ? "إجابة صائبة" : "إجابة خاطئة"}
+                  </span>
+                )}
+              </div>
+              <p style={{ margin: "0 0 10px", fontSize: "0.86rem", color: "var(--ink)" }}>{s.scenario}</p>
+              <div style={{ display: "flex", gap: 8 }}>
+                <button
+                  type="button"
+                  className={`btn btn-sm ${selected === true ? "btn-primary" : ""}`}
+                  onClick={() => handleSelectAnswer(s.id, true)}
+                >
+                  تطبيق حقيقي
+                </button>
+                <button
+                  type="button"
+                  className={`btn btn-sm ${selected === false ? "btn-primary" : ""}`}
+                  onClick={() => handleSelectAnswer(s.id, false)}
+                >
+                  تطبيق شكلي
+                </button>
+              </div>
+              {checked && (
+                <div style={{ marginTop: 8, fontSize: "0.82rem", color: "var(--ink-m)", borderTop: "1px dashed var(--ln)", paddingTop: 6 }}>
+                  <b>التعليل الأكاديمي: </b>{s.explanation}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      <div style={{ display: "flex", alignItems: "center", gap: 12, marginTop: 16 }}>
+        <button
+          type="button"
+          className="btn btn-primary btn-sm"
+          onClick={() => setChecked(true)}
+          disabled={Object.keys(userAnswers).length < PM_SCENARIOS.length}
+        >
+          فحص النتائج
+        </button>
+        <button
+          type="button"
+          className="btn btn-sm"
+          onClick={() => {
+            setUserAnswers({});
+            setChecked(false);
+          }}
+        >
+          إعادة
+        </button>
+        {checked && (
+          <span className={`studio-score ${score === PM_SCENARIOS.length ? "ok" : ""}`}>
+            {score} / {PM_SCENARIOS.length}
+          </span>
+        )}
+      </div>
+    </div>
+  );
+}
+
+const VALUE_CHAIN_CASES = [
+  {
+    id: "univ",
+    title: "منصة التسجيل الإلكتروني للجامعة",
+    subtitle: "حالة دراسية معتمدة في شرائح الدكتور منصور نعمان",
+    ref: "L1-S009",
+    steps: [
+      {
+        stage_ar: "المخرجات المباشرة (Outputs)",
+        stage_en: "Deliverables / Products",
+        desc: "البرمجيات وقواعد البيانات وبوابة الويب وتطبيقات الهواتف التي طورها فريق المشروع وسلّمها رسميا.",
+        trigger: "نظام إلكتروني مطور · بوابة ويب · قاعدة بيانات جاهزة"
+      },
+      {
+        stage_ar: "النتائج التشغيلية (Outcomes)",
+        stage_en: "Operational Behaviors",
+        desc: "تغيّر سلوك الطلاب والموظفين؛ قيام الطلاب بالتسجيل ذاتيا من منازلهم بدلا من الطوابير الورقية المرهقة.",
+        trigger: "اعتماد الطلاب على النظام · التسجيل عن بعد · تغير سلوك العمل"
+      },
+      {
+        stage_ar: "الفوائد القابلة للقياس (Benefits)",
+        stage_en: "Measurable Gains",
+        desc: "تقليص فترة التسجيل من أسبوعين إلى 3 أيام، تقليل استخدام الورق بنسبة 90%، وخفض الأخطاء البشرية بنسبة 80%.",
+        trigger: "تقليص الوقت بنسبة مقاسة · وفر مالي موثق · انخفاض معدل الأخطاء"
+      },
+      {
+        stage_ar: "القيمة الصافية المستدامة (Value)",
+        stage_en: "Realized Net Value",
+        desc: "تحسين السمعة الأكاديمية للجامعة، رفع مستوى رضا الطلاب، وتعزيز القدرة التنافسية واستقطاب طلاب جدد.",
+        trigger: "المنفعة الصافية · السمعة المؤسسية · الرضا الشامل للمستفيدين"
+      }
+    ]
+  },
+  {
+    id: "hospital",
+    title: "نظام السجلات الصحية الموحد للمستشفى",
+    subtitle: "دراسة حالة المحاضرة الثانية (حالة المستشفى PMBOK 8)",
+    ref: "L2-S026",
+    steps: [
+      {
+        stage_ar: "المخرجات المباشرة (Outputs)",
+        stage_en: "Electronic Health Record (EHR)",
+        desc: "نظام السجلات الطبية الرقمي، الخوادم الآمنة، وواجهات أجهزة الفحص والأشعة بالمستشفى.",
+        trigger: "النظام البرمجي للمستشفى · تركيب الخوادم وأجهزة القراءة"
+      },
+      {
+        stage_ar: "النتائج التشغيلية (Outcomes)",
+        stage_en: "Clinical Practice Change",
+        desc: "استخدام الأطباء والتمريض للنظام في توثيق الفحوصات والوصول الفوري لملفات المرضى بين الأقسام.",
+        trigger: "استخدام الأطباء للملفات الرقمية · التنسيق الفوري بين العيادات"
+      },
+      {
+        stage_ar: "الفوائد القابلة للقياس (Benefits)",
+        stage_en: "Healthcare Metrics",
+        desc: "تقليل الأخطاء الدوائية بنسبة 65%، خفض زمن انتظار المرضى بنسبة 45%، وتسريع صدور التحاليل المخبرية.",
+        trigger: "انخفاض الأخطاء الطبية · تقليص زمن الانتظار · تسريع النتائج"
+      },
+      {
+        stage_ar: "القيمة الصافية المستدامة (Value)",
+        stage_en: "Health Impact & Life Saved",
+        desc: "إنقاذ الأرواح، تحسين جودة الرعاية الصحية، ورفع ثقة المجتمع في المنظومة الصحية للمستشفى.",
+        trigger: "إنقاذ حياة المرضى · ثقة المجتمع ورضا المرضى · الجدوى الصحية العامة"
+      }
+    ]
+  }
+];
+
+function PmValueChainStudio() {
+  const [selectedCase, setSelectedCase] = useState("univ");
+  const [activeStep, setActiveStep] = useState(0);
+
+  const currentCase = VALUE_CHAIN_CASES.find((c) => c.id === selectedCase) || VALUE_CHAIN_CASES[0];
+  const step = currentCase.steps[activeStep];
+
+  return (
+    <div className="studio-body">
+      <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
+        {VALUE_CHAIN_CASES.map((c) => (
+          <button
+            key={c.id}
+            type="button"
+            className={`btn btn-sm ${c.id === selectedCase ? "btn-primary" : ""}`}
+            onClick={() => {
+              setSelectedCase(c.id);
+              setActiveStep(0);
+            }}
+          >
+            {c.title}
+          </button>
+        ))}
+      </div>
+
+      <div className="card" style={{ padding: 16, background: "var(--sf2)", border: "1px solid var(--ln)", marginBottom: 16 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+          <h3 style={{ margin: 0, fontSize: "1rem", fontWeight: 800 }}>{currentCase.title}</h3>
+          <span className="ref-chip">{currentCase.ref}</span>
+        </div>
+        <p style={{ margin: 0, fontSize: "0.85rem", color: "var(--ink-m)" }}>{currentCase.subtitle}</p>
+      </div>
+
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 8, marginBottom: 16 }}>
+        {currentCase.steps.map((s, idx) => (
+          <button
+            key={idx}
+            type="button"
+            className={`btn btn-sm ${idx === activeStep ? "btn-primary" : ""}`}
+            onClick={() => setActiveStep(idx)}
+            style={{
+              padding: "10px 6px",
+              textAlign: "center",
+              display: "flex",
+              flexDirection: "column",
+              gap: 4
+            }}
+          >
+            <span style={{ fontSize: "0.75rem", opacity: 0.8 }}>المرحلة {idx + 1}</span>
+            <span style={{ fontSize: "0.82rem", fontWeight: 700 }}>{s.stage_ar.split(" ")[0]}</span>
+          </button>
+        ))}
+      </div>
+
+      <div className="card" style={{ padding: 18, border: "2px solid var(--acc)", background: "var(--sf)" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+          <h4 style={{ margin: 0, fontSize: "1.1rem", fontWeight: 800, color: "var(--acc)" }}>
+            {step.stage_ar}
+          </h4>
+          <span style={{ fontSize: "0.82rem", color: "var(--ink-m)", fontFamily: "monospace" }}>{step.stage_en}</span>
+        </div>
+        <p style={{ fontSize: "0.92rem", lineHeight: 1.6, color: "var(--ink)", marginBottom: 14 }}>
+          {step.desc}
+        </p>
+        <div style={{ padding: 10, borderRadius: "var(--r-s)", background: "var(--sf2)", border: "1px dashed var(--ln)" }}>
+          <span style={{ fontSize: "0.8rem", fontWeight: 700, color: "var(--acc)", display: "block", marginBottom: 4 }}>
+            مفتاح قناص الخيارات في الامتحان (5-Second Trigger):
+          </span>
+          <span style={{ fontSize: "0.84rem", color: "var(--ink)" }}>{step.trigger}</span>
+        </div>
+      </div>
+
+      <div style={{ display: "flex", justifyContent: "space-between", marginTop: 14 }}>
+        <button
+          type="button"
+          className="btn btn-sm"
+          onClick={() => setActiveStep((prev) => Math.max(0, prev - 1))}
+          disabled={activeStep === 0}
+        >
+          السابق
+        </button>
+        <span style={{ fontSize: "0.82rem", color: "var(--ink-m)", alignSelf: "center" }}>
+          المرحلة {activeStep + 1} من {currentCase.steps.length}
+        </span>
+        <button
+          type="button"
+          className="btn btn-sm"
+          onClick={() => setActiveStep((prev) => Math.min(currentCase.steps.length - 1, prev + 1))}
+          disabled={activeStep === currentCase.steps.length - 1}
+        >
+          التالي
+        </button>
       </div>
     </div>
   );

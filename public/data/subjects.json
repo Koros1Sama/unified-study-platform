@@ -64,5 +64,21 @@
     "bundle_version": 5,
     "has_lab": false,
     "data_status": "full"
+  },
+  {
+    "code": "pm",
+    "name_ar": "إدارة المشاريع",
+    "name_en": "Project Management",
+    "term": 1,
+    "professor_name": "د. منصور نعمان",
+    "accent_color": "#eab308",
+    "icon_name": "award",
+    "is_active": true,
+    "lectures_count": 2,
+    "questions_count": 65,
+    "tables_count": 14,
+    "bundle_version": 5,
+    "has_lab": false,
+    "data_status": "full"
   }
 ]

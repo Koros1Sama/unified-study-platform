@@ -59,6 +59,16 @@ const SUBJECTS = {
     accent_color: "#34d399",
     icon_name: "layers",
     term: 1
+  },
+  pm: {
+    code: "pm",
+    dir: "PM_Viewer",
+    name_ar: "إدارة المشاريع",
+    name_en: "Project Management",
+    professor_name: "د. منصور نعمان",
+    accent_color: "#eab308",
+    icon_name: "award",
+    term: 1
   }
 };
 
@@ -1152,6 +1162,188 @@ const CURATED_SUBJECT_GLOSSARIES = {
       ref: "L6-S035",
       context: "إدخال أخطاء متعمدة (طفرات) في الكود لقياس قدرة حالات الاختبار على اكتشافها وقتلها"
     }
+  ],
+  pm: [
+    {
+      term_en: "Project",
+      term_ar: "المشروع",
+      importance: 1,
+      kind: "word",
+      category: "Foundations",
+      ref: "L1-S002",
+      context: "جهد مؤقت يُبذل لإنشاء منتج أو خدمة أو نتيجة فريدة وتقديم قيمة ملموسة للمستفيدين"
+    },
+    {
+      term_en: "Progressive Elaboration",
+      term_ar: "التفصيل التدريجي",
+      importance: 1,
+      kind: "phrase",
+      category: "Foundations",
+      ref: "L1-S003",
+      context: "تزايد وضوح وتفصيل المتطلبات والخطط تدريجياً مع تقدم المشروع وتوفر المعلومات"
+    },
+    {
+      term_en: "Triple Constraint",
+      term_ar: "مثلث القيود الثلاثية",
+      importance: 1,
+      kind: "phrase",
+      category: "Foundations",
+      ref: "L1-S004",
+      context: "إطار التوازن المركزي بين النطاق (Scope) والوقت (Schedule) والتكلفة (Cost)"
+    },
+    {
+      term_en: "Value Delivery System",
+      term_ar: "نظام تقديم القيمة",
+      importance: 1,
+      kind: "phrase",
+      category: "Value",
+      ref: "L1-S007",
+      context: "منظومة استراتيجية متكاملة تتدفق فيها المخرجات لتتحول إلى نتائج وفوائد وقيمة مستدامة"
+    },
+    {
+      term_en: "Portfolio vs Program vs Project",
+      term_ar: "المحفظة مقابل البرنامج مقابل المشروع",
+      importance: 1,
+      kind: "phrase",
+      category: "Governance",
+      ref: "L1-S006",
+      context: "المحفظة استراتيجية عليا، والبرنامج حزمة مشاريع مترابطة لتنسيق الفوائد، والمشروع لنطاق محدد"
+    },
+    {
+      term_en: "Enterprise Environmental Factors (EEF)",
+      term_ar: "العوامل البيئية للمشروع (EEF)",
+      importance: 1,
+      kind: "phrase",
+      category: "Environment",
+      ref: "L1-S011",
+      context: "عوامل بيئية داخلية وخارجية تحيط بالمشروع وتقيده ولا تخضع لسيطرة فريق المشروع المباشرة"
+    },
+    {
+      term_en: "Organizational Process Assets (OPA)",
+      term_ar: "الأصول العملياتية للمنظمة (OPA)",
+      importance: 1,
+      kind: "phrase",
+      category: "Environment",
+      ref: "L1-S011",
+      context: "الخطط والسياسات والإجراءات والقوالب وقواعد المعرفة والدروس المستفادة التاريخية"
+    },
+    {
+      term_en: "Tailoring",
+      term_ar: "التكييف والمواءمة المنهجية",
+      importance: 1,
+      kind: "word",
+      category: "Methodology",
+      ref: "L1-S014",
+      context: "المواءمة الواعية المدروسة للعمليات والممارسات لتناسب سياق وبيئة وحجم المشروع"
+    },
+    {
+      term_en: "Systems View",
+      term_ar: "تبني نظرة شمولية للمنظومة",
+      importance: 1,
+      kind: "phrase",
+      category: "Principles",
+      ref: "L2-S004",
+      context: "رؤية المشروع كعنصر داخل نظام كلي يتفاعل مع بيئته وتجنب التحسين المحلي الضار"
+    },
+    {
+      term_en: "Focus on Value",
+      term_ar: "التركيز الدائم على القيمة",
+      importance: 1,
+      kind: "phrase",
+      category: "Principles",
+      ref: "L2-S008",
+      context: "توجيه كافة أنشطة وقرارات المشروع نحو تحقيق الفوائد؛ فالقيمة هي الغاية والمخرجات وسيلة"
+    },
+    {
+      term_en: "Embed Quality",
+      term_ar: "تضمين الجودة في العمليات",
+      importance: 1,
+      kind: "phrase",
+      category: "Principles",
+      ref: "L2-S011",
+      context: "بناء الجودة في صلب العمليات بالوقاية والتحقق المستمر بدلاً من التفتيش العلاجي المتأخر"
+    },
+    {
+      term_en: "Lead with Accountability",
+      term_ar: "القيادة بمساءلة ونزاهة",
+      importance: 1,
+      kind: "phrase",
+      category: "Principles",
+      ref: "L2-S015",
+      context: "تحديد ملكية القرارات والشفافية التامة في نقل الحقائق وتطبيق مصفوفة RACI دون إبهام"
+    },
+    {
+      term_en: "Integrate Sustainability",
+      term_ar: "دمج الاستدامة الشاملة",
+      importance: 1,
+      kind: "phrase",
+      category: "Principles",
+      ref: "L2-S019",
+      context: "مراعاة الأثر البيئي والاجتماعي والاقتصادي ودورة حياة المنتج الكاملة لتقليل البصمة الكربونية"
+    },
+    {
+      term_en: "Build Empowered Teams",
+      term_ar: "بناء فرق ممكنة ومسؤولة",
+      importance: 1,
+      kind: "phrase",
+      category: "Principles",
+      ref: "L2-S023",
+      context: "توفير الأمان النفسي وتفويض الصلاحيات الفنية وتشجيع التنظيم الذاتي ونبذ الرقابة الخانقة"
+    },
+    {
+      term_en: "Project Management Office (PMO)",
+      term_ar: "مكتب إدارة المشاريع (PMO)",
+      importance: 2,
+      kind: "phrase",
+      category: "Governance",
+      ref: "L1-S006",
+      context: "هيكل تنظيمي يوحد ممارسات الحوكمة ويشارك الموارد ويدعم مديري المشاريع بالمنهجيات"
+    },
+    {
+      term_en: "Development Approaches",
+      term_ar: "مناهج التطوير الخمسة",
+      importance: 2,
+      kind: "phrase",
+      category: "Life Cycle",
+      ref: "L1-S013",
+      context: "التنبؤي (شلالي)، التكراري (تعلم)، التزايدي (دفعات)، التكيفي (رشيق)، والهجين (تكامل)"
+    },
+    {
+      term_en: "RACI Matrix",
+      term_ar: "مصفوفة تحديد المسؤوليات (RACI)",
+      importance: 2,
+      kind: "phrase",
+      category: "Accountability",
+      ref: "L2-S017",
+      context: "أداة تعيين الأدوار: Responsible (المنفذ)، Accountable (المسؤول)، Consulted (المستشار)، Informed (المبلّغ)"
+    },
+    {
+      term_en: "Psychological Safety",
+      term_ar: "الأمان النفسي للفريق",
+      importance: 2,
+      kind: "phrase",
+      category: "Teams",
+      ref: "L2-S024",
+      context: "مناخ ثقة متبادلة يجرؤ فيه أعضاء الفريق على طرح الأسئلة والاعتراف بالأخطاء دون خوف"
+    },
+    {
+      term_en: "Scope Creep",
+      term_ar: "زحف النطاق العشوائي",
+      importance: 3,
+      kind: "phrase",
+      category: "Scope",
+      ref: "L1-S004",
+      context: "التوسع غير المضبوط في متطلبات أو ميزات المشروع دون تعديل مقابل في الجدول أو الميزانية"
+    },
+    {
+      term_en: "Triple Bottom Line",
+      term_ar: "المحصلة الثلاثية للاستدامة",
+      importance: 3,
+      kind: "phrase",
+      category: "Sustainability",
+      ref: "L2-S019",
+      context: "إطار تقييم يقيس نجاح المشروع عبر ثلاثة أبعاد: الكوكب (البيئة)، الناس (المجتمع)، والربح (الاقتصاد)"
+    }
   ]
 };
 
@@ -1378,6 +1570,15 @@ function copySlides(sourceDir, targetCode, lab = false) {
 }
 
 function buildSubject(def) {
+  const dataDir = path.join(ROOT, def.dir, "data");
+  if (!fs.existsSync(dataDir)) {
+    const existingBundlePath = path.join(PUBLIC_DIR, "data", def.code, "bundle.json");
+    if (fs.existsSync(existingBundlePath)) {
+      console.log(`[Build] ${def.code}: source dir not found, preserving pre-built bundle.json`);
+      const existing = JSON.parse(fs.readFileSync(existingBundlePath, "utf-8"));
+      return existing.meta;
+    }
+  }
   const data = loadSubjectData(def);
   console.log(`[Debug] ${def.code} models=${data.models?.length} lectures=${data.meta?.lectures?.length} arKeys=${Object.keys(data.ar || {}).length}`);
   const warnings = [];

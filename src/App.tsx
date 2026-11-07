@@ -1087,7 +1087,7 @@ export const App: React.FC = () => {
               )}
 
               {activeView === "interactive" &&
-                (["sec", "se"].includes(currentSubjectCode) ? (
+                (["sec", "se", "pm"].includes(currentSubjectCode) ? (
                   <ConceptStudios
                     subjectCode={currentSubjectCode}
                     initialStudioId={targetStudioId}
