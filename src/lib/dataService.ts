@@ -473,19 +473,29 @@ export const DataService = {
     const progress = await this.getUserProgress(subjectCode);
     const now = new Date().toISOString();
 
-    const record = {
-      selected_answer: selectedAnswer,
-      is_correct: isCorrect,
-      answered_at: now
-    };
+    if (selectedAnswer < 0) {
+      delete progress.answered_questions[questionId];
+      // المزامنة التوأمية عند إلغاء الاختيار
+      if (twinGroupId) {
+        const twins = await db.questions.where("twin_group_id").equals(twinGroupId).toArray();
+        for (const t of twins) {
+          delete progress.answered_questions[t.id];
+        }
+      }
+    } else {
+      const record = {
+        selected_answer: selectedAnswer,
+        is_correct: isCorrect,
+        answered_at: now
+      };
+      progress.answered_questions[questionId] = record;
 
-    progress.answered_questions[questionId] = record;
-
-    // المزامنة التوأمية: إذا كان السؤال جزءاً من توأم، نعكس الإجابة على جميع توائمه في المادة
-    if (twinGroupId) {
-      const twins = await db.questions.where("twin_group_id").equals(twinGroupId).toArray();
-      for (const t of twins) {
-        progress.answered_questions[t.id] = record;
+      // المزامنة التوأمية: إذا كان السؤال جزءاً من توأم، نعكس الإجابة على جميع توائمه في المادة
+      if (twinGroupId) {
+        const twins = await db.questions.where("twin_group_id").equals(twinGroupId).toArray();
+        for (const t of twins) {
+          progress.answered_questions[t.id] = record;
+        }
       }
     }
 

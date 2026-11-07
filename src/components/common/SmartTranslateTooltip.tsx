@@ -59,6 +59,9 @@ export const SmartTranslateTooltip: React.FC<SmartTranslateTooltipProps> = ({
         onClose();
       }, 16000);
 
+      // استماع للتمرير لإغلاق النافذة فور تحرك الصفحة لمنع انفصالها عن السؤال
+      window.addEventListener("scroll", onClose, { passive: true });
+
       // استماع للنقر خارج النافذة مع حماية 280ms ضد النقرات الشبحية على الهواتف
       const handleOutsideClick = (e: MouseEvent | TouchEvent) => {
         if (Date.now() - openTimeRef.current < 280) return;
@@ -72,6 +75,7 @@ export const SmartTranslateTooltip: React.FC<SmartTranslateTooltipProps> = ({
       return () => {
         clearTimeout(timer);
         if (hoverOutTimerRef.current) clearTimeout(hoverOutTimerRef.current);
+        window.removeEventListener("scroll", onClose);
         document.removeEventListener("pointerdown", handleOutsideClick);
       };
     }
@@ -85,35 +89,55 @@ export const SmartTranslateTooltip: React.FC<SmartTranslateTooltipProps> = ({
   const top = position.y + 12;
 
   return (
-    <div
-      ref={tooltipRef}
-      className="wtip"
-      style={{
-        left: `${left}px`,
-        top: `${top}px`
-      }}
-      role="tooltip"
-      dir="rtl"
-      onMouseEnter={handleMouseEnter}
-      onMouseLeave={handleMouseLeave}
-    >
-      <div className="wtip-header">
-        <span style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-          <Icons.Translate size={15} />
-          <span>{title}</span>
-        </span>
-        <button
-          type="button"
-          className="wtip-close"
-          onClick={onClose}
-          aria-label="إغلاق التلميح"
-        >
-          <Icons.Cross size={14} />
-        </button>
+    <>
+      {/* غطاء شفاف لمنع تسرب اللمسات إلى العناصر والخيارات الخلفية عند الإغلاق */}
+      <div
+        className="wtip-backdrop"
+        style={{
+          position: "fixed",
+          inset: 0,
+          zIndex: 9998,
+          background: "transparent"
+        }}
+        onClick={(e) => {
+          e.stopPropagation();
+          onClose();
+        }}
+        onPointerDown={(e) => {
+          e.stopPropagation();
+        }}
+      />
+      <div
+        ref={tooltipRef}
+        className="wtip"
+        style={{
+          left: `${left}px`,
+          top: `${top}px`,
+          zIndex: 9999
+        }}
+        role="tooltip"
+        dir="rtl"
+        onMouseEnter={handleMouseEnter}
+        onMouseLeave={handleMouseLeave}
+      >
+        <div className="wtip-header">
+          <span style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+            <Icons.Translate size={15} />
+            <span>{title}</span>
+          </span>
+          <button
+            type="button"
+            className="wtip-close"
+            onClick={onClose}
+            aria-label="إغلاق التلميح"
+          >
+            <Icons.Cross size={14} />
+          </button>
+        </div>
+        <div style={{ fontSize: "0.93rem", color: "var(--ink)" }}>
+          {cleanArabicOnly(textAr)}
+        </div>
       </div>
-      <div style={{ fontSize: "0.93rem", color: "var(--ink)" }}>
-        {cleanArabicOnly(textAr)}
-      </div>
-    </div>
+    </>
   );
 };

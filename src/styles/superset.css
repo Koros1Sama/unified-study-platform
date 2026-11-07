@@ -900,10 +900,47 @@
   background: var(--acc-g); border: 1px dashed var(--acc);
 }
 .q-twin-badge {
-  display: inline-flex; align-items: center; gap: 3px;
-  font-size: 0.68rem; font-weight: 700; padding: 1px 7px;
-  border-radius: var(--r-pill); color: var(--acc);
-  border: 1px dashed var(--acc);
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  padding: 3px 9px;
+  border-radius: var(--r-pill);
+  background: color-mix(in srgb, var(--acc) 12%, transparent);
+  color: var(--acc);
+  border: 1px solid color-mix(in srgb, var(--acc) 35%, transparent);
+  cursor: pointer;
+  transition: all var(--dur) var(--ease);
+}
+.q-twin-badge:hover {
+  background: color-mix(in srgb, var(--acc) 22%, transparent);
+  border-color: var(--acc);
+  transform: translateY(-1px);
+}
+
+.twin-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.75);
+  backdrop-filter: blur(4px);
+  z-index: 10000;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  animation: fadeIn 0.15s ease-out;
+}
+.twin-modal-card {
+  background: var(--sf);
+  border: 1px solid var(--ln);
+  border-radius: 16px;
+  max-width: 680px;
+  width: 100%;
+  max-height: 90vh;
+  overflow-y: auto;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.35);
+  padding: 20px;
+  direction: rtl;
 }
 .q-flag-btn {
   display: inline-flex; align-items: center; gap: 4px;

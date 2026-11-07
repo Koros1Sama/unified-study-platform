@@ -8,6 +8,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { Icons } from "../icons/SvgIcons";
 import { QuestionCard } from "./QuestionCard";
+import { TwinQuestionModal } from "./TwinQuestionModal";
 import { SmartTranslateTooltip } from "../common/SmartTranslateTooltip";
 import type {
   UnifiedQuestion,
@@ -62,22 +63,48 @@ function questionLecture(q: UnifiedQuestion): string {
   return "عام";
 }
 
-function parseManualFilter(raw: string): Set<number> | null {
+function parseManualFilter(
+  raw: string,
+  allQuestions?: UnifiedQuestion[]
+): { numSet: Set<number>; textQuery: string | null } | null {
   const text = raw.trim();
   if (!text) return null;
-  const result = new Set<number>();
+  const numSet = new Set<number>();
   const parts = text.split(/[,،\s]+/).filter(Boolean);
+  let hasNumber = false;
   for (const part of parts) {
-    const range = part.match(/^(\d+)\s*[-–]\s*(\d+)$/);
+    const range = part.match(/^(\d+)\s*[-–—]\s*(\d+)$/);
     if (range) {
+      hasNumber = true;
       const start = Number(range[1]);
       const end = Number(range[2]);
-      for (let n = Math.min(start, end); n <= Math.max(start, end); n++) result.add(n);
+      const [mn, mx] = start <= end ? [start, end] : [end, start];
+      for (let n = mn; n <= mx; n++) numSet.add(n);
     } else if (/^\d+$/.test(part)) {
-      result.add(Number(part));
+      hasNumber = true;
+      numSet.add(Number(part));
     }
   }
-  return result.size > 0 ? result : null;
+
+  // إضافة أرقام التوائم للأسئلة المحددة تلقائياً لضمان عدم إخفاء السؤال التوأم
+  if (hasNumber && allQuestions && numSet.size > 0) {
+    const twinsToAdd: number[] = [];
+    allQuestions.forEach((q) => {
+      if (numSet.has(q.orig_q_num) && q.twin_group_id) {
+        allQuestions.forEach((other) => {
+          if (other.twin_group_id === q.twin_group_id && other.id !== q.id) {
+            twinsToAdd.push(other.orig_q_num);
+          }
+        });
+      }
+    });
+    twinsToAdd.forEach((n) => numSet.add(n));
+  }
+
+  return {
+    numSet,
+    textQuery: hasNumber ? null : text.toLowerCase()
+  };
 }
 
 export const UnifiedQuestionBankView: React.FC<UnifiedQuestionBankViewProps> = ({
@@ -112,7 +139,7 @@ export const UnifiedQuestionBankView: React.FC<UnifiedQuestionBankViewProps> = (
   };
 
   const [hideTwins, setHideTwins] = useState<boolean>(true);
-  const [filterState, setFilterState] = useState<"all" | "unsolved" | "wrong" | "correct" | "flagged">("all");
+  const [filterState, setFilterState] = useState<"all" | "unsolved" | "solved" | "wrong" | "correct" | "flagged">("all");
   const [filterBm, setFilterBm] = useState<"all" | BookmarkColor>("all");
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [lectureFilter, setLectureFilter] = useState<string>("all");
@@ -120,6 +147,7 @@ export const UnifiedQuestionBankView: React.FC<UnifiedQuestionBankViewProps> = (
   const [retest, setRetest] = useState<null | "wrong" | "flagged">(null);
   const [retestIds, setRetestIds] = useState<Set<string>>(new Set());
   const [retestAnswered, setRetestAnswered] = useState<Set<string>>(new Set());
+  const [activeTwinModalQ, setActiveTwinModalQ] = useState<UnifiedQuestion | null>(null);
   const [visibleLimit, setVisibleLimit] = useState<number>(40);
   const [tooltipState, setTooltipState] = useState<{
     visible: boolean;
@@ -136,6 +164,13 @@ export const UnifiedQuestionBankView: React.FC<UnifiedQuestionBankViewProps> = (
     [questions, selectedModelId]
   );
 
+  const activeTwinTarget = useMemo(() => {
+    if (!activeTwinModalQ || !activeTwinModalQ.twin_group_id) return undefined;
+    return questions.find(
+      (q) => q.twin_group_id === activeTwinModalQ.twin_group_id && q.id !== activeTwinModalQ.id
+    );
+  }, [activeTwinModalQ, questions]);
+
   const lectures = useMemo(() => {
     const map = new Map<string, number>();
     modelQuestions.forEach((q) => {
@@ -145,7 +180,7 @@ export const UnifiedQuestionBankView: React.FC<UnifiedQuestionBankViewProps> = (
     return Array.from(map.entries()).sort((a, b) => a[0].localeCompare(b[0], "en"));
   }, [modelQuestions]);
 
-  const manualSet = useMemo(() => parseManualFilter(manualFilter), [manualFilter]);
+  const manualData = useMemo(() => parseManualFilter(manualFilter, questions), [manualFilter, questions]);
 
   // حساب أعداد العلامات الملونة في النموذج الحالي
   const bookmarkCounts = useMemo(() => {
@@ -161,13 +196,33 @@ export const UnifiedQuestionBankView: React.FC<UnifiedQuestionBankViewProps> = (
     return counts;
   }, [modelQuestions, bookmarksMap]);
 
+  // إحصائيات حالة الأسئلة للنموذج الحالي
+  const statusCounts = useMemo(() => {
+    let solved = 0;
+    let correct = 0;
+    let wrong = 0;
+    let flagged = 0;
+    modelQuestions.forEach((q) => {
+      const a = answeredMap[q.id];
+      if (a && a.selected_answer >= 0) {
+        solved++;
+        if (a.is_correct) correct++;
+        else wrong++;
+      }
+      if (flaggedIds.includes(q.id)) flagged++;
+    });
+    return {
+      total: modelQuestions.length,
+      unsolved: Math.max(0, modelQuestions.length - solved),
+      solved,
+      correct,
+      wrong,
+      flagged
+    };
+  }, [modelQuestions, answeredMap, flaggedIds]);
+
   // عدد الأسئلة المحلولة في النموذج الحالي
-  const activeAnsCount = useMemo(() => {
-    return modelQuestions.filter((q) => {
-      const ans = answeredMap[q.id];
-      return ans && ans.selected_answer >= 0;
-    }).length;
-  }, [modelQuestions, answeredMap]);
+  const activeAnsCount = statusCounts.solved;
 
   const filteredQuestions = useMemo(() => {
     const seenTwins = new Set<string>();
@@ -175,9 +230,25 @@ export const UnifiedQuestionBankView: React.FC<UnifiedQuestionBankViewProps> = (
 
     return modelQuestions.filter((question) => {
       if (retest && !retestIds.has(question.id)) return false;
-      if (retest && retestAnswered.has(question.id)) return false;
+      // خلال جلسة الإعادة لا نخفي السؤال فور إجابته بل نبقيه ليرى الطالب التعليل
       if (lectureFilter !== "all" && questionLecture(question) !== lectureFilter) return false;
-      if (manualSet && !manualSet.has(question.orig_q_num)) return false;
+
+      if (manualData) {
+        if (manualData.numSet.size > 0 && !manualData.numSet.has(question.orig_q_num)) return false;
+        if (manualData.textQuery) {
+          const haystack = [
+            question.question_en,
+            question.question_ar,
+            ...question.options_en,
+            ...(question.options_ar || []),
+            question.why_correct || "",
+            question.slide_ref || ""
+          ]
+            .join(" ")
+            .toLowerCase();
+          if (!haystack.includes(manualData.textQuery)) return false;
+        }
+      }
 
       // فلتر العلامات الملونة
       if (showBookmarks && filterBm !== "all") {
@@ -192,6 +263,7 @@ export const UnifiedQuestionBankView: React.FC<UnifiedQuestionBankViewProps> = (
 
       const ans = answeredMap[question.id];
       if (filterState === "unsolved" && ans && ans.selected_answer >= 0) return false;
+      if (filterState === "solved" && (!ans || ans.selected_answer < 0)) return false;
       if (filterState === "wrong" && (!ans || ans.is_correct || ans.selected_answer < 0)) return false;
       if (filterState === "correct" && (!ans || !ans.is_correct)) return false;
       if (filterState === "flagged" && !flaggedIds.includes(question.id)) return false;
@@ -201,7 +273,7 @@ export const UnifiedQuestionBankView: React.FC<UnifiedQuestionBankViewProps> = (
           question.question_en,
           question.question_ar,
           ...question.options_en,
-          ...question.options_ar,
+          ...(question.options_ar || []),
           question.why_correct,
           question.slide_ref || ""
         ]
@@ -215,9 +287,8 @@ export const UnifiedQuestionBankView: React.FC<UnifiedQuestionBankViewProps> = (
     modelQuestions,
     retest,
     retestIds,
-    retestAnswered,
     lectureFilter,
-    manualSet,
+    manualData,
     hideTwins,
     filterState,
     filterBm,
@@ -583,10 +654,10 @@ export const UnifiedQuestionBankView: React.FC<UnifiedQuestionBankViewProps> = (
             <Icons.Reset size={16} />
             <span>
               جلسة إعادة {retest === "wrong" ? "الأسئلة الخاطئة" : "الأسئلة المعلّمة"} — متبقٍ{" "}
-              <b>{retestRemaining}</b> سؤالاً
+              <b>{retestRemaining}</b> من أصل <b>{retestIds.size}</b> سؤالاً
             </span>
           </div>
-          <button type="button" className="btn btn-sm" onClick={stopRetest}>إنهاء الجلسة</button>
+          <button type="button" className="btn btn-sm" onClick={stopRetest}>إنهاء الجلسة والعودة للبنك</button>
         </div>
       )}
 
@@ -619,23 +690,39 @@ export const UnifiedQuestionBankView: React.FC<UnifiedQuestionBankViewProps> = (
           })}
         </div>
         {weakLectures.length > 0 && (
-          <div className="ins-weak-note">
-            <Icons.Warning size={14} />
-            <span>
-              محاضرات تحتاج مراجعة عاجلة: <b>{weakLectures.map((entry) => entry.lec).join(" · ")}</b>
-            </span>
+          <div className="ins-weak-note" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "8px" }}>
+            <div style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}>
+              <Icons.Warning size={14} />
+              <span>
+                محاضرات تحتاج مراجعة عاجلة: <b>{weakLectures.map((entry) => entry.lec).join(" · ")}</b>
+              </span>
+            </div>
+            <button
+              type="button"
+              className="btn btn-sm"
+              style={{ padding: "3px 10px", fontSize: "0.78rem" }}
+              onClick={() => {
+                if (weakLectures[0]) {
+                  setLectureFilter(weakLectures[0].lec);
+                  setFilterState("wrong");
+                }
+              }}
+            >
+              مراجعة أضعف محاضرة ({weakLectures[0]?.lec})
+            </button>
           </div>
         )}
       </div>
 
-      {/* شريط الفلاتر الأساسي */}
+      {/* شريط الفلاتر الأساسي مع العدادات الحية المطابق لـ RM_Viewer */}
       <div className="fchips bank-toolbar">
         {[
-          { id: "all" as const, label: "الكل" },
-          { id: "unsolved" as const, label: "غير المحلولة" },
-          { id: "wrong" as const, label: "الخاطئة" },
-          { id: "correct" as const, label: "الصحيحة" },
-          { id: "flagged" as const, label: `المعلّمة (${flaggedIds.length})` }
+          { id: "all" as const, label: `الكل (${statusCounts.total})` },
+          { id: "unsolved" as const, label: `لم يُحل (${statusCounts.unsolved})` },
+          { id: "solved" as const, label: `محلول (${statusCounts.solved})` },
+          { id: "correct" as const, label: `صحيح (${statusCounts.correct})` },
+          { id: "wrong" as const, label: `خاطئ (${statusCounts.wrong})` },
+          { id: "flagged" as const, label: `المعلّمة (${statusCounts.flagged})` }
         ].map((f) => (
           <button
             key={f.id}
@@ -659,13 +746,13 @@ export const UnifiedQuestionBankView: React.FC<UnifiedQuestionBankViewProps> = (
 
         <button
           type="button"
-          className="fchip fchip-review-wrong"
+          className={`fchip fchip-review-wrong ${statusCounts.wrong === 0 ? "is-empty" : ""}`}
           onClick={() => startRetest("wrong")}
-          disabled={stats.answered === stats.correct}
+          disabled={statusCounts.wrong === 0}
           title="جلسة مركزة على الأسئلة التي أخطأت فيها فقط"
         >
           <Icons.Reset size={13} />
-          جلسة الأخطاء
+          جلسة الأخطاء{statusCounts.wrong > 0 ? ` (${statusCounts.wrong})` : ""}
         </button>
 
         {shuffleQuestions && onReshuffle && (
@@ -957,6 +1044,7 @@ export const UnifiedQuestionBankView: React.FC<UnifiedQuestionBankViewProps> = (
                 onToggleBookmark={(col) => onToggleBookmark?.(q.id, col, q.twin_group_id)}
                 onOpenBmLabelModal={onOpenBmLabelModal}
                 expMode={expMode}
+                onOpenTwinModal={(targetQ) => setActiveTwinModalQ(targetQ)}
               />
             );
           })}
@@ -969,6 +1057,18 @@ export const UnifiedQuestionBankView: React.FC<UnifiedQuestionBankViewProps> = (
             عرض المزيد من الأسئلة ({orderedQuestions.length - visibleQuestions.length} متبقٍ)
           </button>
         </div>
+      )}
+
+      {activeTwinModalQ && (
+        <TwinQuestionModal
+          question={activeTwinModalQ}
+          twinQuestion={activeTwinTarget}
+          onClose={() => setActiveTwinModalQ(null)}
+          onJumpToQuestion={(qId) => {
+            setActiveTwinModalQ(null);
+            if (onJumpToQuestion) onJumpToQuestion(qId);
+          }}
+        />
       )}
 
       <SmartTranslateTooltip

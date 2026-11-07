@@ -28,6 +28,7 @@ interface QuestionCardProps {
   onToggleBookmark?: (color: string) => void;
   onOpenBmLabelModal?: () => void;
   expMode?: ExplanationMode;
+  onOpenTwinModal?: (question: UnifiedQuestion) => void;
 }
 
 export function parseDistractorItem(item: DistractorDetail | string | undefined): DistractorDetail {
@@ -73,7 +74,8 @@ const QuestionCardComponent: React.FC<QuestionCardProps> = ({
   bmLabels,
   onToggleBookmark,
   onOpenBmLabelModal,
-  expMode = "always"
+  expMode = "always",
+  onOpenTwinModal
 }) => {
   const isEssay = question.type === "essay";
   const isAnswered = Boolean(userAnswer) && !isEssay && (userAnswer?.selected_answer ?? -1) >= 0;
@@ -172,10 +174,18 @@ const QuestionCardComponent: React.FC<QuestionCardProps> = ({
         )}
 
         {question.twin_group_id && (
-          <span className="q-twin-badge" title="سؤال مدمج مع توأم مطابق">
+          <button
+            type="button"
+            className="q-twin-badge"
+            title="سؤال مدمج مع توأم مطابق 100% — انقر لعرض تفاصيل التوأم وتوحيد الحل"
+            onClick={(e) => {
+              e.stopPropagation();
+              if (onOpenTwinModal) onOpenTwinModal(question);
+            }}
+          >
             <Icons.Twin size={11} />
-            مدمج
-          </span>
+            <span>توأم مدمج</span>
+          </button>
         )}
 
         {/* زر العلامات الملونة (Bookmarks) */}
