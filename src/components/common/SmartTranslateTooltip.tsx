@@ -88,25 +88,31 @@ export const SmartTranslateTooltip: React.FC<SmartTranslateTooltipProps> = ({
   const left = Math.min(Math.max(16, position.x - 150), screenWidth - 340);
   const top = position.y + 12;
 
+  const isTouchDevice =
+    typeof window !== "undefined" &&
+    (window.matchMedia("(hover: none)").matches || navigator.maxTouchPoints > 0);
+
   return (
     <>
-      {/* غطاء شفاف لمنع تسرب اللمسات إلى العناصر والخيارات الخلفية عند الإغلاق */}
-      <div
-        className="wtip-backdrop"
-        style={{
-          position: "fixed",
-          inset: 0,
-          zIndex: 9998,
-          background: "transparent"
-        }}
-        onClick={(e) => {
-          e.stopPropagation();
-          onClose();
-        }}
-        onPointerDown={(e) => {
-          e.stopPropagation();
-        }}
-      />
+      {/* غطاء حماية مقتصر على شاشات اللمس لمنع تسرب اللمسات، مع إبقائه غير حاجب على أجهزة اللابتوب والماوس */}
+      {isTouchDevice && (
+        <div
+          className="wtip-backdrop"
+          style={{
+            position: "fixed",
+            inset: 0,
+            zIndex: 9998,
+            background: "transparent"
+          }}
+          onClick={(e) => {
+            e.stopPropagation();
+            onClose();
+          }}
+          onPointerDown={(e) => {
+            e.stopPropagation();
+          }}
+        />
+      )}
       <div
         ref={tooltipRef}
         className="wtip"

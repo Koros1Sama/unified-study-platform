@@ -5,8 +5,8 @@
 
 const CORE_PREFIX = "usp-core-";
 const RUNTIME_PREFIX = "usp-runtime-";
-const CORE = "usp-core-v3";
-const RUNTIME = "usp-runtime-v3";
+const CORE = "usp-core-v7";
+const RUNTIME = "usp-runtime-v7";
 
 const CORE_ASSETS = [
   "./",
@@ -46,7 +46,7 @@ self.addEventListener("activate", (e) => {
             const oldReqs = await oldC.keys();
             const slideReqs = oldReqs.filter((req) => {
               const u = new URL(req.url);
-              return u.pathname.includes("/slides/") || u.pathname.includes("/data/");
+              return u.pathname.includes("/slides/") || u.pathname.includes("/icons/");
             });
 
             for (let b = 0; b < slideReqs.length; b += 10) {

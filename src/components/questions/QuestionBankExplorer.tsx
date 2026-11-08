@@ -282,11 +282,11 @@ export const QuestionBankExplorer: React.FC<QuestionBankExplorerProps> = ({
                   className="explorer-card"
                 >
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                    <div style={{ display: "flex", gap: "6px" }}>
-                      <span style={{ fontSize: "0.76rem", fontWeight: 800, padding: "1px 7px", borderRadius: "var(--r-pill)", background: "var(--acc)", color: "#000" }}>
+                    <div style={{ display: "flex", gap: "6px", alignItems: "center" }}>
+                      <span style={{ fontSize: "0.82rem", fontWeight: 800, padding: "2px 8px", borderRadius: "var(--r-pill)", background: "var(--acc)", color: "#000" }}>
                         #{q.orig_q_num}
                       </span>
-                      <span style={{ fontSize: "0.72rem", padding: "1px 7px", borderRadius: "var(--r-pill)", background: "var(--sf2)", color: "var(--ink-m)", border: "1px solid var(--ln)" }}>
+                      <span style={{ fontSize: "0.78rem", padding: "2px 8px", borderRadius: "var(--r-pill)", background: "var(--sf2)", color: "var(--ink-m)", border: "1px solid var(--ln)" }}>
                         {q.model_id.toUpperCase()}
                       </span>
                     </div>
@@ -302,18 +302,18 @@ export const QuestionBankExplorer: React.FC<QuestionBankExplorerProps> = ({
                     </button>
                   </div>
 
-                  <div style={{ fontSize: "0.88rem", fontWeight: 700, color: "var(--ink)", direction: "ltr", textAlign: "left", lineClamp: 2, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden", lineHeight: 1.5 }}>
+                  <div style={{ fontSize: "1.02rem", fontWeight: 700, color: "var(--ink)", direction: "ltr", textAlign: "left", lineClamp: 2, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden", lineHeight: 1.6 }}>
                     {highlightSearchText(q.question_en, searchTerm)}
                   </div>
 
                   {q.question_ar && (
-                    <div style={{ fontSize: "0.8rem", color: "var(--ink-m)", lineClamp: 1, display: "-webkit-box", WebkitLineClamp: 1, WebkitBoxOrient: "vertical", overflow: "hidden", lineHeight: 1.5 }}>
+                    <div style={{ fontSize: "0.94rem", color: "var(--ink-m)", lineClamp: 1, display: "-webkit-box", WebkitLineClamp: 1, WebkitBoxOrient: "vertical", overflow: "hidden", lineHeight: 1.65 }}>
                       {highlightSearchText(q.question_ar, searchTerm)}
                     </div>
                   )}
 
-                  <div style={{ marginTop: "auto", fontSize: "0.76rem", color: "var(--ok)", background: "var(--ok-g)", padding: "5px 10px", borderRadius: "var(--r-pill)", display: "flex", alignItems: "center", gap: "6px" }}>
-                    <Icons.Check size={12} />
+                  <div style={{ marginTop: "auto", fontSize: "0.88rem", color: "var(--ok)", background: "var(--ok-g)", padding: "6px 12px", borderRadius: "var(--r-pill)", display: "flex", alignItems: "center", gap: "6px" }}>
+                    <Icons.Check size={13} />
                     {q.type === "essay" ? (
                       <span>سؤال مقالي — الإجابة النموذجية متاحة بالبنك</span>
                     ) : (
@@ -325,23 +325,23 @@ export const QuestionBankExplorer: React.FC<QuestionBankExplorerProps> = ({
             </div>
           ) : (
             /* الوضع الكامل (Full View) */
-            <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
               {visibleResults.map((q) => (
                 <div
                   key={q.id}
                   className="card"
-                  style={{ margin: 0, padding: "14px 16px", border: "1px solid var(--ln)" }}
+                  style={{ margin: 0, padding: "18px 20px", border: "1px solid var(--ln)" }}
                 >
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "10px" }}>
                     <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
-                      <span style={{ fontSize: "0.82rem", fontWeight: 800, padding: "2px 8px", borderRadius: "var(--r-pill)", background: "var(--acc)", color: "#000" }}>
+                      <span style={{ fontSize: "0.86rem", fontWeight: 800, padding: "2px 9px", borderRadius: "var(--r-pill)", background: "var(--acc)", color: "#000" }}>
                         #{q.orig_q_num}
                       </span>
-                      <span style={{ fontSize: "0.76rem", padding: "2px 6px", borderRadius: "var(--r-pill)", background: "var(--sf2)", color: "var(--ink-m)", border: "1px solid var(--ln)" }}>
+                      <span style={{ fontSize: "0.8rem", padding: "2px 8px", borderRadius: "var(--r-pill)", background: "var(--sf2)", color: "var(--ink-m)", border: "1px solid var(--ln)" }}>
                         {q.model_id.toUpperCase()}
                       </span>
                       {q.slide_ref && (
-                        <span style={{ fontSize: "0.75rem", color: "var(--acc)", fontWeight: 700 }}>
+                        <span style={{ fontSize: "0.82rem", color: "var(--acc)", fontWeight: 700 }}>
                           {q.slide_ref}
                         </span>
                       )}
@@ -357,29 +357,29 @@ export const QuestionBankExplorer: React.FC<QuestionBankExplorerProps> = ({
                     </button>
                   </div>
 
-                  <div style={{ fontSize: "0.92rem", fontWeight: 700, color: "var(--ink)", direction: "ltr", textAlign: "left", marginBottom: "4px", lineHeight: 1.5 }}>
+                  <div style={{ fontSize: "1.06rem", fontWeight: 700, color: "var(--ink)", direction: "ltr", textAlign: "left", marginBottom: "6px", lineHeight: 1.65 }}>
                     {highlightSearchText(q.question_en, searchTerm)}
                   </div>
                   {q.question_ar && (
-                    <div style={{ fontSize: "0.84rem", color: "var(--ink-m)", marginBottom: "10px", lineHeight: 1.5 }}>
+                    <div style={{ fontSize: "0.98rem", color: "var(--ink-m)", marginBottom: "12px", lineHeight: 1.7 }}>
                       {highlightSearchText(q.question_ar, searchTerm)}
                     </div>
                   )}
 
                   {q.type !== "essay" ? (
-                  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: "8px", marginBottom: "10px" }}>
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: "10px", marginBottom: "12px" }}>
                     {q.options_en.map((opt, oIdx) => {
                       const isCorrect = oIdx === q.correct_answer;
                       return (
                         <div
                           key={oIdx}
                           style={{
-                            padding: "7px 11px",
+                            padding: "9px 13px",
                             borderRadius: "var(--r-m)",
                             background: isCorrect ? "var(--ok-g)" : "var(--sf2)",
                             border: `1px solid ${isCorrect ? "var(--ok)" : "var(--ln)"}`,
                             color: isCorrect ? "var(--ok)" : "var(--ink)",
-                            fontSize: "0.82rem",
+                            fontSize: "0.92rem",
                             direction: "ltr",
                             textAlign: "left"
                           }}
@@ -391,7 +391,7 @@ export const QuestionBankExplorer: React.FC<QuestionBankExplorerProps> = ({
                   </div>
                   ) : null}
 
-                  <div style={{ fontSize: "0.82rem", color: "var(--ink-m)", borderTop: "1px solid var(--ln-s)", paddingTop: "8px", lineHeight: 1.5 }}>
+                  <div style={{ fontSize: "0.9rem", color: "var(--ink-m)", borderTop: "1px solid var(--ln-s)", paddingTop: "10px", lineHeight: 1.7 }}>
                     <strong style={{ color: "var(--ok)" }}>{q.type === "essay" ? "الإجابة النموذجية: " : "التعليل: "}</strong>
                     <span>{q.type === "essay" ? (q.essay_answer_ar || q.essay_answer_en || q.why_correct) : q.why_correct}</span>
                   </div>

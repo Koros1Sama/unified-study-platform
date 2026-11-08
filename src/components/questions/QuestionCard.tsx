@@ -29,6 +29,7 @@ interface QuestionCardProps {
   onOpenBmLabelModal?: () => void;
   expMode?: ExplanationMode;
   onOpenTwinModal?: (question: UnifiedQuestion) => void;
+  twinNumber?: number;
 }
 
 export function parseDistractorItem(item: DistractorDetail | string | undefined): DistractorDetail {
@@ -75,7 +76,8 @@ const QuestionCardComponent: React.FC<QuestionCardProps> = ({
   onToggleBookmark,
   onOpenBmLabelModal,
   expMode = "always",
-  onOpenTwinModal
+  onOpenTwinModal,
+  twinNumber
 }) => {
   const isEssay = question.type === "essay";
   const isAnswered = Boolean(userAnswer) && !isEssay && (userAnswer?.selected_answer ?? -1) >= 0;
@@ -120,6 +122,8 @@ const QuestionCardComponent: React.FC<QuestionCardProps> = ({
     : "";
 
   const handleSelectOption = (idx: number) => {
+    // قفل الخيارات: إذا كان السؤال قد أُجيب عليه بالفعل، يُمنع التبديل العرضي المباشر، ويجب النقر على زر "إعادة" لإلغاء الاختيار أولاً
+    if (isAnswered) return;
     const ok = idx === question.correct_answer;
     onAnswer(question.id, idx, ok, question.twin_group_id);
 
@@ -177,14 +181,14 @@ const QuestionCardComponent: React.FC<QuestionCardProps> = ({
           <button
             type="button"
             className="q-twin-badge"
-            title="سؤال مدمج مع توأم مطابق 100% — انقر لعرض تفاصيل التوأم وتوحيد الحل"
+            title={`سؤال مدمج مع توأم مطابق 100%${twinNumber ? ` (س${twinNumber})` : ""} — انقر لعرض تفاصيل التوأم وتوحيد الحل`}
             onClick={(e) => {
               e.stopPropagation();
               if (onOpenTwinModal) onOpenTwinModal(question);
             }}
           >
             <Icons.Twin size={11} />
-            <span>توأم مدمج</span>
+            <span>{twinNumber ? `مدمج مع س${twinNumber}` : "توأم مدمج"}</span>
           </button>
         )}
 
@@ -429,13 +433,30 @@ const QuestionCardComponent: React.FC<QuestionCardProps> = ({
                   <span>{isCorrect ? "إجابة صحيحة ومطابقة للبنك المعتمد" : "إجابة خاطئة — راجع تفنيد الخيارات أدناه"}</span>
                 </span>
 
-                <button
-                  type="button"
-                  className="ref-chip q-toggle-exp-btn"
-                  onClick={() => setShowExplanation(!showExplanation)}
-                >
-                  <span>{showExplanation ? "طي التعليل" : "فتح التعليل المفصل"}</span>
-                </button>
+                <div style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}>
+                  <button
+                    type="button"
+                    className="ref-chip q-toggle-exp-btn"
+                    onClick={() => setShowExplanation(!showExplanation)}
+                  >
+                    <span>{showExplanation ? "طي التعليل" : "فتح التعليل المفصل"}</span>
+                  </button>
+
+                  {!readOnly && (
+                    <button
+                      type="button"
+                      className="ref-chip q-undo-btn"
+                      onClick={() => {
+                        setShowExplanation(false);
+                        onAnswer(question.id, -1, false, question.twin_group_id);
+                      }}
+                      title="إلغاء اختيار هذا السؤال لإعادة المحاولة من جديد"
+                    >
+                      <Icons.Reset size={12} />
+                      <span>إلغاء الاختيار</span>
+                    </button>
+                  )}
+                </div>
               </div>
 
               {question.exam_tip && (

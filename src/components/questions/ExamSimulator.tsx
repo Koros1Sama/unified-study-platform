@@ -153,8 +153,8 @@ export const ExamSimulator: React.FC<ExamSimulatorProps> = ({
           <div className="exam-setup-head">
             <div className="exam-setup-icon"><Icons.Exam size={22} /></div>
             <div>
-              <h2 style={{ fontSize: "1.05rem", fontWeight: 800, color: "var(--ink)", margin: 0 }}>تخصيص جلسة الاختبار</h2>
-              <p style={{ margin: "2px 0 0", fontSize: "0.82rem", color: "var(--ink-m)" }}>اختر النطاق وعدد الأسئلة ونمط المؤقت للبدء فوراً.</p>
+              <h2 style={{ fontSize: "1.2rem", fontWeight: 800, color: "var(--ink)", margin: 0 }}>تخصيص جلسة الاختبار</h2>
+              <p style={{ margin: "4px 0 0", fontSize: "0.92rem", color: "var(--ink-m)", lineHeight: 1.6 }}>اختر النطاق وعدد الأسئلة ونمط المؤقت للبدء فوراً.</p>
             </div>
           </div>
 
