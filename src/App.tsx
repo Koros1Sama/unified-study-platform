@@ -132,13 +132,15 @@ export const App: React.FC = () => {
   const [shuffleQuestions, setShuffleQuestions] = useState<boolean>(() => {
     return localStorage.getItem("unified_shuffle_questions") === "true";
   });
-  // توليد بذرة عشوائية جديدة تلقائياً مع كل إعادة تشغيل للصفحة لتحقيق الخلط المتجدد
+  // بذرة الترتيب العشوائي المحفوظة (الافتراضية 1 كما في RM_Viewer)
   const [shuffleSeed, setShuffleSeed] = useState<number>(() => {
-    return Math.floor(Math.random() * 1000000) + 1;
+    return parseInt(localStorage.getItem("unified_seed") || "1", 10) || 1;
   });
 
   const handleReshuffle = useCallback(() => {
-    setShuffleSeed(Math.floor(Math.random() * 1000000) + 1);
+    const next = Math.floor(Math.random() * 999) + 1;
+    setShuffleSeed(next);
+    localStorage.setItem("unified_seed", String(next));
   }, []);
 
   // إدارة وتثبيت تطبيق الويب التقدمي (PWA)
@@ -1036,9 +1038,13 @@ export const App: React.FC = () => {
                   onToggleBookmark={handleToggleBookmark}
                   onOpenBmLabelModal={() => setIsBmModalOpen(true)}
                   expMode={expMode}
+                  onChangeExpMode={handleChangeExpMode}
                   shuffleChoices={shuffleChoices}
+                  onToggleShuffleChoices={handleToggleShuffleChoices}
                   shuffleQuestions={shuffleQuestions}
+                  onToggleShuffleQuestions={handleToggleShuffleQuestions}
                   shuffleSeed={shuffleSeed}
+                  onChangeShuffleSeed={handleChangeShuffleSeed}
                   onResetModelAnswers={handleResetModelAnswers}
                   onReshuffle={handleReshuffle}
                 />

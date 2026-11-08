@@ -37,9 +37,13 @@ interface UnifiedQuestionBankViewProps {
   onToggleBookmark?: (questionId: string, color: string, twinGroupId?: string) => void;
   onOpenBmLabelModal?: () => void;
   expMode?: ExplanationMode;
+  onChangeExpMode?: (mode: ExplanationMode) => void;
   shuffleChoices?: boolean;
+  onToggleShuffleChoices?: () => void;
   shuffleQuestions?: boolean;
+  onToggleShuffleQuestions?: () => void;
   shuffleSeed?: number;
+  onChangeShuffleSeed?: (seed: number) => void;
   onResetModelAnswers?: (modelId: string) => void;
   onReshuffle?: () => void;
 }
@@ -125,9 +129,13 @@ export const UnifiedQuestionBankView: React.FC<UnifiedQuestionBankViewProps> = (
   onToggleBookmark,
   onOpenBmLabelModal,
   expMode = "always",
+  onChangeExpMode,
   shuffleChoices = false,
+  onToggleShuffleChoices,
   shuffleQuestions = false,
+  onToggleShuffleQuestions,
   shuffleSeed = 1,
+  onChangeShuffleSeed,
   onResetModelAnswers,
   onReshuffle
 }) => {
@@ -175,6 +183,39 @@ export const UnifiedQuestionBankView: React.FC<UnifiedQuestionBankViewProps> = (
   useEffect(() => {
     setActiveExpMode(expMode);
   }, [expMode]);
+
+  const toggleShuffleChoicesSync = () => {
+    const next = !activeShuffleChoices;
+    setActiveShuffleChoices(next);
+    if (onToggleShuffleChoices) onToggleShuffleChoices();
+    else localStorage.setItem("unified_shuffle_choices", String(next));
+  };
+
+  const toggleShuffleQuestionsSync = () => {
+    const next = !activeShuffleQuestions;
+    setActiveShuffleQuestions(next);
+    if (onToggleShuffleQuestions) onToggleShuffleQuestions();
+    else localStorage.setItem("unified_shuffle_questions", String(next));
+  };
+
+  const updateSeedSync = (nextSeed: number) => {
+    const s = Math.max(1, nextSeed);
+    setActiveSeed(s);
+    if (onChangeShuffleSeed) onChangeShuffleSeed(s);
+    else localStorage.setItem("unified_seed", String(s));
+  };
+
+  const cycleExpModeSync = () => {
+    const cycle: Record<ExplanationMode, ExplanationMode> = {
+      always: "wrong_only",
+      wrong_only: "manual",
+      manual: "always"
+    };
+    const next = cycle[activeExpMode] || "always";
+    setActiveExpMode(next);
+    if (onChangeExpMode) onChangeExpMode(next);
+    else localStorage.setItem("unified_exp_mode", next);
+  };
 
   const answeredMap = userProgress.answered_questions || {};
   const flaggedIds = userProgress.flagged_questions || [];
@@ -293,12 +334,14 @@ export const UnifiedQuestionBankView: React.FC<UnifiedQuestionBankViewProps> = (
         seenTwins.add(question.twin_group_id);
       }
 
-      const ans = answeredMap[question.id];
-      if (filterState === "unsolved" && ans && ans.selected_answer >= 0) return false;
-      if (filterState === "solved" && (!ans || ans.selected_answer < 0)) return false;
-      if (filterState === "wrong" && (!ans || ans.is_correct || ans.selected_answer < 0)) return false;
-      if (filterState === "correct" && (!ans || !ans.is_correct)) return false;
-      if (filterState === "flagged" && !flaggedIds.includes(question.id)) return false;
+      if (!retest) {
+        const ans = answeredMap[question.id];
+        if (filterState === "unsolved" && ans && ans.selected_answer >= 0) return false;
+        if (filterState === "solved" && (!ans || ans.selected_answer < 0)) return false;
+        if (filterState === "wrong" && (!ans || ans.is_correct || ans.selected_answer < 0)) return false;
+        if (filterState === "correct" && (!ans || !ans.is_correct)) return false;
+        if (filterState === "flagged" && !flaggedIds.includes(question.id)) return false;
+      }
 
       if (q) {
         const haystack = [
@@ -485,6 +528,40 @@ export const UnifiedQuestionBankView: React.FC<UnifiedQuestionBankViewProps> = (
   };
 
   const retestRemaining = retest ? Math.max(0, retestIds.size - retestAnswered.size) : 0;
+
+  const retestSessionStats = useMemo(() => {
+    let correct = 0;
+    let wrong = 0;
+    const wrongSet = new Set<string>();
+    retestIds.forEach((id) => {
+      const a = retestAnswers[id];
+      if (a && a.selected_answer >= 0) {
+        if (a.is_correct) correct++;
+        else {
+          wrong++;
+          wrongSet.add(id);
+        }
+      }
+    });
+    return {
+      total: retestIds.size,
+      answered: retestAnswered.size,
+      remaining: Math.max(0, retestIds.size - retestAnswered.size),
+      correct,
+      wrong,
+      wrongSet
+    };
+  }, [retestIds, retestAnswers, retestAnswered]);
+
+  const retryRemainingWrong = () => {
+    if (retestSessionStats.wrongSet.size === 0) return;
+    const nextIds = new Set(retestSessionStats.wrongSet);
+    setRetestIds(nextIds);
+    setRetestAnswers({});
+    setRetestAnswered(new Set());
+    setVisibleLimit(Math.max(40, nextIds.size));
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
 
   useEffect(() => {
     if (!focusQuestionId) return;
@@ -725,8 +802,10 @@ export const UnifiedQuestionBankView: React.FC<UnifiedQuestionBankViewProps> = (
               </span>
               <small style={{ color: "var(--ink-m)" }}>
                 {retestRemaining === 0
-                  ? "أكملت مراجعة جميع أسئلة الجلسة — يمكنك إنهاء الجلسة أو العودة للبنك الكامل."
-                  : `أعد الإجابة بنفسك · أجبت ${retestAnswered.size} من أصل ${retestIds.size} سؤالاً · متبقٍ ${retestRemaining}`}
+                  ? retestSessionStats.wrong === 0
+                    ? "أجبت عن جميع الأسئلة بشكل صحيح — أحسنت!"
+                    : `أنهيت ${retestSessionStats.total} سؤالاً · صحيح ${retestSessionStats.correct} · لا يزال خطأ ${retestSessionStats.wrong}`
+                  : `أعد الإجابة على هذه الأسئلة بنفسك · أجبت ${retestSessionStats.answered} من ${retestSessionStats.total} · صحيح ${retestSessionStats.correct} · خطأ ${retestSessionStats.wrong}`}
               </small>
             </div>
           </div>
@@ -753,9 +832,19 @@ export const UnifiedQuestionBankView: React.FC<UnifiedQuestionBankViewProps> = (
           </div>
 
           <div style={{ display: "flex", gap: "8px", alignItems: "center", flexWrap: "wrap" }}>
-            <button type="button" className="btn btn-sm btn-primary" onClick={stopRetest}>
+            {retestSessionStats.wrong > 0 && (
+              <button type="button" className="btn btn-sm btn-primary" onClick={retryRemainingWrong}>
+                <Icons.Rotate size={13} />
+                <span>
+                  {retestSessionStats.wrong === retestSessionStats.total && retestRemaining === 0
+                    ? "أعد المحاولة من جديد"
+                    : `أعد محاولة الأخطاء المتبقية (${retestSessionStats.wrong})`}
+                </span>
+              </button>
+            )}
+            <button type="button" className="btn btn-sm" onClick={stopRetest}>
               <Icons.Back size={13} />
-              <span>إنهاء الجلسة والعودة للبنك</span>
+              <span>إنهاء المراجعة والعودة للبنك</span>
             </button>
           </div>
         </div>
@@ -855,23 +944,11 @@ export const UnifiedQuestionBankView: React.FC<UnifiedQuestionBankViewProps> = (
           جلسة الأخطاء{statusCounts.wrong > 0 ? ` (${statusCounts.wrong})` : ""}
         </button>
 
-        {shuffleQuestions && onReshuffle && (
-          <button
-            type="button"
-            className="fchip"
-            onClick={onReshuffle}
-            title="توليد خلط عشوائي متجدد للأسئلة غير المحلولة"
-          >
-            <Icons.Rotate size={13} />
-            <span>إعادة خلط</span>
-          </button>
-        )}
-
-        {/* أزرار اللخبطة والبذرة والشرح المطابقة لـ RM_Viewer */}
+        {/* أزرار اللخبطة والبذرة والشرح المطابقة لـ RM_Viewer والمرتبطة بالتخزين والإعدادات */}
         <button
           type="button"
           className={`fchip ${activeShuffleChoices ? "on" : ""}`}
-          onClick={() => setActiveShuffleChoices(!activeShuffleChoices)}
+          onClick={toggleShuffleChoicesSync}
           title="تبديل عشوائي لترتيب خيارات الإجابة"
         >
           <Icons.Shuffle size={13} />
@@ -881,7 +958,7 @@ export const UnifiedQuestionBankView: React.FC<UnifiedQuestionBankViewProps> = (
         <button
           type="button"
           className={`fchip ${activeShuffleQuestions ? "on" : ""}`}
-          onClick={() => setActiveShuffleQuestions(!activeShuffleQuestions)}
+          onClick={toggleShuffleQuestionsSync}
           title="خلط عشوائي متزن للأسئلة غير المحلولة"
         >
           <Icons.Shuffle size={13} />
@@ -896,7 +973,7 @@ export const UnifiedQuestionBankView: React.FC<UnifiedQuestionBankViewProps> = (
           <button
             type="button"
             className="seed-btn seed-dec"
-            onClick={() => setActiveSeed((s) => Math.max(1, s - 1))}
+            onClick={() => updateSeedSync(activeSeed - 1)}
             title="إنقاص رقم البذرة"
           >
             -
@@ -905,14 +982,14 @@ export const UnifiedQuestionBankView: React.FC<UnifiedQuestionBankViewProps> = (
             type="number"
             className="seed-input-num"
             value={activeSeed}
-            onChange={(e) => setActiveSeed(Math.max(1, parseInt(e.target.value, 10) || 1))}
+            onChange={(e) => updateSeedSync(parseInt(e.target.value, 10) || 1)}
             min={1}
             max={9999}
           />
           <button
             type="button"
             className="seed-btn seed-inc"
-            onClick={() => setActiveSeed((s) => s + 1)}
+            onClick={() => updateSeedSync(activeSeed + 1)}
             title="زيادة رقم البذرة"
           >
             +
@@ -920,7 +997,7 @@ export const UnifiedQuestionBankView: React.FC<UnifiedQuestionBankViewProps> = (
           <button
             type="button"
             className="seed-btn seed-rnd"
-            onClick={() => setActiveSeed(Math.floor(Math.random() * 999) + 1)}
+            onClick={() => updateSeedSync(Math.floor(Math.random() * 999) + 1)}
             title="توليد بذرة عشوائية جديدة"
           >
             <Icons.Rotate size={11} />
@@ -931,14 +1008,7 @@ export const UnifiedQuestionBankView: React.FC<UnifiedQuestionBankViewProps> = (
         <button
           type="button"
           className="fchip fchip-expmode"
-          onClick={() => {
-            const cycle: Record<ExplanationMode, ExplanationMode> = {
-              always: "wrong_only",
-              wrong_only: "manual",
-              manual: "always"
-            };
-            setActiveExpMode((prev) => cycle[prev] || "always");
-          }}
+          onClick={cycleExpModeSync}
           title="التبديل السريع بين أوضاع ظهور الشرح والتعليل"
         >
           {activeExpMode === "manual" ? <Icons.EyeOff size={13} /> : <Icons.Eye size={13} />}

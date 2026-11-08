@@ -9,12 +9,29 @@
    0. Header: more-menu + compact pills
    ------------------------------------------------------------------------------ */
 
-.seg-pills {
-  max-width: min(940px, 62vw);
+.top-nav-wrap {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  justify-content: center;
   overflow-x: auto;
   scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+}
+.top-nav-wrap::-webkit-scrollbar { display: none; }
+
+.seg-pills {
+  max-width: none;
+  width: max-content;
+  overflow: visible;
+  gap: 2px;
 }
 .seg-pills::-webkit-scrollbar { display: none; }
+.seg-pill {
+  padding: 5px 10px;
+  font-size: 0.78rem;
+  white-space: nowrap;
+}
 
 .more-wrap { position: relative; display: inline-flex; }
 
@@ -1383,7 +1400,9 @@
    ------------------------------------------------------------------------------ */
 
 @media (max-width: 1180px) {
-  .seg-pills { max-width: 56vw; }
+  .top-nav-wrap { justify-content: flex-start; }
+  .seg-pills { max-width: none; width: max-content; }
+  .seg-pill { padding: 5px 8px; }
   .seg-pill .span, .seg-pill span { font-size: 0.74rem; }
 }
 

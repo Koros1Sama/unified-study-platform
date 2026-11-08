@@ -14,7 +14,7 @@ const __dirname = path.dirname(__filename);
 const ROOT = path.resolve(__dirname, "../..");
 const PLATFORM_DIR = path.resolve(__dirname, "..");
 const PUBLIC_DIR = path.join(PLATFORM_DIR, "public");
-const BUNDLE_VERSION = 5;
+const BUNDLE_VERSION = 6;
 
 const SUBJECTS = {
   toc: {
@@ -1170,7 +1170,7 @@ const CURATED_SUBJECT_GLOSSARIES = {
       importance: 1,
       kind: "word",
       category: "Foundations",
-      ref: "L1-S002",
+      ref: "L1-S005",
       context: "جهد مؤقت يُبذل لإنشاء منتج أو خدمة أو نتيجة فريدة وتقديم قيمة ملموسة للمستفيدين"
     },
     {
@@ -1179,8 +1179,26 @@ const CURATED_SUBJECT_GLOSSARIES = {
       importance: 1,
       kind: "phrase",
       category: "Foundations",
-      ref: "L1-S003",
-      context: "تزايد وضوح وتفصيل المتطلبات والخطط تدريجياً مع تقدم المشروع وتوفر المعلومات"
+      ref: "L1-S006",
+      context: "تزايد وضوح وتفصيل المتطلبات والخطط والتقديرات تدريجياً مع تقدم المشروع وتوفر المعلومات"
+    },
+    {
+      term_en: "Project vs Operations",
+      term_ar: "المشروع مقابل العمل التشغيلي",
+      importance: 1,
+      kind: "phrase",
+      category: "Foundations",
+      ref: "L1-S008",
+      context: "المشروع مؤقت وفريد يُحدث التغيير ثم ينتهي، بينما التشغيل مستمر ومتكرر يحافظ على سير العمل"
+    },
+    {
+      term_en: "Project Management",
+      term_ar: "إدارة المشاريع",
+      importance: 1,
+      kind: "phrase",
+      category: "Foundations",
+      ref: "L1-S009",
+      context: "تطبيق المعرفة والمهارات والأدوات والتقنيات على أنشطة المشروع لتحقيق متطلباته وتقديم قيمة مستدامة"
     },
     {
       term_en: "Triple Constraint",
@@ -1188,8 +1206,8 @@ const CURATED_SUBJECT_GLOSSARIES = {
       importance: 1,
       kind: "phrase",
       category: "Foundations",
-      ref: "L1-S004",
-      context: "إطار التوازن المركزي بين النطاق (Scope) والوقت (Schedule) والتكلفة (Cost)"
+      ref: "L1-S010",
+      context: "إطار التوازن المركزي بين النطاق (Scope) والوقت (Schedule) والتكلفة (Cost) حول هدف الجودة والقيمة"
     },
     {
       term_en: "Value Delivery System",
@@ -1197,8 +1215,8 @@ const CURATED_SUBJECT_GLOSSARIES = {
       importance: 1,
       kind: "phrase",
       category: "Value",
-      ref: "L1-S007",
-      context: "منظومة استراتيجية متكاملة تتدفق فيها المخرجات لتتحول إلى نتائج وفوائد وقيمة مستدامة"
+      ref: "L1-S013",
+      context: "منظومة استراتيجية خماسية تتدفق فيها التوجهات من الاستراتيجية إلى المحافظ والبرامج والمشاريع فالتشغيل"
     },
     {
       term_en: "Portfolio vs Program vs Project",
@@ -1206,8 +1224,17 @@ const CURATED_SUBJECT_GLOSSARIES = {
       importance: 1,
       kind: "phrase",
       category: "Governance",
-      ref: "L1-S006",
-      context: "المحفظة استراتيجية عليا، والبرنامج حزمة مشاريع مترابطة لتنسيق الفوائد، والمشروع لنطاق محدد"
+      ref: "L1-S014",
+      context: "المحفظة تختار الاستثمارات الاستراتيجية، والبرنامج ينسق مشاريع مترابطة وظيفياً، والمشروع ينجز مخرجاً محدداً"
+    },
+    {
+      term_en: "Value Chain (Outputs -> Outcomes -> Benefits -> Value)",
+      term_ar: "سلسلة القيمة الرباعية",
+      importance: 1,
+      kind: "phrase",
+      category: "Value",
+      ref: "L1-S017",
+      context: "المخرجات تسليمات تقنية مباشرة، تتحول بالاستخدام إلى نتائج سلوكية، فتولّد فوائد قابلة للقياس، فتثمر قيمة صافية"
     },
     {
       term_en: "Enterprise Environmental Factors (EEF)",
@@ -1215,8 +1242,8 @@ const CURATED_SUBJECT_GLOSSARIES = {
       importance: 1,
       kind: "phrase",
       category: "Environment",
-      ref: "L1-S011",
-      context: "عوامل بيئية داخلية وخارجية تحيط بالمشروع وتقيده ولا تخضع لسيطرة فريق المشروع المباشرة"
+      ref: "L1-S020",
+      context: "ظروف داخلية وخارجية تحيط بالمشروع وتؤثر فيه أو تقيده ولا تخضع للسيطرة المباشرة لفريق المشروع"
     },
     {
       term_en: "Organizational Process Assets (OPA)",
@@ -1224,8 +1251,8 @@ const CURATED_SUBJECT_GLOSSARIES = {
       importance: 1,
       kind: "phrase",
       category: "Environment",
-      ref: "L1-S011",
-      context: "الخطط والسياسات والإجراءات والقوالب وقواعد المعرفة والدروس المستفادة التاريخية"
+      ref: "L1-S022",
+      context: "الخطط والسياسات والإجراءات والقوالب المعيارية وقواعد المعرفة والدروس المستفادة التاريخية للمنظمة"
     },
     {
       term_en: "Tailoring",
@@ -1233,8 +1260,17 @@ const CURATED_SUBJECT_GLOSSARIES = {
       importance: 1,
       kind: "word",
       category: "Methodology",
-      ref: "L1-S014",
-      context: "المواءمة الواعية المدروسة للعمليات والممارسات لتناسب سياق وبيئة وحجم المشروع"
+      ref: "L1-S026",
+      context: "المواءمة الواعية للعمليات والممارسات في أربع خطوات (اعرف سياقك، اختر ما يناسب، راجع، حسّن)"
+    },
+    {
+      term_en: "PMBOK 8 Architecture (6-7-5-40)",
+      term_ar: "الهيكل الرباعي للإصدار الثامن (6-7-5-40)",
+      importance: 1,
+      kind: "phrase",
+      category: "Architecture",
+      ref: "L1-S028",
+      context: "6 مبادئ توجيهية (لماذا)، 7 مجالات أداء (ماذا)، 5 مجالات تركيز، و40 عملية إدارية (كيف ومتى)"
     },
     {
       term_en: "Systems View",
@@ -1243,7 +1279,7 @@ const CURATED_SUBJECT_GLOSSARIES = {
       kind: "phrase",
       category: "Principles",
       ref: "L2-S004",
-      context: "رؤية المشروع كعنصر داخل نظام كلي يتفاعل مع بيئته وتجنب التحسين المحلي الضار"
+      context: "رؤية المشروع كعنصر داخل نظام كلي يتفاعل مع بيئته وتجنب التحسين المحلي الضار بالمنظومة"
     },
     {
       term_en: "Focus on Value",
@@ -1296,8 +1332,17 @@ const CURATED_SUBJECT_GLOSSARIES = {
       importance: 2,
       kind: "phrase",
       category: "Governance",
-      ref: "L1-S006",
-      context: "هيكل تنظيمي يوحد ممارسات الحوكمة ويشارك الموارد ويدعم مديري المشاريع بالمنهجيات"
+      ref: "L1-S016",
+      context: "هيكل تنظيمي يوحد معايير الحوكمة ويدرب الفرق ويدير الموارد المشتركة ولوحات متابعة الإدارة العليا"
+    },
+    {
+      term_en: "Stakeholders",
+      term_ar: "أصحاب المصلحة والمعنيون",
+      importance: 2,
+      kind: "word",
+      category: "Environment",
+      ref: "L1-S021",
+      context: "كل فرد أو جهة تؤثر في المشروع أو تتأثر به إيجاباً أو سلباً، ويشمل الراعي والعميل والفريق والمعارضين"
     },
     {
       term_en: "Development Approaches",
@@ -1305,8 +1350,44 @@ const CURATED_SUBJECT_GLOSSARIES = {
       importance: 2,
       kind: "phrase",
       category: "Life Cycle",
-      ref: "L1-S013",
-      context: "التنبؤي (شلالي)، التكراري (تعلم)، التزايدي (دفعات)، التكيفي (رشيق)، والهجين (تكامل)"
+      ref: "L1-S023",
+      context: "التنبؤي (شلالي)، التكراري (تعلم)، التزايدي (دفعات)، التكيفي (رشيق)، والهجين (مزج مدروس)"
+    },
+    {
+      term_en: "Project Life Cycle Phases",
+      term_ar: "مراحل دورة حياة المشروع الأربع",
+      importance: 2,
+      kind: "phrase",
+      category: "Life Cycle",
+      ref: "L1-S024",
+      context: "البدء (ميثاق المشروع)، التنظيم والتحضير (خطة المشروع)، تنفيذ العمل (التسليمات)، والإغلاق (الأرشفة)"
+    },
+    {
+      term_en: "Life Cycle Curves (Risk vs Cost of Change)",
+      term_ar: "منحنيات المخاطر وتكلفة التغيير",
+      importance: 2,
+      kind: "phrase",
+      category: "Life Cycle",
+      ref: "L1-S025",
+      context: "المخاطر وعدم اليقين في أعلى مستوياتها عند البداية وتنخفض تدريجياً، بينما تكلفة التغيير منخفضة في البداية وتتصاعد بحدة في النهاية"
+    },
+    {
+      term_en: "Performance Domains (7 Domains)",
+      term_ar: "مجالات الأداء السبعة في PMBOK 8",
+      importance: 2,
+      kind: "phrase",
+      category: "Architecture",
+      ref: "L1-S029",
+      context: "الحوكمة، النطاق، الجدول الزمني، التمويل، أصحاب المصلحة، الموارد، والمخاطر (بعد دمج الجودة والتواصل والمشتريات)"
+    },
+    {
+      term_en: "Focus Areas (5 Process Groups)",
+      term_ar: "مجالات التركيز الخمسة",
+      importance: 2,
+      kind: "phrase",
+      category: "Architecture",
+      ref: "L1-S030",
+      context: "المسمى المحدث لمجموعات العمليات الخمس: البدء، التخطيط، التنفيذ، الرصد والتحكم، والإغلاق"
     },
     {
       term_en: "RACI Matrix",
@@ -1332,8 +1413,17 @@ const CURATED_SUBJECT_GLOSSARIES = {
       importance: 3,
       kind: "phrase",
       category: "Scope",
-      ref: "L1-S004",
+      ref: "L1-S010",
       context: "التوسع غير المضبوط في متطلبات أو ميزات المشروع دون تعديل مقابل في الجدول أو الميزانية"
+    },
+    {
+      term_en: "Emerging Trends (AI, PMO, Procurement)",
+      term_ar: "المواضيع الناشئة في PMBOK 8",
+      importance: 3,
+      kind: "phrase",
+      category: "Architecture",
+      ref: "L1-S031",
+      context: "توظيف الذكاء الاصطناعي في التقديرات والمخاطر، وتطور PMO شريكاً استراتيجياً، ومرونة عقود المشتريات"
     },
     {
       term_en: "Triple Bottom Line",

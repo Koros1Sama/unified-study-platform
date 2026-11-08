@@ -95,11 +95,16 @@ const QuestionCardComponent: React.FC<QuestionCardProps> = ({
   const [isBmDropdownOpen, setIsBmDropdownOpen] = useState<boolean>(false);
   const bmWrapRef = useRef<HTMLDivElement>(null);
 
-  // تحديث حالة الشرح عند تغيير نمط العرض
+  // تحديث حالة الشرح عند تغيير نمط العرض أو تصفير الإجابة
   useEffect(() => {
-    if (isAnswered) {
-      if (expMode === "always") setShowExplanation(true);
-      else if (expMode === "wrong_only") setShowExplanation(!isCorrect);
+    if (!isAnswered) {
+      setShowExplanation(false);
+    } else if (expMode === "always") {
+      setShowExplanation(true);
+    } else if (expMode === "wrong_only") {
+      setShowExplanation(!isCorrect);
+    } else {
+      setShowExplanation(false);
     }
   }, [expMode, isAnswered, isCorrect]);
 
