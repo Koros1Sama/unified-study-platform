@@ -323,7 +323,7 @@ const QuestionCardComponent: React.FC<QuestionCardProps> = ({
             {question.question_en}
           </div>
         )}
-        {(languageMode === "ar" || languageMode === "both" || (languageMode === "smart" && question.question_ar)) && (
+        {(languageMode === "ar" || languageMode === "both" || (!question.question_en && question.question_ar)) && (
           <div className="q-stem-ar">
             {cleanArabicOnly(question.question_ar || question.question_en)}
           </div>
@@ -388,6 +388,18 @@ const QuestionCardComponent: React.FC<QuestionCardProps> = ({
 
               return (
                 <div key={idx} className="opt-row">
+                  {optAr && optEn && optAr !== optEn && languageMode === "smart" && onShowTranslate && (
+                    <button
+                      type="button"
+                      className="opt-tr"
+                      onClick={(e) => handleTranslateClick(e, optAr)}
+                      title="عرض الترجمة العربية الفورية"
+                      aria-label="ترجمة"
+                    >
+                      <Icons.Translate size={15} />
+                    </button>
+                  )}
+
                   <button
                     type="button"
                     className={btnClass}
@@ -413,18 +425,6 @@ const QuestionCardComponent: React.FC<QuestionCardProps> = ({
                       )}
                     </span>
                   </button>
-
-                  {optAr && languageMode === "smart" && onShowTranslate && (
-                    <button
-                      type="button"
-                      className="opt-tr"
-                      onClick={(e) => handleTranslateClick(e, optAr)}
-                      title="عرض الترجمة العربية الفورية"
-                      aria-label="ترجمة"
-                    >
-                      <Icons.Translate size={15} />
-                    </button>
-                  )}
                 </div>
               );
             })}
