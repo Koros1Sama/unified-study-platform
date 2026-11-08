@@ -15,9 +15,7 @@ interface QuestionCardProps {
   question: UnifiedQuestion;
   displayNumber?: number;
   userAnswer?: { selected_answer: number; is_correct: boolean };
-  flagged?: boolean;
   onAnswer: (questionId: string, answerIdx: number, isCorrect: boolean, twinGroupId?: string) => void;
-  onToggleFlag?: (questionId: string) => void;
   onJumpToSlide?: (ref: string) => void;
   onShowTranslate?: (text: string, pos: { x: number; y: number }) => void;
   languageMode?: "smart" | "en" | "ar" | "both";
@@ -63,9 +61,7 @@ const QuestionCardComponent: React.FC<QuestionCardProps> = ({
   question,
   displayNumber,
   userAnswer,
-  flagged = false,
   onAnswer,
-  onToggleFlag,
   onJumpToSlide,
   onShowTranslate,
   languageMode = "smart",
@@ -266,18 +262,6 @@ const QuestionCardComponent: React.FC<QuestionCardProps> = ({
           </div>
         )}
 
-        {onToggleFlag && (
-          <button
-            type="button"
-            className={`q-flag-btn ${flagged ? "on" : ""}`}
-            onClick={() => onToggleFlag(question.id)}
-            title={flagged ? "إزالة من المراجعة السريعة" : "تعليم للمراجعة السريعة"}
-            aria-pressed={flagged}
-          >
-            <Icons.Flag size={13} />
-            <span>{flagged ? "معلّم" : "علّم"}</span>
-          </button>
-        )}
 
         {isAnswered && !readOnly && (
           <button
@@ -563,7 +547,6 @@ export const QuestionCard = React.memo(QuestionCardComponent, (prev, next) => {
   return (
     prev.question.id === next.question.id &&
     prev.displayNumber === next.displayNumber &&
-    prev.flagged === next.flagged &&
     prev.readOnly === next.readOnly &&
     prev.showBookmarks === next.showBookmarks &&
     prev.languageMode === next.languageMode &&

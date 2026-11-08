@@ -297,9 +297,7 @@ export const ExamSimulator: React.FC<ExamSimulatorProps> = ({
             question={currentQ}
             displayNumber={currentIdx + 1}
             userAnswer={userAnswers[currentQ.id]}
-            flagged={flagged.has(currentQ.id)}
             onAnswer={handleAnswerQuestion}
-            onToggleFlag={toggleFlag}
             onJumpToSlide={onJumpToSlide}
           />
         )}
@@ -313,6 +311,17 @@ export const ExamSimulator: React.FC<ExamSimulatorProps> = ({
           >
             <Icons.ChevronRight size={16} />
             <span>السابق</span>
+          </button>
+
+          <button
+            type="button"
+            className={`btn btn-sm ${flagged.has(currentQ.id) ? "btn-warning" : ""}`}
+            style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}
+            onClick={() => toggleFlag(currentQ.id)}
+            title="تأجيل أو تمييز السؤال للمراجعة قبل تسليم الاختبار"
+          >
+            <Icons.Flag size={14} />
+            <span>{flagged.has(currentQ.id) ? "مؤجل للمراجعة" : "تأجيل للمراجعة"}</span>
           </button>
 
           <div className="exam-palette">
@@ -445,9 +454,7 @@ export const ExamSimulator: React.FC<ExamSimulatorProps> = ({
             question={q}
             displayNumber={q.orig_q_num}
             userAnswer={userAnswers[q.id]}
-            flagged={flagged.has(q.id)}
             onAnswer={() => undefined}
-            onToggleFlag={toggleFlag}
             onJumpToSlide={onJumpToSlide}
             readOnly
           />

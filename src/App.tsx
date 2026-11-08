@@ -1028,7 +1028,6 @@ export const App: React.FC = () => {
                   onSelectModel={handleSelectModel}
                   userProgress={userProgress || { subject_code: currentSubjectCode, memorized_tables: [], answered_questions: {}, bookmarks: {}, exam_history: [], updated_at: "" }}
                   onAnswerQuestion={handleAnswerQuestion}
-                  onToggleFlag={handleToggleFlag}
                   onJumpToSlide={handleJumpToSlide}
                   onJumpToQuestion={handleJumpToQuestion}
                   focusQuestionId={focusQuestionId}

@@ -25,7 +25,6 @@ interface UnifiedQuestionBankViewProps {
   models: QuestionModelInfo[];
   userProgress: UserStudyProgress;
   onAnswerQuestion: (questionId: string, answerIdx: number, isCorrect: boolean, twinGroupId?: string) => void;
-  onToggleFlag?: (questionId: string) => void;
   onJumpToSlide?: (ref: string) => void;
   onJumpToQuestion?: (questionId: string) => void;
   languageMode?: "smart" | "en" | "ar" | "both";
@@ -117,7 +116,6 @@ export const UnifiedQuestionBankView: React.FC<UnifiedQuestionBankViewProps> = (
   models,
   userProgress,
   onAnswerQuestion,
-  onToggleFlag,
   onJumpToSlide,
   onJumpToQuestion,
   languageMode = "smart",
@@ -147,12 +145,12 @@ export const UnifiedQuestionBankView: React.FC<UnifiedQuestionBankViewProps> = (
   };
 
   const [hideTwins, setHideTwins] = useState<boolean>(true);
-  const [filterState, setFilterState] = useState<"all" | "unsolved" | "solved" | "wrong" | "correct" | "flagged">("all");
+  const [filterState, setFilterState] = useState<"all" | "unsolved" | "solved" | "wrong" | "correct">("all");
   const [filterBm, setFilterBm] = useState<"all" | BookmarkColor>("all");
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [lectureFilter, setLectureFilter] = useState<string>("all");
   const [manualFilter, setManualFilter] = useState<string>("");
-  const [retest, setRetest] = useState<null | "wrong" | "flagged">(null);
+  const [retest, setRetest] = useState<null | "wrong">(null);
   const [retestIds, setRetestIds] = useState<Set<string>>(new Set());
   const [retestAnswered, setRetestAnswered] = useState<Set<string>>(new Set());
   const [retestAnswers, setRetestAnswers] = useState<
@@ -274,7 +272,6 @@ export const UnifiedQuestionBankView: React.FC<UnifiedQuestionBankViewProps> = (
     let solved = 0;
     let correct = 0;
     let wrong = 0;
-    let flagged = 0;
     modelQuestions.forEach((q) => {
       const a = answeredMap[q.id];
       if (a && a.selected_answer >= 0) {
@@ -282,17 +279,15 @@ export const UnifiedQuestionBankView: React.FC<UnifiedQuestionBankViewProps> = (
         if (a.is_correct) correct++;
         else wrong++;
       }
-      if (flaggedIds.includes(q.id)) flagged++;
     });
     return {
       total: modelQuestions.length,
       unsolved: Math.max(0, modelQuestions.length - solved),
       solved,
       correct,
-      wrong,
-      flagged
+      wrong
     };
-  }, [modelQuestions, answeredMap, flaggedIds]);
+  }, [modelQuestions, answeredMap]);
 
   // عدد الأسئلة المحلولة في النموذج الحالي
   const activeAnsCount = statusCounts.solved;
@@ -340,7 +335,6 @@ export const UnifiedQuestionBankView: React.FC<UnifiedQuestionBankViewProps> = (
         if (filterState === "solved" && (!ans || ans.selected_answer < 0)) return false;
         if (filterState === "wrong" && (!ans || ans.is_correct || ans.selected_answer < 0)) return false;
         if (filterState === "correct" && (!ans || !ans.is_correct)) return false;
-        if (filterState === "flagged" && !flaggedIds.includes(question.id)) return false;
       }
 
       if (q) {
@@ -370,7 +364,6 @@ export const UnifiedQuestionBankView: React.FC<UnifiedQuestionBankViewProps> = (
     showBookmarks,
     bookmarksMap,
     answeredMap,
-    flaggedIds,
     searchQuery
   ]);
 
@@ -465,15 +458,11 @@ export const UnifiedQuestionBankView: React.FC<UnifiedQuestionBankViewProps> = (
     [insights]
   );
 
-  const startRetest = (kind: "wrong" | "flagged") => {
+  const startRetest = (kind: "wrong" = "wrong") => {
     const ids = new Set<string>();
     modelQuestions.forEach((q) => {
-      if (kind === "wrong") {
-        const a = answeredMap[q.id];
-        if (a && !a.is_correct && a.selected_answer >= 0) ids.add(q.id);
-      } else {
-        if (flaggedIds.includes(q.id)) ids.add(q.id);
-      }
+      const a = answeredMap[q.id];
+      if (a && !a.is_correct && a.selected_answer >= 0) ids.add(q.id);
     });
     setRetest(kind);
     setRetestIds(ids);
@@ -670,19 +659,9 @@ export const UnifiedQuestionBankView: React.FC<UnifiedQuestionBankViewProps> = (
         }
       }
 
-      // F: تعليم السؤال بعلم للمراجعة
-      if (e.key.toLowerCase() === "f") {
-        const flagBtn = activeCard.querySelector<HTMLButtonElement>(".q-flag-btn");
-        if (flagBtn) {
-          e.preventDefault();
-          flagBtn.click();
-          return;
-        }
-      }
-
-      // B: إضافة أو إزالة العلامة المرجعية
-      if (e.key.toLowerCase() === "b") {
-        const bmBtn = activeCard.querySelector<HTMLButtonElement>(".bm-btn");
+      // B أو F: إضافة أو إزالة العلامة المرجعية الملونة
+      if (e.key.toLowerCase() === "b" || e.key.toLowerCase() === "f") {
+        const bmBtn = activeCard.querySelector<HTMLButtonElement>(".q-bm-btn, .bm-btn");
         if (bmBtn) {
           e.preventDefault();
           bmBtn.click();
@@ -727,8 +706,7 @@ export const UnifiedQuestionBankView: React.FC<UnifiedQuestionBankViewProps> = (
             : activeModelMeta?.title_ar || "نماذج الاختبارات"}
         </h1>
         <p className="sub">
-          أجبت عن {stats.answered} من {stats.total} سؤالاً · نسبة الدقة الإجمالية: {stats.percentage}% ·
-          المعلّم للمراجعة: {flaggedIds.length}
+          أجبت عن {stats.answered} من {stats.total} سؤالاً · نسبة الدقة الإجمالية: {stats.percentage}%
         </p>
       </div>
 
@@ -910,8 +888,7 @@ export const UnifiedQuestionBankView: React.FC<UnifiedQuestionBankViewProps> = (
           { id: "unsolved" as const, label: `لم يُحل (${statusCounts.unsolved})` },
           { id: "solved" as const, label: `محلول (${statusCounts.solved})` },
           { id: "correct" as const, label: `صحيح (${statusCounts.correct})` },
-          { id: "wrong" as const, label: `خاطئ (${statusCounts.wrong})` },
-          { id: "flagged" as const, label: `المعلّمة (${statusCounts.flagged})` }
+          { id: "wrong" as const, label: `خاطئ (${statusCounts.wrong})` }
         ].map((f) => (
           <button
             key={f.id}
@@ -1031,15 +1008,6 @@ export const UnifiedQuestionBankView: React.FC<UnifiedQuestionBankViewProps> = (
           <span>طباعة ورقة تدريب</span>
         </button>
 
-        <button
-          type="button"
-          className={`fchip ${retest === "flagged" ? "on" : ""}`}
-          onClick={() => startRetest("flagged")}
-          disabled={flaggedIds.length === 0}
-        >
-          <Icons.Flag size={13} />
-          مراجعة المعلّمة
-        </button>
 
         {/* زر تصفير إجابات هذا النموذج المطابق لـ RM_Viewer */}
         {onResetModelAnswers && activeAnsCount > 0 && (
@@ -1286,9 +1254,7 @@ export const UnifiedQuestionBankView: React.FC<UnifiedQuestionBankViewProps> = (
                 question={renderedQ}
                 displayNumber={q.orig_q_num || idx + 1}
                 userAnswer={currentAnswer}
-                flagged={flaggedIds.includes(q.id)}
                 onAnswer={onAnswerHandler}
-                onToggleFlag={onToggleFlag}
                 onJumpToSlide={onJumpToSlide}
                 onShowTranslate={handleShowTranslate}
                 languageMode={languageMode}
