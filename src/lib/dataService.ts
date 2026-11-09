@@ -59,7 +59,7 @@ export const DataService = {
    */
   async getSubjects(): Promise<SubjectMeta[]> {
     try {
-      const res = await fetch(resolveDataPath("data/subjects.json?v=10"), { cache: "no-cache" });
+      const res = await fetch(resolveDataPath("data/subjects.json?v=11"), { cache: "no-cache" });
       if (res.ok) {
         const subjects: SubjectMeta[] = await res.json();
         subjectsCache = subjects;
