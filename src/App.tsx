@@ -845,6 +845,8 @@ export const App: React.FC = () => {
       accent_color: "#f5b13d"
     };
 
+  const isArabicOnly = Boolean(currentSubjectMeta.arabic_only);
+  const effectiveLanguageMode = isArabicOnly ? "ar" : languageMode;
   const hasQuestions = (bundle?.questions?.length || 0) > 0;
   const summaryTitle = bundle?.summary?.title_ar || "";
   const emergencyTitle = bundle?.emergency?.title_ar || "";
@@ -859,9 +861,9 @@ export const App: React.FC = () => {
     questions: hasQuestions,
     explorer: hasQuestions,
     exam: hasQuestions,
-    interactive: ["toc", "rm", "sec", "se"].includes(currentSubjectCode),
+    interactive: ["toc", "rm", "sec", "se", "pm"].includes(currentSubjectCode),
     definitions: Boolean(bundle?.definitions?.items?.length),
-    glossary: Boolean(bundle?.glossary),
+    glossary: Boolean(bundle?.glossary) && !isArabicOnly,
     patterns: Boolean(bundle?.patterns?.rules?.length),
     lab: Boolean(bundle?.lab?.slides?.length)
   };
@@ -904,9 +906,9 @@ export const App: React.FC = () => {
         onOpenPortal={() => setIsPortalOpen(true)}
         zenLevel={zenLevel}
         onZenChange={handleZenChange}
-        languageMode={languageMode}
+        languageMode={effectiveLanguageMode}
         onLanguageChange={handleLanguageChange}
-        autoTranslateSlides={autoTranslateSlides}
+        autoTranslateSlides={!isArabicOnly && autoTranslateSlides}
         onToggleAutoTranslate={handleToggleAutoTranslate}
         autoExplainSlides={autoExplainSlides}
         onToggleAutoExplain={handleToggleAutoExplain}
@@ -979,12 +981,13 @@ export const App: React.FC = () => {
                   targetSlideRef={targetSlideRef}
                   activeLectureId={activeLectureId}
                   onSelectLecture={handleSelectLecture}
-                  autoTranslate={autoTranslateSlides}
+                  autoTranslate={!isArabicOnly && autoTranslateSlides}
                   autoExplain={autoExplainSlides}
                   onToggleAutoTranslate={handleToggleAutoTranslate}
                   onToggleAutoExplain={handleToggleAutoExplain}
                   seenSlides={seenSlides}
                   onToggleSeenSlide={handleToggleSeenSlide}
+                  arabicOnly={isArabicOnly}
                 />
               )}
 
@@ -1031,7 +1034,7 @@ export const App: React.FC = () => {
                   onJumpToSlide={handleJumpToSlide}
                   onJumpToQuestion={handleJumpToQuestion}
                   focusQuestionId={focusQuestionId}
-                  languageMode={languageMode}
+                  languageMode={effectiveLanguageMode}
                   showBookmarks={showBookmarks}
                   bmLabels={bmLabels}
                   onToggleBookmark={handleToggleBookmark}
@@ -1053,6 +1056,7 @@ export const App: React.FC = () => {
                 <QuestionBankExplorer
                   questions={bundle?.questions || []}
                   onJumpToQuestion={handleJumpToQuestion}
+                  arabicOnly={isArabicOnly}
                 />
               )}
 
@@ -1063,6 +1067,7 @@ export const App: React.FC = () => {
                   examHistory={userProgress?.exam_history || []}
                   onRecordResult={handleRecordExamResult}
                   onJumpToSlide={handleJumpToSlide}
+                  languageMode={effectiveLanguageMode}
                 />
               )}
 
@@ -1072,6 +1077,7 @@ export const App: React.FC = () => {
                   masteredIds={userProgress?.mastered_definitions || []}
                   onToggleMastered={handleToggleMasteredDefinition}
                   onJumpToSlide={handleJumpToSlide}
+                  arabicOnly={isArabicOnly}
                 />
               )}
 

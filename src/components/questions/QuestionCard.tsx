@@ -295,10 +295,10 @@ const QuestionCardComponent: React.FC<QuestionCardProps> = ({
       <div className="q-text" style={{ margin: "10px 0 14px" }}>
         {(languageMode === "en" || languageMode === "both" || languageMode === "smart") && question.question_en && (
           <div
-            className={`q-stem-en ${languageMode === "smart" && question.question_ar ? "hover-ar" : ""}`}
+            className={`q-stem-en ${languageMode === "smart" && question.question_ar && question.question_ar.trim() !== question.question_en.trim() ? "hover-ar" : ""}`}
             data-ar={cleanArabicOnly(question.question_ar || "")}
             onClick={(e) => {
-              if (languageMode === "smart" && question.question_ar && onShowTranslate) {
+              if (languageMode === "smart" && question.question_ar && question.question_ar.trim() !== question.question_en.trim() && onShowTranslate) {
                 const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
                 onShowTranslate(cleanArabicOnly(question.question_ar), { x: rect.left, y: rect.bottom + 6 });
               }
@@ -307,7 +307,7 @@ const QuestionCardComponent: React.FC<QuestionCardProps> = ({
             {question.question_en}
           </div>
         )}
-        {(languageMode === "ar" || languageMode === "both" || (!question.question_en && question.question_ar)) && (
+        {(languageMode === "ar" || (languageMode === "both" && question.question_ar && question.question_ar.trim() !== question.question_en.trim()) || (!question.question_en && question.question_ar)) && (
           <div className="q-stem-ar">
             {cleanArabicOnly(question.question_ar || question.question_en)}
           </div>
@@ -393,12 +393,12 @@ const QuestionCardComponent: React.FC<QuestionCardProps> = ({
                   >
                     <span className="letter">{letter}</span>
                     <span className={`opt-text-wrap ${isRtlOpt ? "is-rtl" : "is-ltr"}`}>
-                      {languageMode === "ar" && optAr ? (
-                        <span className="opt-ar">{cleanArabicOnly(optAr)}</span>
+                      {languageMode === "ar" && (optAr || optEn) ? (
+                        <span className="opt-ar">{cleanArabicOnly(optAr || optEn)}</span>
                       ) : languageMode === "both" ? (
                         <div>
                           <div className="opt-en">{optEn}</div>
-                          {optAr && (
+                          {optAr && optAr.trim() !== optEn.trim() && (
                             <div className="opt-ar" style={{ fontSize: "0.82rem", color: "var(--ink-m)", marginTop: "2px", direction: "rtl", textAlign: "right" }}>
                               {cleanArabicOnly(optAr)}
                             </div>

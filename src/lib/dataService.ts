@@ -59,7 +59,7 @@ export const DataService = {
    */
   async getSubjects(): Promise<SubjectMeta[]> {
     try {
-      const res = await fetch(resolveDataPath("data/subjects.json?v=11"), { cache: "no-cache" });
+      const res = await fetch(resolveDataPath("data/subjects.json?v=12"), { cache: "no-cache" });
       if (res.ok) {
         const subjects: SubjectMeta[] = await res.json();
         subjectsCache = subjects;
@@ -234,7 +234,7 @@ export const DataService = {
 
     // 2. جلب أحدث حزمة من ملف JSON المحلي (ثم حفظها في الكاش)
     try {
-      const res = await fetch(resolveDataPath(`data/${code}/bundle.json?v=8`), { cache: "no-cache" });
+      const res = await fetch(resolveDataPath(`data/${code}/bundle.json?v=12`), { cache: "no-cache" });
       if (res.ok) {
         const bundle: SubjectBundle = await res.json();
         await this.persistBundleToIndexedDB(bundle);

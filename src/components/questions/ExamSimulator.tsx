@@ -15,6 +15,7 @@ interface ExamSimulatorProps {
   examHistory?: UserStudyProgress["exam_history"];
   onRecordResult: (result: { total: number; score: number; timeSpentSec: number; mode: string }) => void;
   onJumpToSlide?: (ref: string) => void;
+  languageMode?: "smart" | "en" | "ar" | "both";
 }
 
 type ReviewFilter = "all" | "wrong" | "correct" | "unanswered" | "flagged";
@@ -33,7 +34,8 @@ export const ExamSimulator: React.FC<ExamSimulatorProps> = ({
   models = [],
   examHistory = [],
   onRecordResult,
-  onJumpToSlide
+  onJumpToSlide,
+  languageMode = "smart"
 }) => {
   const [examState, setExamState] = useState<"setup" | "running" | "results">("setup");
   const [scope, setScope] = useState<string>("all");
@@ -299,6 +301,7 @@ export const ExamSimulator: React.FC<ExamSimulatorProps> = ({
             userAnswer={userAnswers[currentQ.id]}
             onAnswer={handleAnswerQuestion}
             onJumpToSlide={onJumpToSlide}
+            languageMode={languageMode}
           />
         )}
 
@@ -456,6 +459,7 @@ export const ExamSimulator: React.FC<ExamSimulatorProps> = ({
             userAnswer={userAnswers[q.id]}
             onAnswer={() => undefined}
             onJumpToSlide={onJumpToSlide}
+            languageMode={languageMode}
             readOnly
           />
         ))}

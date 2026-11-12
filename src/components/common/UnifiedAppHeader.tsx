@@ -359,19 +359,21 @@ export const UnifiedAppHeader: React.FC<UnifiedAppHeaderProps> = ({
           {activeView === "slides" && (
             <div className="slide-actions-wrap" style={{ display: "inline-flex" }}>
               <span className="nav-divider"></span>
-              <button
-                type="button"
-                className={`top-btn slide-action-btn ${autoTranslateSlides ? "on" : ""}`}
-                onClick={onToggleAutoTranslate}
-                title="إظهار أو إخفاء ترجمات السلايدات التلقائية"
-              >
-                <svg className="svg-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <circle cx="12" cy="12" r="10"/>
-                  <line x1="2" y1="12" x2="22" y2="12"/>
-                  <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
-                </svg>
-                <span className="txt">عربي</span>
-              </button>
+              {!currentSubject.arabic_only && (
+                <button
+                  type="button"
+                  className={`top-btn slide-action-btn ${autoTranslateSlides ? "on" : ""}`}
+                  onClick={onToggleAutoTranslate}
+                  title="إظهار أو إخفاء ترجمات السلايدات التلقائية"
+                >
+                  <svg className="svg-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <circle cx="12" cy="12" r="10"/>
+                    <line x1="2" y1="12" x2="22" y2="12"/>
+                    <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
+                  </svg>
+                  <span className="txt">عربي</span>
+                </button>
+              )}
               <button
                 type="button"
                 className={`top-btn slide-action-btn ${autoExplainSlides ? "on" : ""}`}
@@ -389,7 +391,7 @@ export const UnifiedAppHeader: React.FC<UnifiedAppHeaderProps> = ({
           )}
 
           {/* أدوات النماذج المساعدة في التوبار */}
-          {activeView === "questions" && (
+          {activeView === "questions" && !currentSubject.arabic_only && (
             <div className="model-actions-wrap" style={{ display: "inline-flex" }}>
               <span className="nav-divider"></span>
               <button
@@ -686,7 +688,9 @@ export const UnifiedAppHeader: React.FC<UnifiedAppHeaderProps> = ({
                 </div>
                 <div className="set-acc-head-meta">
                   <span className="set-acc-badge">
-                    {languageMode === "smart" ? "ذكي" : languageMode === "en" ? "English" : languageMode === "ar" ? "عربي" : "الاثنين"} · {expMode === "always" ? "شرح دائم" : expMode === "wrong_only" ? "عند الخطأ" : "يدوي"}
+                    {currentSubject.arabic_only
+                      ? `${expMode === "always" ? "شرح دائم" : expMode === "wrong_only" ? "عند الخطأ" : "يدوي"}`
+                      : `${languageMode === "smart" ? "ذكي" : languageMode === "en" ? "English" : languageMode === "ar" ? "عربي" : "الاثنين"} · ${expMode === "always" ? "شرح دائم" : expMode === "wrong_only" ? "عند الخطأ" : "يدوي"}`}
                   </span>
                   <span className="set-acc-chevron">
                     <Icons.ChevronDown size={15} />
@@ -697,46 +701,48 @@ export const UnifiedAppHeader: React.FC<UnifiedAppHeaderProps> = ({
               {openSettingGroup === "qbank" && (
                 <div className="set-acc-body">
                   {/* لغة أسئلة البنك */}
-                  <div className="setgroup">
-                    <div className="setlabel">
-                      <Icons.Translate size={16} />
-                      <span>لغة أسئلة البنك</span>
+                  {!currentSubject.arabic_only && (
+                    <div className="setgroup">
+                      <div className="setlabel">
+                        <Icons.Translate size={16} />
+                        <span>لغة أسئلة البنك</span>
+                      </div>
+                      <div className="setopts">
+                        <button
+                          type="button"
+                          className={`set-opt ${languageMode === "ar" ? "on" : ""}`}
+                          onClick={() => onLanguageChange("ar")}
+                        >
+                          عربي
+                        </button>
+                        <button
+                          type="button"
+                          className={`set-opt ${languageMode === "en" ? "on" : ""}`}
+                          onClick={() => onLanguageChange("en")}
+                        >
+                          English
+                        </button>
+                        <button
+                          type="button"
+                          className={`set-opt ${languageMode === "both" ? "on" : ""}`}
+                          onClick={() => onLanguageChange("both")}
+                        >
+                          الاثنين
+                        </button>
+                        <button
+                          type="button"
+                          className={`set-opt ${languageMode === "smart" ? "on" : ""}`}
+                          onClick={() => onLanguageChange("smart")}
+                        >
+                          <svg className="svg-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M9.5 2A2.5 2.5 0 0 1 12 4.5v15a2.5 2.5 0 0 1-4.96.44 2.5 2.5 0 0 1-2.96-3.08 3 3 0 0 1-.34-5.58 2.5 2.5 0 0 1 1.32-4.24 2.5 2.5 0 0 1 4.44-2.04z"/>
+                            <path d="M14.5 2A2.5 2.5 0 0 0 12 4.5v15a2.5 2.5 0 0 0 4.96.44 2.5 2.5 0 0 0 2.96-3.08 3 3 0 0 0 .34-5.58 2.5 2.5 0 0 0-1.32-4.24 2.5 2.5 0 0 0-4.44-2.04z"/>
+                          </svg>
+                          <span>ذكي (مرّر يظهر العربي)</span>
+                        </button>
+                      </div>
                     </div>
-                    <div className="setopts">
-                      <button
-                        type="button"
-                        className={`set-opt ${languageMode === "ar" ? "on" : ""}`}
-                        onClick={() => onLanguageChange("ar")}
-                      >
-                        عربي
-                      </button>
-                      <button
-                        type="button"
-                        className={`set-opt ${languageMode === "en" ? "on" : ""}`}
-                        onClick={() => onLanguageChange("en")}
-                      >
-                        English
-                      </button>
-                      <button
-                        type="button"
-                        className={`set-opt ${languageMode === "both" ? "on" : ""}`}
-                        onClick={() => onLanguageChange("both")}
-                      >
-                        الاثنين
-                      </button>
-                      <button
-                        type="button"
-                        className={`set-opt ${languageMode === "smart" ? "on" : ""}`}
-                        onClick={() => onLanguageChange("smart")}
-                      >
-                        <svg className="svg-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                          <path d="M9.5 2A2.5 2.5 0 0 1 12 4.5v15a2.5 2.5 0 0 1-4.96.44 2.5 2.5 0 0 1-2.96-3.08 3 3 0 0 1-.34-5.58 2.5 2.5 0 0 1 1.32-4.24 2.5 2.5 0 0 1 4.44-2.04z"/>
-                          <path d="M14.5 2A2.5 2.5 0 0 0 12 4.5v15a2.5 2.5 0 0 0 4.96.44 2.5 2.5 0 0 0 2.96-3.08 3 3 0 0 0 .34-5.58 2.5 2.5 0 0 0-1.32-4.24 2.5 2.5 0 0 0-4.44-2.04z"/>
-                        </svg>
-                        <span>ذكي (مرّر يظهر العربي)</span>
-                      </button>
-                    </div>
-                  </div>
+                  )}
 
                   {/* ظهور الشرح والتعليل في البنك */}
                   <div className="setgroup" id="setGroupExp">
@@ -874,7 +880,9 @@ export const UnifiedAppHeader: React.FC<UnifiedAppHeaderProps> = ({
                 </div>
                 <div className="set-acc-head-meta">
                   <span className="set-acc-badge">
-                    {autoTranslateSlides ? "ترجمة تلقائية" : "الأصل الإنجليزي"} · {autoExplainSlides ? "شرح تلقائي" : "شرح يدوي"}
+                    {currentSubject.arabic_only
+                      ? `${autoExplainSlides ? "شرح تلقائي" : "شرح يدوي"}`
+                      : `${autoTranslateSlides ? "ترجمة تلقائية" : "الأصل الإنجليزي"} · ${autoExplainSlides ? "شرح تلقائي" : "شرح يدوي"}`}
                   </span>
                   <span className="set-acc-chevron">
                     <Icons.ChevronDown size={15} />
@@ -890,14 +898,16 @@ export const UnifiedAppHeader: React.FC<UnifiedAppHeaderProps> = ({
                       <span>عرض وتخصيص السلايدات</span>
                     </div>
                     <div className="setopts">
-                      <button
-                        type="button"
-                        className={`set-opt ${autoTranslateSlides ? "on" : ""}`}
-                        onClick={onToggleAutoTranslate}
-                      >
-                        <Icons.Translate size={14} />
-                        <span>ترجمة تلقائية</span>
-                      </button>
+                      {!currentSubject.arabic_only && (
+                        <button
+                          type="button"
+                          className={`set-opt ${autoTranslateSlides ? "on" : ""}`}
+                          onClick={onToggleAutoTranslate}
+                        >
+                          <Icons.Translate size={14} />
+                          <span>ترجمة تلقائية</span>
+                        </button>
+                      )}
                       <button
                         type="button"
                         className={`set-opt ${autoExplainSlides ? "on" : ""}`}

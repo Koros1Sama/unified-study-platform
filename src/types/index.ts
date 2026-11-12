@@ -22,6 +22,7 @@ export interface SubjectMeta {
   lab_url?: string;
   lab_title?: string;
   data_status?: "full" | "theory-only" | "pending";
+  arabic_only?: boolean;
 }
 
 export interface Lecture {

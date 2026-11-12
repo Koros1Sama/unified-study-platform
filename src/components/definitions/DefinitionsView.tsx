@@ -13,6 +13,7 @@ interface DefinitionsViewProps {
   masteredIds?: string[];
   onToggleMastered?: (id: string) => void;
   onJumpToSlide: (ref: string) => void;
+  arabicOnly?: boolean;
 }
 
 export function getDefinitionTier(importance: number): ImportanceTier {
@@ -57,7 +58,8 @@ export const DefinitionsView: React.FC<DefinitionsViewProps> = ({
   data,
   masteredIds = [],
   onToggleMastered,
-  onJumpToSlide
+  onJumpToSlide,
+  arabicOnly = false
 }) => {
   const [query, setQuery] = useState("");
   const [lectureFilter, setLectureFilter] = useState("all");
@@ -166,17 +168,27 @@ export const DefinitionsView: React.FC<DefinitionsViewProps> = ({
         </div>
 
         <div className="def-term">
-          <h3 className="def-term-title" dir="ltr">
-            {item.term_en}
+          <h3 className="def-term-title" dir={arabicOnly ? "rtl" : "ltr"} style={arabicOnly ? { textAlign: "right" } : undefined}>
+            {arabicOnly ? (item.term_ar || item.term_en) : item.term_en}
           </h3>
-          {item.term_ar && <div className="def-term-ar">{item.term_ar}</div>}
+          {!arabicOnly && item.term_ar && item.term_ar.trim() !== item.term_en.trim() && (
+            <div className="def-term-ar">{item.term_ar}</div>
+          )}
         </div>
 
         <div className="def-body">
-          <div className="def-body-en" dir="ltr">
-            {item.def_en}
-          </div>
-          {showArabic && item.def_ar && <div className="def-body-ar">{item.def_ar}</div>}
+          {arabicOnly ? (
+            <div className="def-body-ar">{item.def_ar || item.def_en}</div>
+          ) : (
+            <>
+              <div className="def-body-en" dir="ltr">
+                {item.def_en}
+              </div>
+              {showArabic && item.def_ar && item.def_ar.trim() !== item.def_en.trim() && (
+                <div className="def-body-ar">{item.def_ar}</div>
+              )}
+            </>
+          )}
         </div>
 
         {isRevealed && (
@@ -344,13 +356,15 @@ export const DefinitionsView: React.FC<DefinitionsViewProps> = ({
               </option>
             ))}
           </select>
-          <button
-            type="button"
-            className={`fchip ${showArabic ? "on" : ""}`}
-            onClick={() => setShowArabic(!showArabic)}
-          >
-            الترجمة العربية
-          </button>
+          {!arabicOnly && (
+            <button
+              type="button"
+              className={`fchip ${showArabic ? "on" : ""}`}
+              onClick={() => setShowArabic(!showArabic)}
+            >
+              الترجمة العربية
+            </button>
+          )}
           <button
             type="button"
             className={`fchip ${flashcardMode ? "on" : ""}`}

@@ -1671,12 +1671,13 @@ function buildSubject(def) {
   }
   const data = loadSubjectData(def);
   console.log(`[Debug] ${def.code} models=${data.models?.length} lectures=${data.meta?.lectures?.length} arKeys=${Object.keys(data.ar || {}).length}`);
+  const isArabicOnly = Boolean(def.arabicOnly || def.arabic_only || data.config?.arabicOnly || data.config?.arabic_only);
   const warnings = [];
   const { questions, models } = buildQuestions(def, data, warnings);
   const { slides, lectures } = buildSlides(def, data);
   const tables = buildTables(data.tables);
   const summary = buildSummary(data.summary);
-  const glossary = buildGlossary(def, data);
+  const glossary = isArabicOnly ? undefined : buildGlossary(def, data);
   const definitions = buildDefinitions(data);
   const patterns = buildPatterns(data);
   const emergency = buildEmergency(data.emergency, patterns, def);
@@ -1692,6 +1693,7 @@ function buildSubject(def) {
       accent_color: def.accent_color,
       icon_name: def.icon_name,
       is_active: true,
+      arabic_only: isArabicOnly,
       lectures_count: lectures.length,
       questions_count: questions.length,
       tables_count: tables.length,

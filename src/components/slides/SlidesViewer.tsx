@@ -24,6 +24,7 @@ interface SlidesViewerProps {
   onToggleAutoExplain?: () => void;
   seenSlides?: Set<string>;
   onToggleSeenSlide?: (slideRef: string) => void;
+  arabicOnly?: boolean;
 }
 
 export const SlidesViewer: React.FC<SlidesViewerProps> = ({
@@ -37,7 +38,8 @@ export const SlidesViewer: React.FC<SlidesViewerProps> = ({
   onToggleAutoTranslate,
   onToggleAutoExplain,
   seenSlides = new Set(),
-  onToggleSeenSlide
+  onToggleSeenSlide,
+  arabicOnly = false
 }) => {
   const [internalLectureId, setInternalLectureId] = useState<string>(() => lectures[0]?.id || "L1");
   const activeLectureId = controlledLectureId ?? internalLectureId;
@@ -244,7 +246,7 @@ export const SlidesViewer: React.FC<SlidesViewerProps> = ({
           {slideSearchQuery && <span style={{ opacity: 0.85, marginInlineStart: 4 }}>({currentSlides.length})</span>}
         </button>
 
-        {onToggleAutoTranslate && (
+        {!arabicOnly && onToggleAutoTranslate && (
           <button
             type="button"
             className={`fchip ${autoTranslate ? "on" : ""}`}
@@ -409,18 +411,20 @@ export const SlidesViewer: React.FC<SlidesViewerProps> = ({
                     {slide.title || slide.content_en || `شريحة ${slide.slide_num}`}
                   </span>
                   <div className="sc-actions">
-                    <button
-                      type="button"
-                      className={`mini ar-btn ${showAr ? "on" : ""}`}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        toggleCardAr(slide.ref);
-                      }}
-                      title="إظهار أو طي الترجمة العربية"
-                    >
-                      <Icons.Translate size={12} />
-                      <span>ترجمة</span>
-                    </button>
+                    {!arabicOnly && (
+                      <button
+                        type="button"
+                        className={`mini ar-btn ${showAr ? "on" : ""}`}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          toggleCardAr(slide.ref);
+                        }}
+                        title="إظهار أو طي الترجمة العربية"
+                      >
+                        <Icons.Translate size={12} />
+                        <span>ترجمة</span>
+                      </button>
+                    )}
                     <button
                       type="button"
                       className={`mini ex-btn ${showEx ? "on" : ""}`}
@@ -499,23 +503,25 @@ export const SlidesViewer: React.FC<SlidesViewerProps> = ({
                 {/* متن الشريحة: الترجمة والشرح */}
                 <div className="sc-body">
                   {/* لوحة الترجمة العربية */}
-                  <div className={`ar-panel ${showAr ? "show" : ""}`}>
-                    <div className="ex-head" style={{ color: "var(--acc)", display: "flex", alignItems: "center", gap: "6px" }}>
-                      <Icons.Translate size={14} />
-                      <span>الترجمة العربية</span>
+                  {!arabicOnly && (
+                    <div className={`ar-panel ${showAr ? "show" : ""}`}>
+                      <div className="ex-head" style={{ color: "var(--acc)", display: "flex", alignItems: "center", gap: "6px" }}>
+                        <Icons.Translate size={14} />
+                        <span>الترجمة العربية</span>
+                      </div>
+                      {slide.content_ar ? (
+                        <div className="ar-body" style={{ marginTop: "8px", fontSize: "0.88rem", lineHeight: 1.7, color: "var(--ink)" }}>
+                          {slide.content_ar.split("\n").filter(Boolean).map((line, idx) => (
+                            <p key={idx} style={{ marginBottom: "6px" }}>{line}</p>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="ph" style={{ color: "var(--ink-m)", fontSize: "0.8rem", fontStyle: "italic", marginTop: "4px" }}>
+                          لا توجد ترجمة نصية لهذه الشريحة
+                        </div>
+                      )}
                     </div>
-                    {slide.content_ar ? (
-                      <div className="ar-body" style={{ marginTop: "8px", fontSize: "0.88rem", lineHeight: 1.7, color: "var(--ink)" }}>
-                        {slide.content_ar.split("\n").filter(Boolean).map((line, idx) => (
-                          <p key={idx} style={{ marginBottom: "6px" }}>{line}</p>
-                        ))}
-                      </div>
-                    ) : (
-                      <div className="ph" style={{ color: "var(--ink-m)", fontSize: "0.8rem", fontStyle: "italic", marginTop: "4px" }}>
-                        لا توجد ترجمة نصية لهذه الشريحة
-                      </div>
-                    )}
-                  </div>
+                  )}
 
                   {/* لوحة الشرح التعليمي والوقفة الامتحانية */}
                   <div className={`ex-panel ${showEx ? "show" : ""}`}>

@@ -10,6 +10,7 @@ import type { UnifiedQuestion } from "../../types";
 interface QuestionBankExplorerProps {
   questions: UnifiedQuestion[];
   onJumpToQuestion: (questionId: string) => void;
+  arabicOnly?: boolean;
 }
 
 export function highlightSearchText(text: string, term: string): React.ReactNode {
@@ -34,7 +35,8 @@ export function highlightSearchText(text: string, term: string): React.ReactNode
 
 export const QuestionBankExplorer: React.FC<QuestionBankExplorerProps> = ({
   questions,
-  onJumpToQuestion
+  onJumpToQuestion,
+  arabicOnly = false
 }) => {
   const [activeTab, setActiveTab] = useState<"explorer" | "rules">("explorer");
   const [searchTerm, setSearchTerm] = useState<string>("");
@@ -302,11 +304,15 @@ export const QuestionBankExplorer: React.FC<QuestionBankExplorerProps> = ({
                     </button>
                   </div>
 
-                  <div className="explorer-card-title-en">
-                    {highlightSearchText(q.question_en, searchTerm)}
+                  <div
+                    className="explorer-card-title-en"
+                    dir={arabicOnly ? "rtl" : "ltr"}
+                    style={arabicOnly ? { textAlign: "right" } : undefined}
+                  >
+                    {highlightSearchText(arabicOnly ? (q.question_ar || q.question_en) : q.question_en, searchTerm)}
                   </div>
 
-                  {q.question_ar && (
+                  {!arabicOnly && q.question_ar && q.question_ar.trim() !== q.question_en.trim() && (
                     <div className="explorer-card-title-ar">
                       {highlightSearchText(q.question_ar, searchTerm)}
                     </div>
@@ -317,7 +323,10 @@ export const QuestionBankExplorer: React.FC<QuestionBankExplorerProps> = ({
                     {q.type === "essay" ? (
                       <span>سؤال مقالي — الإجابة النموذجية متاحة بالبنك</span>
                     ) : (
-                      <span>الصحيح ({String.fromCharCode(65 + q.correct_answer)}): {q.options_en[q.correct_answer]}</span>
+                      <span>
+                        الصحيح ({String.fromCharCode(65 + q.correct_answer)}):{" "}
+                        {arabicOnly ? (q.options_ar?.[q.correct_answer] || q.options_en[q.correct_answer]) : q.options_en[q.correct_answer]}
+                      </span>
                     )}
                   </div>
                 </div>
@@ -356,10 +365,14 @@ export const QuestionBankExplorer: React.FC<QuestionBankExplorerProps> = ({
                     </button>
                   </div>
 
-                  <div className="explorer-full-title-en">
-                    {highlightSearchText(q.question_en, searchTerm)}
+                  <div
+                    className="explorer-full-title-en"
+                    dir={arabicOnly ? "rtl" : "ltr"}
+                    style={arabicOnly ? { textAlign: "right" } : undefined}
+                  >
+                    {highlightSearchText(arabicOnly ? (q.question_ar || q.question_en) : q.question_en, searchTerm)}
                   </div>
-                  {q.question_ar && (
+                  {!arabicOnly && q.question_ar && q.question_ar.trim() !== q.question_en.trim() && (
                     <div className="explorer-full-title-ar">
                       {highlightSearchText(q.question_ar, searchTerm)}
                     </div>
@@ -369,12 +382,15 @@ export const QuestionBankExplorer: React.FC<QuestionBankExplorerProps> = ({
                   <div className="explorer-full-opts">
                     {q.options_en.map((opt, oIdx) => {
                       const isCorrect = oIdx === q.correct_answer;
+                      const displayOpt = arabicOnly ? (q.options_ar?.[oIdx] || opt) : opt;
                       return (
                         <div
                           key={oIdx}
                           className={`explorer-full-opt ${isCorrect ? "is-correct" : ""}`}
+                          dir={arabicOnly ? "rtl" : "ltr"}
+                          style={arabicOnly ? { textAlign: "right" } : undefined}
                         >
-                          <strong>{String.fromCharCode(65 + oIdx)}.</strong> {highlightSearchText(opt, searchTerm)}
+                          <strong>{String.fromCharCode(65 + oIdx)}.</strong> {highlightSearchText(displayOpt, searchTerm)}
                         </div>
                       );
                     })}
