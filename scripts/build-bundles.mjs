@@ -69,6 +69,16 @@ const SUBJECTS = {
     accent_color: "#eab308",
     icon_name: "award",
     term: 2
+  },
+  phy: {
+    code: "phy",
+    dir: "PHY_Viewer",
+    name_ar: "فيزياء (الحوسبة الكمية)",
+    name_en: "Physics (Quantum Computing)",
+    professor_name: "د. محمد شكري",
+    accent_color: "#22d3ee",
+    icon_name: "cpu",
+    term: 2
   }
 };
 

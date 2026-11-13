@@ -1472,7 +1472,6 @@ function PmValueChainStudio() {
 
 type CNum = { re: number; im: number };
 const cMul = (a: CNum, b: CNum): CNum => ({ re: a.re * b.re - a.im * b.im, im: a.re * b.im + a.im * b.re });
-const cAdd = (a: CNum, b: CNum): CNum => ({ re: a.re + b.re, im: a.im + b.im });
 const cConj = (a: CNum): CNum => ({ re: a.re, im: -a.im });
 const cAbs2 = (a: CNum): number => a.re * a.re + a.im * a.im;
 const fmtC = (z: CNum): string => {
