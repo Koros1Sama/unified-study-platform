@@ -285,25 +285,56 @@ export const LightboxModal: React.FC<LightboxModalProps> = ({
         onMouseMove={handleMouseMove}
         onDoubleClick={handleDoubleTap}
       >
-        <img
-          src={resolveAssetUrl(currentSlide.image_url)}
-          alt={currentSlide.title || currentSlide.ref}
-          style={{
-            maxWidth: "92vw",
-            maxHeight: "82vh",
-            objectFit: "contain",
-            transform: `translate(${pan.x}px, ${pan.y}px) scale(${scale})`,
-            transition: isDragging ? "none" : "transform 0.15s ease-out",
-            userSelect: "none"
-          }}
-          draggable={false}
-          onError={(e) => {
-            // صورة احتياطية توضيحية في حال تعذر تحميل مسار الصورة
-            const target = e.currentTarget;
-            target.onerror = null;
-            target.src = "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='800' height='450' viewBox='0 0 800 450'><rect width='100%' height='100%' fill='%23191c24'/><text x='50%' y='50%' dominant-baseline='middle' text-anchor='middle' fill='%23f5b13d' font-family='sans-serif' font-size='24' font-weight='bold'>شريحة " + currentSlide.ref + "</text></svg>";
-          }}
-        />
+        {currentSlide.image_url ? (
+          <img
+            src={resolveAssetUrl(currentSlide.image_url)}
+            alt={currentSlide.title || currentSlide.ref}
+            style={{
+              maxWidth: "92vw",
+              maxHeight: "82vh",
+              objectFit: "contain",
+              transform: `translate(${pan.x}px, ${pan.y}px) scale(${scale})`,
+              transition: isDragging ? "none" : "transform 0.15s ease-out",
+              userSelect: "none"
+            }}
+            draggable={false}
+            onError={(e) => {
+              const target = e.currentTarget;
+              target.onerror = null;
+              target.src = "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='800' height='450' viewBox='0 0 800 450'><rect width='100%' height='100%' fill='%23191c24'/><text x='50%' y='50%' dominant-baseline='middle' text-anchor='middle' fill='%23f5b13d' font-family='sans-serif' font-size='24' font-weight='bold'>شريحة " + currentSlide.ref + "</text></svg>";
+            }}
+          />
+        ) : (
+          <div
+            dir="ltr"
+            style={{
+              maxWidth: "780px",
+              width: "88vw",
+              maxHeight: "74vh",
+              overflowY: "auto",
+              padding: "28px 32px",
+              borderRadius: "16px",
+              background: "var(--sf)",
+              border: "1px solid var(--ln)",
+              color: "var(--ink)",
+              textAlign: "left",
+              transform: `translate(${pan.x}px, ${pan.y}px) scale(${scale})`,
+              transition: isDragging ? "none" : "transform 0.15s ease-out"
+            }}
+          >
+            <div style={{ fontFamily: "var(--fm)", fontSize: "0.85rem", fontWeight: 800, color: "var(--acc)", marginBottom: 8 }}>
+              {currentSlide.ref}
+            </div>
+            <h3 style={{ margin: "0 0 14px", fontSize: "1.2rem", fontWeight: 800, color: "var(--ink)" }}>
+              {currentSlide.title || currentSlide.ref}
+            </h3>
+            {currentSlide.content_en && (
+              <div style={{ fontFamily: "var(--fm)", fontSize: "0.95rem", lineHeight: 1.7, color: "var(--ink-m)", whiteSpace: "pre-wrap" }}>
+                {currentSlide.content_en}
+              </div>
+            )}
+          </div>
+        )}
 
         {/* أزرار التنقل بين السلايدات (سابق / تالي) */}
         {currentIndex > 0 && (

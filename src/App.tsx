@@ -861,7 +861,7 @@ export const App: React.FC = () => {
     questions: hasQuestions,
     explorer: hasQuestions,
     exam: hasQuestions,
-    interactive: ["toc", "rm", "sec", "se", "pm"].includes(currentSubjectCode),
+    interactive: ["toc", "rm", "sec", "se", "pm", "phy"].includes(currentSubjectCode),
     definitions: Boolean(bundle?.definitions?.items?.length),
     glossary: Boolean(bundle?.glossary) && !isArabicOnly,
     patterns: Boolean(bundle?.patterns?.rules?.length),
@@ -1098,7 +1098,7 @@ export const App: React.FC = () => {
               )}
 
               {activeView === "interactive" &&
-                (["sec", "se", "pm"].includes(currentSubjectCode) ? (
+                (["sec", "se", "pm", "phy"].includes(currentSubjectCode) ? (
                   <ConceptStudios
                     subjectCode={currentSubjectCode}
                     initialStudioId={targetStudioId}

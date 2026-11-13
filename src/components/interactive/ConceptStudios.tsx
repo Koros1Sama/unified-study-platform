@@ -89,6 +89,23 @@ const PM_STUDIOS: StudioMeta[] = [
   }
 ];
 
+const PHY_STUDIOS: StudioMeta[] = [
+  {
+    id: "qc_gates",
+    title: "محاكي الكيوبت وبوابات باولي وهادامارد",
+    desc: "اختر الحالة الابتدائية وطبق البوابات الكمية (X, Y, Z, H, S) مع تتبع الاحتمالات ومتجه بلوخ لحظياً.",
+    ref: "L8-S002",
+    tabs: ["gates"]
+  },
+  {
+    id: "qc_entanglement",
+    title: "مختبر التشابك الكمي وحالات بيل (ad = bc)",
+    desc: "اختبر قابلية الفصل لحالات ثنائية الكيوبت واحسب درجة النقاء Tr(rho^2) وعدد شميدت وإنتروبيا فون نيومان.",
+    ref: "L7-S003",
+    tabs: ["entanglement"]
+  }
+];
+
 function caesar(text: string, shift: number): string {
   return text.replace(/[a-z]/gi, (char) => {
     const base = char <= "Z" ? 65 : 97;
@@ -148,6 +165,10 @@ function normalizeStudioForSubject(subjectCode: string, id?: string): string | u
     if (/l2|principle|value|authentic|hospital/.test(lower)) return "pm_principles";
     return "pm_approach";
   }
+  if (subjectCode === "phy") {
+    if (/entangl|bell|schmidt|density|l5|l7|l10/.test(lower)) return "qc_entanglement";
+    return "qc_gates";
+  }
   return undefined;
 }
 
@@ -180,6 +201,8 @@ export const ConceptStudios: React.FC<ConceptStudiosProps> = ({
       ? SE_STUDIOS
       : subjectCode === "pm"
       ? PM_STUDIOS
+      : subjectCode === "phy"
+      ? PHY_STUDIOS
       : [];
   const normalizedId = normalizeStudioForSubject(subjectCode, initialStudioId);
   const initial = studios.find((studio) => studio.id === normalizedId) || studios[0];
@@ -273,6 +296,8 @@ export const ConceptStudios: React.FC<ConceptStudiosProps> = ({
         {activeStudio === "pm_approach" && <PmApproachStudio />}
         {activeStudio === "pm_principles" && activeTab === "principles" && <PmPrinciplesStudio />}
         {activeStudio === "pm_principles" && activeTab === "value_chain" && <PmValueChainStudio />}
+        {activeStudio === "qc_gates" && <QcGatesStudio />}
+        {activeStudio === "qc_entanglement" && <QcEntanglementStudio />}
       </div>
     </div>
   );
@@ -294,7 +319,9 @@ function studioTabLabel(tab: string): string {
     risk: "مصفوفة المخاطر",
     approach: "مستشار المناهج الخمسة",
     principles: "المبادئ وسيناريوهات الفحص",
-    value_chain: "سلسلة خلق القيمة"
+    value_chain: "سلسلة خلق القيمة",
+    gates: "محاكي البوابات الكمية",
+    entanglement: "مختبر التشابك وحالات بيل"
   };
   return map[tab] || tab;
 }
@@ -1438,6 +1465,214 @@ function PmValueChainStudio() {
         >
           التالي
         </button>
+      </div>
+    </div>
+  );
+}
+
+type CNum = { re: number; im: number };
+const cMul = (a: CNum, b: CNum): CNum => ({ re: a.re * b.re - a.im * b.im, im: a.re * b.im + a.im * b.re });
+const cAdd = (a: CNum, b: CNum): CNum => ({ re: a.re + b.re, im: a.im + b.im });
+const cConj = (a: CNum): CNum => ({ re: a.re, im: -a.im });
+const cAbs2 = (a: CNum): number => a.re * a.re + a.im * a.im;
+const fmtC = (z: CNum): string => {
+  const r = Math.abs(z.re) < 1e-4 ? 0 : Number(z.re.toFixed(3));
+  const im = Math.abs(z.im) < 1e-4 ? 0 : Number(z.im.toFixed(3));
+  if (im === 0) return String(r);
+  if (r === 0) return im === 1 ? "i" : im === -1 ? "-i" : `${im}i`;
+  return `${r}${im >= 0 ? "+" : ""}${im}i`;
+};
+
+function QcGatesStudio() {
+  const [alpha, setAlpha] = useState<CNum>({ re: 1, im: 0 });
+  const [beta, setBeta] = useState<CNum>({ re: 0, im: 0 });
+  const [history, setHistory] = useState<string[]>([]);
+
+  const applyInit = (name: string, a: CNum, b: CNum) => {
+    setAlpha(a);
+    setBeta(b);
+    setHistory([name]);
+  };
+
+  const applyGate = (gate: "X" | "Y" | "Z" | "H" | "S" | "T") => {
+    const s2 = 1 / Math.SQRT2;
+    let na = alpha;
+    let nb = beta;
+    if (gate === "X") {
+      na = beta;
+      nb = alpha;
+    } else if (gate === "Y") {
+      na = cMul({ re: 0, im: -1 }, beta);
+      nb = cMul({ re: 0, im: 1 }, alpha);
+    } else if (gate === "Z") {
+      na = alpha;
+      nb = { re: -beta.re, im: -beta.im };
+    } else if (gate === "H") {
+      na = { re: (alpha.re + beta.re) * s2, im: (alpha.im + beta.im) * s2 };
+      nb = { re: (alpha.re - beta.re) * s2, im: (alpha.im - beta.im) * s2 };
+    } else if (gate === "S") {
+      na = alpha;
+      nb = cMul({ re: 0, im: 1 }, beta);
+    } else if (gate === "T") {
+      na = alpha;
+      nb = cMul({ re: Math.cos(Math.PI / 4), im: Math.sin(Math.PI / 4) }, beta);
+    }
+    setAlpha(na);
+    setBeta(nb);
+    setHistory((prev) => [...prev.slice(-7), gate]);
+  };
+
+  const p0 = cAbs2(alpha);
+  const p1 = cAbs2(beta);
+  const cross = cMul(cConj(alpha), beta);
+  const sx = Number((2 * cross.re).toFixed(3));
+  const sy = Number((2 * cross.im).toFixed(3));
+  const sz = Number((p0 - p1).toFixed(3));
+
+  return (
+    <div className="studio-body">
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 14 }}>
+        <button type="button" className="btn btn-sm" onClick={() => applyInit("|0>", { re: 1, im: 0 }, { re: 0, im: 0 })}>|0&gt;</button>
+        <button type="button" className="btn btn-sm" onClick={() => applyInit("|1>", { re: 0, im: 0 }, { re: 1, im: 0 })}>|1&gt;</button>
+        <button type="button" className="btn btn-sm" onClick={() => applyInit("|+>", { re: 1 / Math.SQRT2, im: 0 }, { re: 1 / Math.SQRT2, im: 0 })}>|+&gt;</button>
+        <button type="button" className="btn btn-sm" onClick={() => applyInit("|->", { re: 1 / Math.SQRT2, im: 0 }, { re: -1 / Math.SQRT2, im: 0 })}>|-&gt;</button>
+        <button type="button" className="btn btn-sm" onClick={() => applyInit("|+i>", { re: 1 / Math.SQRT2, im: 0 }, { re: 0, im: 1 / Math.SQRT2 })}>(|0&gt;+i|1&gt;)/sqrt(2)</button>
+      </div>
+
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 16 }}>
+        {(["X", "Y", "Z", "H", "S", "T"] as const).map((g) => (
+          <button key={g} type="button" className="btn btn-primary btn-sm" onClick={() => applyGate(g)} dir="ltr">
+            {g} Gate
+          </button>
+        ))}
+      </div>
+
+      <div className="card" style={{ padding: 16, background: "var(--sf2)", border: "1px solid var(--ln)", marginBottom: 14 }}>
+        <div style={{ fontSize: "0.82rem", color: "var(--ink-m)", marginBottom: 6 }}>
+          مسار العمليات: <code className="m-ltr">{history.length ? history.join(" -> ") : "|0>"}</code>
+        </div>
+        <div style={{ fontSize: "1.05rem", fontWeight: 800, color: "var(--acc)", fontFamily: "var(--fm)" }} dir="ltr">
+          |psi&gt; = ({fmtC(alpha)})|0&gt; + ({fmtC(beta)})|1&gt;
+        </div>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginTop: 14 }}>
+          <div>
+            <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.84rem", marginBottom: 4 }}>
+              <span>احتمال القياس |0&gt;</span>
+              <b dir="ltr">{(p0 * 100).toFixed(1)}%</b>
+            </div>
+            <div style={{ height: 10, borderRadius: 99, background: "var(--sf)", overflow: "hidden", border: "1px solid var(--ln)" }}>
+              <div style={{ width: `${Math.min(100, p0 * 100)}%`, height: "100%", background: "var(--acc)" }} />
+            </div>
+          </div>
+          <div>
+            <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.84rem", marginBottom: 4 }}>
+              <span>احتمال القياس |1&gt;</span>
+              <b dir="ltr">{(p1 * 100).toFixed(1)}%</b>
+            </div>
+            <div style={{ height: 10, borderRadius: 99, background: "var(--sf)", overflow: "hidden", border: "1px solid var(--ln)" }}>
+              <div style={{ width: `${Math.min(100, p1 * 100)}%`, height: "100%", background: "#38bdf8" }} />
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="studio-note" dir="ltr" style={{ textAlign: "left" }}>
+        Bloch Vector S = (&lt;X&gt;, &lt;Y&gt;, &lt;Z&gt;) = ({sx}, {sy}, {sz}) | |S|^2 = {(sx * sx + sy * sy + sz * sz).toFixed(3)} (Pure State = 1)
+      </div>
+    </div>
+  );
+}
+
+const BELL_PRESETS = [
+  { id: "b00", label: "Bell |beta_00> = (|00>+|11>)/sqrt(2)", a: 0.7071, b: 0, c: 0, d: 0.7071 },
+  { id: "b01", label: "Bell |beta_01> = (|01>+|10>)/sqrt(2)", a: 0, b: 0.7071, c: 0.7071, d: 0 },
+  { id: "b10", label: "Bell |beta_10> = (|00>-|11>)/sqrt(2)", a: 0.7071, b: 0, c: 0, d: -0.7071 },
+  { id: "b11", label: "Singlet |beta_11> = (|01>-|10>)/sqrt(2)", a: 0, b: 0.7071, c: -0.7071, d: 0 },
+  { id: "prod", label: "Product |++> = (|00>+|01>+|10>+|11>)/2", a: 0.5, b: 0.5, c: 0.5, d: 0.5 },
+  { id: "partial", label: "Partial Entangled (0.8|00>+0.6|11>)", a: 0.8, b: 0, c: 0, d: 0.6 }
+];
+
+function QcEntanglementStudio() {
+  const [a, setA] = useState(1);
+  const [b, setB] = useState(0);
+  const [c, setC] = useState(0);
+  const [d, setD] = useState(1);
+
+  const norm = Math.sqrt(a * a + b * b + c * c + d * d) || 1;
+  const na = a / norm;
+  const nb = b / norm;
+  const nc = c / norm;
+  const nd = d / norm;
+
+  const ad = na * nd;
+  const bc = nb * nc;
+  const diff = Math.abs(ad - bc);
+  const isSeparable = diff < 0.015;
+
+  // Reduced density matrix rho_A = Tr_B(|psi><psi|)
+  const r00 = na * na + nb * nb;
+  const r01 = na * nc + nb * nd;
+  const r11 = nc * nc + nd * nd;
+  const trRhoA2 = r00 * r00 + 2 * r01 * r01 + r11 * r11;
+  const det = r00 * r11 - r01 * r01;
+  const disc = Math.sqrt(Math.max(0, 1 - 4 * det));
+  const lam1 = (1 + disc) / 2;
+  const lam2 = (1 - disc) / 2;
+  const schmidtNumber = (lam1 > 1e-4 ? 1 : 0) + (lam2 > 1e-4 ? 1 : 0);
+  const h = (x: number) => (x > 1e-6 ? -x * Math.log2(x) : 0);
+  const entropy = h(lam1) + h(lam2);
+
+  return (
+    <div className="studio-body">
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 14 }}>
+        {BELL_PRESETS.map((p) => (
+          <button
+            key={p.id}
+            type="button"
+            className="btn btn-sm"
+            dir="ltr"
+            onClick={() => { setA(p.a); setB(p.b); setC(p.c); setD(p.d); }}
+          >
+            {p.label}
+          </button>
+        ))}
+      </div>
+
+      <div className="studio-controls studio-two-col">
+        <Slider label="المعامل a (|00>)" value={Math.round(a * 10)} min={-10} max={10} onChange={(v) => setA(v / 10)} />
+        <Slider label="المعامل b (|01>)" value={Math.round(b * 10)} min={-10} max={10} onChange={(v) => setB(v / 10)} />
+        <Slider label="المعامل c (|10>)" value={Math.round(c * 10)} min={-10} max={10} onChange={(v) => setC(v / 10)} />
+        <Slider label="المعامل d (|11>)" value={Math.round(d * 10)} min={-10} max={10} onChange={(v) => setD(v / 10)} />
+      </div>
+
+      <div className={`studio-result ${isSeparable ? "ok" : "err"}`}>
+        <Icons.Target size={16} />
+        <span>
+          <b>{isSeparable ? "حالة قابلة للفصل (Product / Separable State)" : "حالة متشابكة (Entangled State)"}</b>
+          {" — "}
+          <code className="m-ltr">|ad - bc| = {diff.toFixed(4)}</code>
+          {" | "}
+          عدد شميدت: <code className="m-ltr">Sch = {schmidtNumber}</code>
+        </span>
+      </div>
+
+      <div className="studio-compare" style={{ marginTop: 14 }}>
+        <div className="studio-compare-col">
+          <h4>معيار الفصل (ad = bc)</h4>
+          <p dir="ltr">ad = {ad.toFixed(3)}, bc = {bc.toFixed(3)}</p>
+        </div>
+        <div className="studio-compare-col">
+          <h4>نقاء الحالة المختزلة</h4>
+          <p dir="ltr">Tr(rho_A^2) = {trRhoA2.toFixed(3)}</p>
+        </div>
+        <div className="studio-compare-col">
+          <h4>القيم الذاتية لشميدت</h4>
+          <p dir="ltr">lambda = {lam1.toFixed(3)}, {lam2.toFixed(3)}</p>
+        </div>
+        <div className="studio-compare-col">
+          <h4>إنتروبيا التشابك</h4>
+          <p dir="ltr">S(rho_A) = {entropy.toFixed(3)} bits</p>
+        </div>
       </div>
     </div>
   );

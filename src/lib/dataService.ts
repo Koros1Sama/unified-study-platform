@@ -59,7 +59,7 @@ export const DataService = {
    */
   async getSubjects(): Promise<SubjectMeta[]> {
     try {
-      const res = await fetch(resolveDataPath("data/subjects.json?v=12"), { cache: "no-cache" });
+      const res = await fetch(resolveDataPath("data/subjects.json?v=13"), { cache: "no-cache" });
       if (res.ok) {
         const subjects: SubjectMeta[] = await res.json();
         subjectsCache = subjects;
@@ -126,6 +126,16 @@ export const DataService = {
         professor_name: "د. منصور نعمان",
         accent_color: "#eab308",
         icon_name: "award",
+        is_active: true
+      },
+      {
+        code: "phy",
+        name_ar: "فيزياء (الحوسبة الكمية)",
+        name_en: "Physics (Quantum Computing)",
+        term: 2,
+        professor_name: "د. محمد شكري",
+        accent_color: "#22d3ee",
+        icon_name: "cpu",
         is_active: true
       },
       {
@@ -234,7 +244,7 @@ export const DataService = {
 
     // 2. جلب أحدث حزمة من ملف JSON المحلي (ثم حفظها في الكاش)
     try {
-      const res = await fetch(resolveDataPath(`data/${code}/bundle.json?v=12`), { cache: "no-cache" });
+      const res = await fetch(resolveDataPath(`data/${code}/bundle.json?v=13`), { cache: "no-cache" });
       if (res.ok) {
         const bundle: SubjectBundle = await res.json();
         await this.persistBundleToIndexedDB(bundle);

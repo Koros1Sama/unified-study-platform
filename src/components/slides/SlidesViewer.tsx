@@ -482,8 +482,37 @@ export const SlidesViewer: React.FC<SlidesViewerProps> = ({
                       }}
                     />
                   ) : (
-                    <div style={{ height: "100%", minHeight: 180, display: "grid", placeItems: "center", background: "var(--sf2)", color: "var(--ink-m)", fontFamily: "var(--fm)", fontSize: "1.1rem" }}>
-                      <span>{slide.ref}</span>
+                    <div
+                      dir="ltr"
+                      style={{
+                        height: "100%",
+                        minHeight: 190,
+                        padding: "16px 18px",
+                        display: "flex",
+                        flexDirection: "column",
+                        justifyContent: "space-between",
+                        background: "linear-gradient(145deg, color-mix(in srgb, var(--acc) 9%, var(--sf2)), var(--sf2))",
+                        color: "var(--ink)",
+                        textAlign: "left",
+                        borderBottom: "1px solid var(--ln-s)"
+                      }}
+                    >
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
+                        <span style={{ fontFamily: "var(--fm)", fontSize: "0.78rem", fontWeight: 800, color: "var(--acc)" }}>
+                          {slide.ref}
+                        </span>
+                        <span style={{ fontSize: "0.72rem", padding: "2px 8px", borderRadius: "var(--r-pill)", background: "var(--sf)", color: "var(--ink-m)", border: "1px solid var(--ln)" }}>
+                          Reference Excerpt
+                        </span>
+                      </div>
+                      <div style={{ fontSize: "0.94rem", fontWeight: 700, color: "var(--ink)", marginTop: 8, marginBottom: 6 }}>
+                        {slide.title || slide.ref}
+                      </div>
+                      {slide.content_en && (
+                        <div style={{ fontSize: "0.82rem", lineHeight: 1.55, color: "var(--ink-m)", fontFamily: "var(--fm)", whiteSpace: "pre-wrap" }}>
+                          {slide.content_en}
+                        </div>
+                      )}
                     </div>
                   )}
                   <button

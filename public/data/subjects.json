@@ -80,5 +80,22 @@
     "bundle_version": 6,
     "has_lab": false,
     "data_status": "full"
+  },
+  {
+    "code": "phy",
+    "name_ar": "فيزياء (الحوسبة الكمية)",
+    "name_en": "Physics (Quantum Computing)",
+    "term": 2,
+    "professor_name": "د. محمد شكري",
+    "accent_color": "#22d3ee",
+    "icon_name": "cpu",
+    "is_active": true,
+    "arabic_only": false,
+    "lectures_count": 15,
+    "questions_count": 90,
+    "tables_count": 18,
+    "bundle_version": 1,
+    "has_lab": false,
+    "data_status": "full"
   }
 ]
