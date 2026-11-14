@@ -18,6 +18,7 @@ interface QuestionCardProps {
   onAnswer: (questionId: string, answerIdx: number, isCorrect: boolean, twinGroupId?: string) => void;
   onJumpToSlide?: (ref: string) => void;
   onShowTranslate?: (text: string, pos: { x: number; y: number }) => void;
+  onScheduleHideTranslate?: () => void;
   languageMode?: "smart" | "en" | "ar" | "both";
   readOnly?: boolean;
   showBookmarks?: boolean;
@@ -64,6 +65,7 @@ const QuestionCardComponent: React.FC<QuestionCardProps> = ({
   onAnswer,
   onJumpToSlide,
   onShowTranslate,
+  onScheduleHideTranslate,
   languageMode = "smart",
   readOnly = false,
   showBookmarks = true,
@@ -182,14 +184,14 @@ const QuestionCardComponent: React.FC<QuestionCardProps> = ({
           <button
             type="button"
             className="q-twin-badge"
-            title={`سؤال مدمج مع توأم مطابق 100%${twinNumber ? ` (س${twinNumber})` : ""} — انقر لعرض تفاصيل التوأم وتوحيد الحل`}
+            title={`سؤال متكرر بصيغة مطابقة${twinNumber ? ` (س${twinNumber})` : ""} — انقر للمقارنة`}
             onClick={(e) => {
               e.stopPropagation();
               if (onOpenTwinModal) onOpenTwinModal(question);
             }}
           >
             <Icons.Twin size={11} />
-            <span>{twinNumber ? `مدمج مع س${twinNumber}` : "توأم مدمج"}</span>
+            <span>{twinNumber ? `متكرر · س${twinNumber}` : "سؤال متكرر"}</span>
           </button>
         )}
 
@@ -297,10 +299,27 @@ const QuestionCardComponent: React.FC<QuestionCardProps> = ({
           <div
             className={`q-stem-en ${languageMode === "smart" && question.question_ar && question.question_ar.trim() !== question.question_en.trim() ? "hover-ar" : ""}`}
             data-ar={cleanArabicOnly(question.question_ar || "")}
+            onPointerEnter={(e) => {
+              if (
+                e.pointerType === "mouse" &&
+                languageMode === "smart" &&
+                question.question_ar &&
+                question.question_ar.trim() !== question.question_en.trim() &&
+                onShowTranslate
+              ) {
+                const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+                onShowTranslate(cleanArabicOnly(question.question_ar), { x: rect.left + rect.width / 2, y: rect.bottom + 4 });
+              }
+            }}
+            onPointerLeave={(e) => {
+              if (e.pointerType === "mouse" && onScheduleHideTranslate) {
+                onScheduleHideTranslate();
+              }
+            }}
             onClick={(e) => {
               if (languageMode === "smart" && question.question_ar && question.question_ar.trim() !== question.question_en.trim() && onShowTranslate) {
                 const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-                onShowTranslate(cleanArabicOnly(question.question_ar), { x: rect.left, y: rect.bottom + 6 });
+                onShowTranslate(cleanArabicOnly(question.question_ar), { x: rect.left + rect.width / 2, y: rect.bottom + 6 });
               }
             }}
           >
@@ -389,6 +408,23 @@ const QuestionCardComponent: React.FC<QuestionCardProps> = ({
                     className={btnClass}
                     data-correct={isAnswered && isRightOpt ? "true" : undefined}
                     onClick={() => handleSelectOption(idx)}
+                    onPointerEnter={(e) => {
+                      if (
+                        e.pointerType === "mouse" &&
+                        languageMode === "smart" &&
+                        optAr &&
+                        optAr.trim() !== optEn.trim() &&
+                        onShowTranslate
+                      ) {
+                        const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+                        onShowTranslate(cleanArabicOnly(optAr), { x: rect.left + rect.width / 2, y: rect.bottom + 4 });
+                      }
+                    }}
+                    onPointerLeave={(e) => {
+                      if (e.pointerType === "mouse" && onScheduleHideTranslate) {
+                        onScheduleHideTranslate();
+                      }
+                    }}
                     disabled={readOnly}
                   >
                     <span className="letter">{letter}</span>
@@ -405,7 +441,9 @@ const QuestionCardComponent: React.FC<QuestionCardProps> = ({
                           )}
                         </div>
                       ) : (
-                        <span className="opt-en">{optEn}</span>
+                        <span className={`opt-en ${languageMode === "smart" && optAr && optAr.trim() !== optEn.trim() ? "hover-ar" : ""}`}>
+                          {optEn}
+                        </span>
                       )}
                     </span>
                   </button>

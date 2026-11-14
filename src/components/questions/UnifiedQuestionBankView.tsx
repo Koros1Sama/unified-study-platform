@@ -5,11 +5,16 @@
 // deterministic shuffle (questions & choices) · zero emojis.
 // ==============================================================================
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Icons } from "../icons/SvgIcons";
 import { QuestionCard } from "./QuestionCard";
 import { TwinQuestionModal } from "./TwinQuestionModal";
 import { SmartTranslateTooltip } from "../common/SmartTranslateTooltip";
+import {
+  sortQuestionsBySimilarity,
+  sortQuestionsBySlides,
+  type QuestionSortMode
+} from "../../lib/questionOrder";
 import type {
   UnifiedQuestion,
   QuestionModelInfo,
@@ -28,6 +33,8 @@ interface UnifiedQuestionBankViewProps {
   onJumpToSlide?: (ref: string) => void;
   onJumpToQuestion?: (questionId: string) => void;
   languageMode?: "smart" | "en" | "ar" | "both";
+  onLanguageChange?: (mode: "smart" | "en" | "ar" | "both") => void;
+  arabicOnly?: boolean;
   selectedModelId?: string;
   onSelectModel?: (id: string) => void;
   focusQuestionId?: string | null;
@@ -38,13 +45,11 @@ interface UnifiedQuestionBankViewProps {
   expMode?: ExplanationMode;
   onChangeExpMode?: (mode: ExplanationMode) => void;
   shuffleChoices?: boolean;
-  onToggleShuffleChoices?: () => void;
   shuffleQuestions?: boolean;
-  onToggleShuffleQuestions?: () => void;
-  shuffleSeed?: number;
-  onChangeShuffleSeed?: (seed: number) => void;
+  choicesSeed?: number;
+  questionsSeed?: number;
+  syncTwins?: boolean;
   onResetModelAnswers?: (modelId: string) => void;
-  onReshuffle?: () => void;
 }
 
 function ordSeed(str: string) {
@@ -119,6 +124,8 @@ export const UnifiedQuestionBankView: React.FC<UnifiedQuestionBankViewProps> = (
   onJumpToSlide,
   onJumpToQuestion,
   languageMode = "smart",
+  onLanguageChange,
+  arabicOnly = false,
   selectedModelId: propSelectedModelId,
   onSelectModel,
   focusQuestionId,
@@ -129,13 +136,11 @@ export const UnifiedQuestionBankView: React.FC<UnifiedQuestionBankViewProps> = (
   expMode = "always",
   onChangeExpMode,
   shuffleChoices = false,
-  onToggleShuffleChoices,
   shuffleQuestions = false,
-  onToggleShuffleQuestions,
-  shuffleSeed = 1,
-  onChangeShuffleSeed,
-  onResetModelAnswers,
-  onReshuffle
+  choicesSeed = 1,
+  questionsSeed = 1,
+  syncTwins = false,
+  onResetModelAnswers
 }) => {
   const [internalModelId, setInternalModelId] = useState<string>("all");
   const selectedModelId = propSelectedModelId !== undefined ? propSelectedModelId : internalModelId;
@@ -144,7 +149,7 @@ export const UnifiedQuestionBankView: React.FC<UnifiedQuestionBankViewProps> = (
     if (onSelectModel) onSelectModel(id);
   };
 
-  const [hideTwins, setHideTwins] = useState<boolean>(true);
+  const [sortMode, setSortMode] = useState<QuestionSortMode>("natural");
   const [filterState, setFilterState] = useState<"all" | "unsolved" | "solved" | "wrong" | "correct">("all");
   const [filterBm, setFilterBm] = useState<"all" | BookmarkColor>("all");
   const [searchQuery, setSearchQuery] = useState<string>("");
@@ -163,45 +168,19 @@ export const UnifiedQuestionBankView: React.FC<UnifiedQuestionBankViewProps> = (
     text: string;
     pos: { x: number; y: number } | null;
   }>({ visible: false, text: "", pos: null });
+  const hoverHideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const [activeShuffleChoices, setActiveShuffleChoices] = useState<boolean>(shuffleChoices);
-  const [activeShuffleQuestions, setActiveShuffleQuestions] = useState<boolean>(shuffleQuestions);
-  const [activeSeed, setActiveSeed] = useState<number>(shuffleSeed);
   const [activeExpMode, setActiveExpMode] = useState<ExplanationMode>(expMode);
 
-  useEffect(() => {
-    setActiveShuffleChoices(shuffleChoices);
-  }, [shuffleChoices]);
-  useEffect(() => {
-    setActiveShuffleQuestions(shuffleQuestions);
-  }, [shuffleQuestions]);
-  useEffect(() => {
-    setActiveSeed(shuffleSeed);
-  }, [shuffleSeed]);
   useEffect(() => {
     setActiveExpMode(expMode);
   }, [expMode]);
 
-  const toggleShuffleChoicesSync = () => {
-    const next = !activeShuffleChoices;
-    setActiveShuffleChoices(next);
-    if (onToggleShuffleChoices) onToggleShuffleChoices();
-    else localStorage.setItem("unified_shuffle_choices", String(next));
-  };
-
-  const toggleShuffleQuestionsSync = () => {
-    const next = !activeShuffleQuestions;
-    setActiveShuffleQuestions(next);
-    if (onToggleShuffleQuestions) onToggleShuffleQuestions();
-    else localStorage.setItem("unified_shuffle_questions", String(next));
-  };
-
-  const updateSeedSync = (nextSeed: number) => {
-    const s = Math.max(1, nextSeed);
-    setActiveSeed(s);
-    if (onChangeShuffleSeed) onChangeShuffleSeed(s);
-    else localStorage.setItem("unified_seed", String(s));
-  };
+  useEffect(() => {
+    return () => {
+      if (hoverHideTimerRef.current) clearTimeout(hoverHideTimerRef.current);
+    };
+  }, []);
 
   const cycleExpModeSync = () => {
     const cycle: Record<ExplanationMode, ExplanationMode> = {
@@ -293,7 +272,6 @@ export const UnifiedQuestionBankView: React.FC<UnifiedQuestionBankViewProps> = (
   const activeAnsCount = statusCounts.solved;
 
   const filteredQuestions = useMemo(() => {
-    const seenTwins = new Set<string>();
     const q = searchQuery.trim().toLowerCase();
 
     return modelQuestions.filter((question) => {
@@ -322,11 +300,6 @@ export const UnifiedQuestionBankView: React.FC<UnifiedQuestionBankViewProps> = (
       if (showBookmarks && filterBm !== "all") {
         const qBms = bookmarksMap[question.id] || [];
         if (!qBms.includes(filterBm)) return false;
-      }
-
-      if (hideTwins && question.twin_group_id) {
-        if (seenTwins.has(question.twin_group_id)) return false;
-        seenTwins.add(question.twin_group_id);
       }
 
       if (!retest) {
@@ -358,7 +331,6 @@ export const UnifiedQuestionBankView: React.FC<UnifiedQuestionBankViewProps> = (
     retestIds,
     lectureFilter,
     manualData,
-    hideTwins,
     filterState,
     filterBm,
     showBookmarks,
@@ -367,9 +339,15 @@ export const UnifiedQuestionBankView: React.FC<UnifiedQuestionBankViewProps> = (
     searchQuery
   ]);
 
-  // ترتيب الأسئلة: إذا كان الخلط مفعلاً، تبقى الأسئلة المحلولة في البداية بترتيبها المستقر، والأسئلة غير المحلولة تُخلط عشوائياً
+  // ترتيب الأسئلة: يدعم الترتيب الطبيعي (أو العشوائي من الإعدادات)، والترتيب حسب التشابه، والترتيب حسب الدروس والسلايدات
   const orderedQuestions = useMemo(() => {
-    if (!activeShuffleQuestions) return filteredQuestions;
+    if (sortMode === "similarity") {
+      return sortQuestionsBySimilarity(filteredQuestions);
+    }
+    if (sortMode === "slides") {
+      return sortQuestionsBySlides(filteredQuestions);
+    }
+    if (!shuffleQuestions) return filteredQuestions;
 
     const answered: UnifiedQuestion[] = [];
     const unanswered: UnifiedQuestion[] = [];
@@ -383,7 +361,7 @@ export const UnifiedQuestionBankView: React.FC<UnifiedQuestionBankViewProps> = (
       }
     });
 
-    const seedStr = `${subjectCode}#${selectedModelId}#unans#${activeSeed}`;
+    const seedStr = `${subjectCode}#${selectedModelId}#unans#${questionsSeed}`;
     const rnd = ordSeed(seedStr);
     const shuffledUnanswered = [...unanswered];
     for (let i = shuffledUnanswered.length - 1; i > 0; i--) {
@@ -396,10 +374,11 @@ export const UnifiedQuestionBankView: React.FC<UnifiedQuestionBankViewProps> = (
     return [...answered, ...shuffledUnanswered];
   }, [
     filteredQuestions,
-    activeShuffleQuestions,
+    sortMode,
+    shuffleQuestions,
     subjectCode,
     selectedModelId,
-    activeSeed,
+    questionsSeed,
     answeredMap,
     retest,
     retestAnswers
@@ -576,7 +555,25 @@ export const UnifiedQuestionBankView: React.FC<UnifiedQuestionBankViewProps> = (
   };
 
   const handleShowTranslate = (text: string, pos: { x: number; y: number }) => {
+    if (hoverHideTimerRef.current) {
+      clearTimeout(hoverHideTimerRef.current);
+      hoverHideTimerRef.current = null;
+    }
     setTooltipState({ visible: true, text, pos });
+  };
+
+  const handleScheduleHideTranslate = () => {
+    if (hoverHideTimerRef.current) clearTimeout(hoverHideTimerRef.current);
+    hoverHideTimerRef.current = setTimeout(() => {
+      setTooltipState((s) => ({ ...s, visible: false }));
+    }, 180);
+  };
+
+  const handleCancelHideTranslate = () => {
+    if (hoverHideTimerRef.current) {
+      clearTimeout(hoverHideTimerRef.current);
+      hoverHideTimerRef.current = null;
+    }
   };
 
   // محرك اختصارات لوحة المفاتيح لبنك الأسئلة (1, 2, 3, 4, J, K, E, F, B, T)
@@ -902,16 +899,6 @@ export const UnifiedQuestionBankView: React.FC<UnifiedQuestionBankViewProps> = (
 
         <button
           type="button"
-          className={`fchip ${hideTwins ? "on" : ""}`}
-          onClick={() => setHideTwins(!hideTwins)}
-          title="دمج الأسئلة التوأمية المتطابقة نصاً"
-        >
-          <Icons.Twin size={13} />
-          {hideTwins ? "دمج التوائم" : "عرض المكررات"}
-        </button>
-
-        <button
-          type="button"
           className={`fchip fchip-review-wrong ${statusCounts.wrong === 0 ? "is-empty" : ""}`}
           onClick={() => startRetest("wrong")}
           disabled={statusCounts.wrong === 0}
@@ -921,65 +908,67 @@ export const UnifiedQuestionBankView: React.FC<UnifiedQuestionBankViewProps> = (
           جلسة الأخطاء{statusCounts.wrong > 0 ? ` (${statusCounts.wrong})` : ""}
         </button>
 
-        {/* أزرار اللخبطة والبذرة والشرح المطابقة لـ RM_Viewer والمرتبطة بالتخزين والإعدادات */}
-        <button
-          type="button"
-          className={`fchip ${activeShuffleChoices ? "on" : ""}`}
-          onClick={toggleShuffleChoicesSync}
-          title="تبديل عشوائي لترتيب خيارات الإجابة"
-        >
-          <Icons.Shuffle size={13} />
-          <span>{activeShuffleChoices ? "لخبطة الخيارات: مفعلة" : "لخبطة الخيارات: ملغاة"}</span>
-        </button>
+        {/* مبدّل لغة الأسئلة خارج الإعدادات */}
+        {!arabicOnly && onLanguageChange && (
+          <div className="fchip-group" role="group" aria-label="لغة أسئلة البنك">
+            {[
+              { id: "smart" as const, label: "ذكي", title: "الإنجليزية مع الترجمة الفورية عند التمرير بالماوس أو النقر" },
+              { id: "en" as const, label: "English", title: "عرض الأسئلة بالإنجليزية فقط" },
+              { id: "ar" as const, label: "عربي", title: "عرض الأسئلة بالعربية فقط" },
+              { id: "both" as const, label: "الاثنين", title: "عرض الإنجليزية والعربية معاً" }
+            ].map((lang) => (
+              <button
+                key={lang.id}
+                type="button"
+                className={`fchip ${languageMode === lang.id ? "on" : ""}`}
+                onClick={() => onLanguageChange(lang.id)}
+                title={lang.title}
+              >
+                {lang.id === "smart" && <Icons.Translate size={13} />}
+                <span>{lang.label}</span>
+              </button>
+            ))}
+          </div>
+        )}
 
-        <button
-          type="button"
-          className={`fchip ${activeShuffleQuestions ? "on" : ""}`}
-          onClick={toggleShuffleQuestionsSync}
-          title="خلط عشوائي متزن للأسئلة غير المحلولة"
-        >
-          <Icons.Shuffle size={13} />
-          <span>{activeShuffleQuestions ? "لخبطة الأسئلة: مفعلة" : "لخبطة الأسئلة: ملغاة"}</span>
-        </button>
-
-        <div className="seed-control-capsule" title="رقم البذرة العشوائية للخلط والتوليد (Seed)">
-          <span className="seed-label">
-            <Icons.Hash size={11} />
-            Seed
-          </span>
-          <button
-            type="button"
-            className="seed-btn seed-dec"
-            onClick={() => updateSeedSync(activeSeed - 1)}
-            title="إنقاص رقم البذرة"
-          >
-            -
-          </button>
-          <input
-            type="number"
-            className="seed-input-num"
-            value={activeSeed}
-            onChange={(e) => updateSeedSync(parseInt(e.target.value, 10) || 1)}
-            min={1}
-            max={9999}
-          />
-          <button
-            type="button"
-            className="seed-btn seed-inc"
-            onClick={() => updateSeedSync(activeSeed + 1)}
-            title="زيادة رقم البذرة"
-          >
-            +
-          </button>
-          <button
-            type="button"
-            className="seed-btn seed-rnd"
-            onClick={() => updateSeedSync(Math.floor(Math.random() * 999) + 1)}
-            title="توليد بذرة عشوائية جديدة"
-          >
-            <Icons.Rotate size={11} />
-            <span className="seed-rnd-txt">عشوائي</span>
-          </button>
+        {/* محدد نمط ترتيب الأسئلة */}
+        <div className="fchip-group" role="group" aria-label="ترتيب الأسئلة">
+          {[
+            {
+              id: "natural" as const,
+              label: shuffleQuestions ? "طبيعي (عشوائي)" : "ترتيب طبيعي",
+              title: shuffleQuestions
+                ? "الترتيب العشوائي المفعل من الإعدادات"
+                : "ترتيب الأسئلة الأصلي كما ورد في النموذج"
+            },
+            {
+              id: "similarity" as const,
+              label: "حسب التشابه",
+              title: "تجميع الأسئلة المتشابهة والمتكررة والمرتبطة موضوعياً بجانب بعضها"
+            },
+            {
+              id: "slides" as const,
+              label: "حسب الدروس والسلايدات",
+              title: "ترتيب الأسئلة تصاعدياً حسب رقم المحاضرة ورقم السلايد المرتبط بها"
+            }
+          ].map((mode) => (
+            <button
+              key={mode.id}
+              type="button"
+              className={`fchip ${sortMode === mode.id ? "on" : ""}`}
+              onClick={() => setSortMode(mode.id)}
+              title={mode.title}
+            >
+              {mode.id === "slides" ? (
+                <Icons.Slides size={13} />
+              ) : mode.id === "similarity" ? (
+                <Icons.Layers size={13} />
+              ) : (
+                <Icons.List size={13} />
+              )}
+              <span>{mode.label}</span>
+            </button>
+          ))}
         </div>
 
         <button
@@ -1151,7 +1140,7 @@ export const UnifiedQuestionBankView: React.FC<UnifiedQuestionBankViewProps> = (
           </span>
           <span>
             {selectedModelId === "all"
-              ? "قسم شامل يضم كافة الأسئلة بعد دمج التوائم المكررة طبق الأصل، مع تفنيد المشتتات المزدوج والتعليل الصائب لكل سؤال."
+              ? `قسم شامل يضم كافة الأسئلة من جميع النماذج، مع دعم الترتيب حسب التشابه أو حسب تسلسل الدروس والشرائح${syncTwins ? " ومزامنة المتطابقات تلقائياً" : ""}.`
               : activeModelMeta?.origin_ar || "أسئلة النموذج المعتمد مع الشرح المفصل وتفنيد الخيارات الخاطئة."}
           </span>
         </div>
@@ -1198,8 +1187,8 @@ export const UnifiedQuestionBankView: React.FC<UnifiedQuestionBankViewProps> = (
             let currentAnswer = retest ? retestAnswers[q.id] : answeredMap[q.id];
             let onAnswerHandler = handleAnswerWithRetest;
 
-            if (activeShuffleChoices && q.options_en && q.options_en.length >= 2) {
-              const seedStr = `${subjectCode}#${q.id}#opts#${activeSeed}`;
+            if (shuffleChoices && q.options_en && q.options_en.length >= 2) {
+              const seedStr = `${subjectCode}#${q.id}#opts#${choicesSeed}`;
               const rnd = ordSeed(seedStr);
               const perm = q.options_en.map((_, i) => i);
               for (let i = perm.length - 1; i > 0; i--) {
@@ -1257,6 +1246,7 @@ export const UnifiedQuestionBankView: React.FC<UnifiedQuestionBankViewProps> = (
                 onAnswer={onAnswerHandler}
                 onJumpToSlide={onJumpToSlide}
                 onShowTranslate={handleShowTranslate}
+                onScheduleHideTranslate={handleScheduleHideTranslate}
                 languageMode={languageMode}
                 showBookmarks={showBookmarks}
                 bookmarks={bookmarksMap[q.id] || []}
@@ -1297,6 +1287,8 @@ export const UnifiedQuestionBankView: React.FC<UnifiedQuestionBankViewProps> = (
         textAr={tooltipState.text}
         position={tooltipState.pos}
         onClose={() => setTooltipState((s) => ({ ...s, visible: false }))}
+        onMouseEnterTooltip={handleCancelHideTranslate}
+        onMouseLeaveTooltip={handleScheduleHideTranslate}
       />
     </div>
   );

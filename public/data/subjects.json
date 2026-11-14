@@ -12,7 +12,7 @@
     "lectures_count": 8,
     "questions_count": 226,
     "tables_count": 28,
-    "bundle_version": 6,
+    "bundle_version": 7,
     "has_lab": false,
     "data_status": "full"
   },
@@ -29,7 +29,7 @@
     "lectures_count": 6,
     "questions_count": 445,
     "tables_count": 1,
-    "bundle_version": 6,
+    "bundle_version": 7,
     "has_lab": false,
     "data_status": "theory-only"
   },
@@ -46,7 +46,7 @@
     "lectures_count": 6,
     "questions_count": 956,
     "tables_count": 29,
-    "bundle_version": 6,
+    "bundle_version": 7,
     "has_lab": true,
     "lab_url": "https://koros1sama.github.io/sec-lab-viewer/",
     "lab_title": "ملحق معمل أمن المعلومات",
@@ -65,7 +65,7 @@
     "lectures_count": 9,
     "questions_count": 808,
     "tables_count": 21,
-    "bundle_version": 6,
+    "bundle_version": 7,
     "has_lab": false,
     "data_status": "full"
   },
@@ -82,7 +82,7 @@
     "lectures_count": 2,
     "questions_count": 65,
     "tables_count": 16,
-    "bundle_version": 6,
+    "bundle_version": 7,
     "has_lab": false,
     "data_status": "full"
   },
@@ -99,7 +99,7 @@
     "lectures_count": 15,
     "questions_count": 90,
     "tables_count": 18,
-    "bundle_version": 2,
+    "bundle_version": 7,
     "has_lab": false,
     "data_status": "full"
   }

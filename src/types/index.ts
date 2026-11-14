@@ -305,6 +305,7 @@ export interface UnifiedQuestion {
   exam_tip?: string;
   is_ai_predicted?: boolean;
   twin_group_id?: string;
+  similarity_order?: number;
   tg_msg_id?: number;
   tg_url?: string;
   created_at?: string;
@@ -520,6 +521,7 @@ export interface UserStudyProgress {
 // ------------------------------------------------------------------------------
 
 export type ExplanationMode = "always" | "wrong_only" | "manual";
+export type QuestionSortMode = "natural" | "similarity" | "slides";
 export type BookmarkColor = "red" | "yellow" | "green" | "blue";
 export type BookmarkLabels = Record<BookmarkColor, string>;
 

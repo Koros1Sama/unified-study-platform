@@ -14,7 +14,7 @@ const __dirname = path.dirname(__filename);
 const ROOT = path.resolve(__dirname, "../..");
 const PLATFORM_DIR = path.resolve(__dirname, "..");
 const PUBLIC_DIR = path.join(PLATFORM_DIR, "public");
-const BUNDLE_VERSION = 6;
+const BUNDLE_VERSION = 7;
 
 const SUBJECTS = {
   toc: {
@@ -448,7 +448,129 @@ function buildQuestions(def, data, warnings) {
     questions.push(item);
   }
 
+  stampSimilarityOrder(questions);
   return { questions, models };
+}
+
+const SIM_STOP_WORDS = new Set([
+  "the", "is", "are", "was", "were", "a", "an", "of", "in", "to", "for", "and",
+  "or", "not", "by", "with", "on", "at", "from", "as", "which", "what", "when",
+  "where", "how", "why", "who", "does", "do", "did", "can", "if", "that", "this",
+  "it", "its", "be", "have", "has", "any", "all", "only", "true", "false",
+  "في", "من", "على", "إلى", "عن", "مع", "أو", "و", "ما", "هل", "أي", "التي",
+  "الذي", "هذا", "هذه", "تلك", "ذلك", "عند", "بين", "كل", "لا", "أن", "إن",
+  "هو", "هي", "كان", "يكون", "تكون", "صواب", "خطأ", "فقط", "دائماً"
+]);
+
+function extractLecNum(q) {
+  const raw = q.lecture_id || (q.slide_ref ? String(q.slide_ref).split("-")[0] : "");
+  const m = String(raw).match(/L(\d+)/i);
+  return m ? Number(m[1]) : 999;
+}
+
+function extractSlideNum(q) {
+  if (!q.slide_ref) return 9999;
+  const m = String(q.slide_ref).match(/S0*(\d+)/i);
+  return m ? Number(m[1]) : 9999;
+}
+
+function tokenizeForSimilarity(q) {
+  const raw = [
+    q.question_en || "",
+    q.question_ar || "",
+    ...(q.options_en || []),
+    ...(q.options_ar || []),
+    q.exam_tip || ""
+  ]
+    .join(" ")
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}_]+/gu, " ");
+  const tokens = new Set();
+  for (const w of raw.split(/\s+/)) {
+    if (w.length < 2 || SIM_STOP_WORDS.has(w)) continue;
+    tokens.add(w);
+  }
+  return tokens;
+}
+
+function stampSimilarityOrder(questions) {
+  if (!Array.isArray(questions) || questions.length === 0) return;
+  const base = [...questions].sort((a, b) => {
+    const la = extractLecNum(a);
+    const lb = extractLecNum(b);
+    if (la !== lb) return la - lb;
+    const sa = extractSlideNum(a);
+    const sb = extractSlideNum(b);
+    if (sa !== sb) return sa - sb;
+    return (a.orig_q_num || 0) - (b.orig_q_num || 0);
+  });
+
+  const n = base.length;
+  const tokens = base.map(tokenizeForSimilarity);
+  const used = new Uint8Array(n);
+  const orderMap = new Map();
+
+  let cur = 0;
+  used[0] = 1;
+  orderMap.set(base[0].id, 1);
+
+  for (let step = 1; step < n; step++) {
+    const curQ = base[cur];
+    const curTok = tokens[cur];
+    let bestIdx = -1;
+    let bestScore = -1;
+
+    for (let j = 0; j < n; j++) {
+      if (used[j]) continue;
+      const cand = base[j];
+      let score = 0;
+
+      if (curQ.twin_group_id && cand.twin_group_id && curQ.twin_group_id === cand.twin_group_id) {
+        score += 10;
+      }
+      if (curQ.slide_ref && cand.slide_ref && curQ.slide_ref === cand.slide_ref) {
+        score += 0.85;
+      } else if (curQ.lecture_id && cand.lecture_id && curQ.lecture_id === cand.lecture_id) {
+        score += 0.35;
+      }
+
+      const candTok = tokens[j];
+      if (curTok.size > 0 && candTok.size > 0) {
+        let inter = 0;
+        for (const t of curTok) {
+          if (candTok.has(t)) inter++;
+        }
+        if (inter > 0) {
+          const union = curTok.size + candTok.size - inter;
+          score += (inter / union) * 3.0;
+        }
+      }
+
+      if (curQ.type === cand.type) score += 0.04;
+
+      if (score > bestScore) {
+        bestScore = score;
+        bestIdx = j;
+      }
+    }
+
+    if (bestIdx < 0) {
+      for (let j = 0; j < n; j++) {
+        if (!used[j]) {
+          bestIdx = j;
+          break;
+        }
+      }
+    }
+
+    used[bestIdx] = 1;
+    orderMap.set(base[bestIdx].id, step + 1);
+    cur = bestIdx;
+  }
+
+  for (const q of questions) {
+    q.similarity_order = orderMap.get(q.id) || 0;
+  }
 }
 
 function buildSlides(def, data) {
@@ -1676,6 +1798,10 @@ function buildSubject(def) {
     if (fs.existsSync(existingBundlePath)) {
       console.log(`[Build] ${def.code}: source dir not found, preserving pre-built bundle.json`);
       const existing = JSON.parse(fs.readFileSync(existingBundlePath, "utf-8"));
+      if (Array.isArray(existing.questions) && existing.questions.some((q) => typeof q.similarity_order !== "number")) {
+        stampSimilarityOrder(existing.questions);
+        fs.writeFileSync(existingBundlePath, JSON.stringify(existing), "utf-8");
+      }
       return existing.meta;
     }
   }

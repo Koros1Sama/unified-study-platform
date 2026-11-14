@@ -7,6 +7,7 @@
 import React, { useState, useEffect, useMemo, useRef } from "react";
 import { Icons } from "../icons/SvgIcons";
 import { QuestionCard } from "./QuestionCard";
+import { SmartTranslateTooltip } from "../common/SmartTranslateTooltip";
 import type { UnifiedQuestion, UserStudyProgress } from "../../types";
 
 interface ExamSimulatorProps {
@@ -52,6 +53,40 @@ export const ExamSimulator: React.FC<ExamSimulatorProps> = ({
   const [timeSpent, setTimeSpent] = useState<number>(0);
   const [reviewFilter, setReviewFilter] = useState<ReviewFilter>("all");
   const finishRef = useRef<() => void>(() => undefined);
+  const [tooltipState, setTooltipState] = useState<{
+    visible: boolean;
+    text: string;
+    pos: { x: number; y: number } | null;
+  }>({ visible: false, text: "", pos: null });
+  const hoverHideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (hoverHideTimerRef.current) clearTimeout(hoverHideTimerRef.current);
+    };
+  }, []);
+
+  const handleShowTranslate = (text: string, pos: { x: number; y: number }) => {
+    if (hoverHideTimerRef.current) {
+      clearTimeout(hoverHideTimerRef.current);
+      hoverHideTimerRef.current = null;
+    }
+    setTooltipState({ visible: true, text, pos });
+  };
+
+  const handleScheduleHideTranslate = () => {
+    if (hoverHideTimerRef.current) clearTimeout(hoverHideTimerRef.current);
+    hoverHideTimerRef.current = setTimeout(() => {
+      setTooltipState((s) => ({ ...s, visible: false }));
+    }, 180);
+  };
+
+  const handleCancelHideTranslate = () => {
+    if (hoverHideTimerRef.current) {
+      clearTimeout(hoverHideTimerRef.current);
+      hoverHideTimerRef.current = null;
+    }
+  };
 
   const pool = useMemo(
     () => (scope === "all" ? questions : questions.filter((q) => q.model_id === scope)),
@@ -301,6 +336,8 @@ export const ExamSimulator: React.FC<ExamSimulatorProps> = ({
             userAnswer={userAnswers[currentQ.id]}
             onAnswer={handleAnswerQuestion}
             onJumpToSlide={onJumpToSlide}
+            onShowTranslate={handleShowTranslate}
+            onScheduleHideTranslate={handleScheduleHideTranslate}
             languageMode={languageMode}
           />
         )}
@@ -360,6 +397,15 @@ export const ExamSimulator: React.FC<ExamSimulatorProps> = ({
             </button>
           )}
         </div>
+
+        <SmartTranslateTooltip
+          visible={tooltipState.visible}
+          textAr={tooltipState.text}
+          position={tooltipState.pos}
+          onClose={() => setTooltipState((s) => ({ ...s, visible: false }))}
+          onMouseEnterTooltip={handleCancelHideTranslate}
+          onMouseLeaveTooltip={handleScheduleHideTranslate}
+        />
       </div>
     );
   }
@@ -459,11 +505,22 @@ export const ExamSimulator: React.FC<ExamSimulatorProps> = ({
             userAnswer={userAnswers[q.id]}
             onAnswer={() => undefined}
             onJumpToSlide={onJumpToSlide}
+            onShowTranslate={handleShowTranslate}
+            onScheduleHideTranslate={handleScheduleHideTranslate}
             languageMode={languageMode}
             readOnly
           />
         ))}
       </div>
+
+      <SmartTranslateTooltip
+        visible={tooltipState.visible}
+        textAr={tooltipState.text}
+        position={tooltipState.pos}
+        onClose={() => setTooltipState((s) => ({ ...s, visible: false }))}
+        onMouseEnterTooltip={handleCancelHideTranslate}
+        onMouseLeaveTooltip={handleScheduleHideTranslate}
+      />
     </div>
   );
 };

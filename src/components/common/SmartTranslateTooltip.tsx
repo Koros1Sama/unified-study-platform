@@ -22,6 +22,8 @@ interface SmartTranslateTooltipProps {
   textAr: string;
   position: { x: number; y: number } | null;
   onClose: () => void;
+  onMouseEnterTooltip?: () => void;
+  onMouseLeaveTooltip?: () => void;
   title?: string;
 }
 
@@ -30,6 +32,8 @@ export const SmartTranslateTooltip: React.FC<SmartTranslateTooltipProps> = ({
   textAr,
   position,
   onClose,
+  onMouseEnterTooltip,
+  onMouseLeaveTooltip,
   title = "الترجمة الفورية المعتمدة"
 }) => {
   const tooltipRef = useRef<HTMLDivElement>(null);
@@ -41,13 +45,17 @@ export const SmartTranslateTooltip: React.FC<SmartTranslateTooltipProps> = ({
       clearTimeout(hoverOutTimerRef.current);
       hoverOutTimerRef.current = null;
     }
+    if (onMouseEnterTooltip) onMouseEnterTooltip();
   };
 
   const handleMouseLeave = () => {
-    // Desktop hover debounce: 120ms grace period before closing
+    if (onMouseLeaveTooltip) {
+      onMouseLeaveTooltip();
+      return;
+    }
     hoverOutTimerRef.current = setTimeout(() => {
       onClose();
-    }, 120);
+    }, 140);
   };
 
   useEffect(() => {
@@ -83,14 +91,18 @@ export const SmartTranslateTooltip: React.FC<SmartTranslateTooltipProps> = ({
 
   if (!visible || !position || !textAr) return null;
 
-  // حصر الموضع داخل حدود الشاشة المرئية
+  // حصر الموضع داخل حدود الشاشة المرئية أفقياً وعمودياً
   const screenWidth = typeof window !== "undefined" ? window.innerWidth : 1000;
-  const left = Math.min(Math.max(16, position.x - 150), screenWidth - 340);
-  const top = position.y + 12;
+  const screenHeight = typeof window !== "undefined" ? window.innerHeight : 800;
+  const left = Math.min(Math.max(16, position.x - 150), Math.max(16, screenWidth - 340));
+  const top =
+    position.y + 165 > screenHeight
+      ? Math.max(16, position.y - 170)
+      : Math.max(16, position.y + 10);
 
   const isTouchDevice =
     typeof window !== "undefined" &&
-    (window.matchMedia("(hover: none)").matches || navigator.maxTouchPoints > 0);
+    window.matchMedia("(hover: none) and (pointer: coarse)").matches;
 
   return (
     <>

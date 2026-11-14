@@ -39,8 +39,8 @@ interface UnifiedAppHeaderProps {
   onToggleShuffleChoices?: () => void;
   shuffleQuestions?: boolean;
   onToggleShuffleQuestions?: () => void;
-  shuffleSeed?: number;
-  onChangeShuffleSeed?: (seed: number) => void;
+  syncTwins?: boolean;
+  onToggleSyncTwins?: () => void;
   showBookmarks?: boolean;
   onToggleShowBookmarks?: (show: boolean) => void;
   onOpenBmLabelModal?: () => void;
@@ -57,7 +57,6 @@ interface UnifiedAppHeaderProps {
   canInstallPwa?: boolean;
   isPwaInstalled?: boolean;
   onPromptPwaInstall?: () => void;
-  onReshuffle?: () => void;
   isIos?: boolean;
   isDesktop?: boolean;
 }
@@ -80,8 +79,8 @@ export const UnifiedAppHeader: React.FC<UnifiedAppHeaderProps> = ({
   onToggleShuffleChoices,
   shuffleQuestions = false,
   onToggleShuffleQuestions,
-  shuffleSeed = 1,
-  onChangeShuffleSeed,
+  syncTwins = false,
+  onToggleSyncTwins,
   showBookmarks = true,
   onToggleShowBookmarks,
   onOpenBmLabelModal,
@@ -98,7 +97,6 @@ export const UnifiedAppHeader: React.FC<UnifiedAppHeaderProps> = ({
   canInstallPwa = false,
   isPwaInstalled = false,
   onPromptPwaInstall,
-  onReshuffle,
   isIos = false,
   isDesktop = false
 }) => {
@@ -469,37 +467,6 @@ export const UnifiedAppHeader: React.FC<UnifiedAppHeaderProps> = ({
                   <path d="M15.09 14c.18-.98.65-1.74 1.41-2.5A4.65 4.65 0 0 0 18 8 6 6 0 0 0 6 8c0 1 .23 2.23 1.5 3.5A4.61 4.61 0 0 1 8.91 14"/>
                 </svg>
                 <span className="txt">شرح</span>
-              </button>
-            </div>
-          )}
-
-          {/* أدوات النماذج المساعدة في التوبار */}
-          {activeView === "questions" && !currentSubject.arabic_only && (
-            <div className="model-actions-wrap" style={{ display: "inline-flex" }}>
-              <span className="nav-divider"></span>
-              <button
-                type="button"
-                className={`top-btn model-action-btn ${languageMode === "smart" ? "on" : ""}`}
-                onClick={() => onLanguageChange("smart")}
-                title="الوضع الذكي: الإنجليزية مع نافذة الترجمة بالحوم"
-              >
-                <span className="txt">ذكي</span>
-              </button>
-              <button
-                type="button"
-                className={`top-btn model-action-btn ${languageMode === "en" ? "on" : ""}`}
-                onClick={() => onLanguageChange("en")}
-                title="عرض الأسئلة بالإنجليزية فقط"
-              >
-                <span className="txt">English</span>
-              </button>
-              <button
-                type="button"
-                className={`top-btn model-action-btn ${languageMode === "ar" ? "on" : ""}`}
-                onClick={() => onLanguageChange("ar")}
-                title="عرض الأسئلة بالعربية فقط"
-              >
-                <span className="txt">عربي</span>
               </button>
             </div>
           )}
@@ -876,46 +843,40 @@ export const UnifiedAppHeader: React.FC<UnifiedAppHeaderProps> = ({
                     </div>
                   </div>
 
-                  {/* الترتيب واللخبطة العشوائية */}
+                  {/* الترتيب واللخبطة العشوائية (داخل الإعدادات فقط) */}
                   <div className="setgroup">
                     <div className="setlabel">
                       <Icons.Shuffle size={16} />
-                      <span>الترتيب واللخبطة العشوائية</span>
+                      <span>اللخبطة العشوائية والمكررات</span>
                     </div>
                     <div className="setopts" style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
                       <button
                         type="button"
                         className={`set-opt ${shuffleChoices ? "on" : ""}`}
                         onClick={onToggleShuffleChoices}
-                        title="خلط ترتيب خيارات كل سؤال عشوائياً لمقاومة الحفظ المكاني"
+                        title="خلط ترتيب خيارات كل سؤال عشوائياً بسيد متجدد عند كل إعادة تحميل للصفحة"
                       >
                         <Icons.Shuffle size={14} />
-                        <span>لخبطة خيارات السؤال عشوائياً</span>
+                        <span>لخبطة خيارات السؤال (عشوائي عند كل تحديث)</span>
                       </button>
                       <button
                         type="button"
                         className={`set-opt ${shuffleQuestions ? "on" : ""}`}
                         onClick={onToggleShuffleQuestions}
-                        title="ترتيب عشوائي للأسئلة يتغير تلقائياً مع كل إعادة تشغيل، مع إبقاء الأسئلة المحلولة في البداية بنفس ترتيبها المستقر"
+                        title="خلط ترتيب الأسئلة عشوائياً بسيد مستقل يتجدد عند كل إعادة تحميل للصفحة"
                       >
                         <Icons.List size={14} />
-                        <span>ترتيب عشوائي للأسئلة (المحلولة أولاً)</span>
+                        <span>لخبطة ترتيب الأسئلة (عشوائي عند كل تحديث)</span>
                       </button>
-
-                      {shuffleQuestions && onReshuffle && (
-                        <div style={{ paddingInlineStart: "6px", marginTop: "2px" }}>
-                          <button
-                            type="button"
-                            className="fchip"
-                            onClick={onReshuffle}
-                            style={{ fontSize: "0.76rem" }}
-                            title="توليد خلط عشوائي جديد الآن لبقية الأسئلة غير المحلولة"
-                          >
-                            <Icons.Rotate size={13} />
-                            <span>إعادة خلط الأسئلة الآن</span>
-                          </button>
-                        </div>
-                      )}
+                      <button
+                        type="button"
+                        className={`set-opt ${syncTwins ? "on" : ""}`}
+                        onClick={onToggleSyncTwins}
+                        title="عند التفعيل، تتزامن إجابتك تلقائياً بين الأسئلة المتطابقة في النماذج المختلفة؛ وعند الإيقاف تذاكر كل سؤال على حدة"
+                      >
+                        <Icons.Twin size={14} />
+                        <span>مزامنة حل الأسئلة المتطابقة تلقائياً</span>
+                      </button>
                     </div>
                   </div>
 

@@ -125,23 +125,18 @@ export const App: React.FC = () => {
     return saved !== null ? saved === "true" : true;
   });
 
-  // إعدادات اللخبطة العشوائية والعلامات الملونة والشرح
+  // إعدادات اللخبطة العشوائية (سيد عشوائي مستقل لكل من الخيارات والأسئلة يتجدد مع كل تحميل للصفحة)
   const [shuffleChoices, setShuffleChoices] = useState<boolean>(() => {
     return localStorage.getItem("unified_shuffle_choices") === "true";
   });
   const [shuffleQuestions, setShuffleQuestions] = useState<boolean>(() => {
     return localStorage.getItem("unified_shuffle_questions") === "true";
   });
-  // بذرة الترتيب العشوائي المحفوظة (الافتراضية 1 كما في RM_Viewer)
-  const [shuffleSeed, setShuffleSeed] = useState<number>(() => {
-    return parseInt(localStorage.getItem("unified_seed") || "1", 10) || 1;
+  const [choicesSeed] = useState<number>(() => Math.floor(Math.random() * 1_000_000_000) + 1);
+  const [questionsSeed] = useState<number>(() => Math.floor(Math.random() * 1_000_000_000) + 1);
+  const [syncTwins, setSyncTwins] = useState<boolean>(() => {
+    return localStorage.getItem("unified_sync_twins") === "true";
   });
-
-  const handleReshuffle = useCallback(() => {
-    const next = Math.floor(Math.random() * 999) + 1;
-    setShuffleSeed(next);
-    localStorage.setItem("unified_seed", String(next));
-  }, []);
 
   // إدارة وتثبيت تطبيق الويب التقدمي (PWA)
   const {
@@ -268,10 +263,12 @@ export const App: React.FC = () => {
     });
   };
 
-  const handleChangeShuffleSeed = (newSeed: number) => {
-    const s = Math.max(1, newSeed);
-    setShuffleSeed(s);
-    localStorage.setItem("unified_seed", String(s));
+  const handleToggleSyncTwins = () => {
+    setSyncTwins((prev) => {
+      const next = !prev;
+      localStorage.setItem("unified_sync_twins", String(next));
+      return next;
+    });
   };
 
   const handleToggleShowBookmarks = (show: boolean) => {
@@ -295,11 +292,11 @@ export const App: React.FC = () => {
         currentSubjectCode,
         qId,
         color,
-        twinGroupId
+        syncTwins ? twinGroupId : undefined
       );
       setUserProgress({ ...updated });
     },
-    [currentSubjectCode]
+    [currentSubjectCode, syncTwins]
   );
 
   const handleResetModelAnswers = useCallback(
@@ -759,7 +756,7 @@ export const App: React.FC = () => {
     restoreScrollToElement(`[id="q-${questionId}"]`, 100);
   }, [activeView]);
 
-  // حفظ الإجابة ومزامنة التوائم اللحظية
+  // حفظ الإجابة (مع مزامنة التوائم اختيارياً عند تفعيلها من الإعدادات)
   const handleAnswerQuestion = useCallback(
     async (qId: string, ansIdx: number, isOk: boolean, twinGroupId?: string) => {
       const updated = await DataService.saveAnswer(
@@ -767,11 +764,11 @@ export const App: React.FC = () => {
         qId,
         ansIdx,
         isOk,
-        twinGroupId
+        syncTwins ? twinGroupId : undefined
       );
       setUserProgress({ ...updated });
     },
-    [currentSubjectCode]
+    [currentSubjectCode, syncTwins]
   );
 
   // تبديل حفظ جدول في المفضلة
@@ -917,12 +914,11 @@ export const App: React.FC = () => {
         onToggleShuffleChoices={handleToggleShuffleChoices}
         shuffleQuestions={shuffleQuestions}
         onToggleShuffleQuestions={handleToggleShuffleQuestions}
-        shuffleSeed={shuffleSeed}
-        onChangeShuffleSeed={handleChangeShuffleSeed}
+        syncTwins={syncTwins}
+        onToggleSyncTwins={handleToggleSyncTwins}
         canInstallPwa={canInstallPwa}
         isPwaInstalled={isPwaInstalled}
         onPromptPwaInstall={promptPwaInstall}
-        onReshuffle={handleReshuffle}
         isIos={isIos}
         isDesktop={isDesktop}
         showBookmarks={showBookmarks}
@@ -1035,6 +1031,8 @@ export const App: React.FC = () => {
                   onJumpToQuestion={handleJumpToQuestion}
                   focusQuestionId={focusQuestionId}
                   languageMode={effectiveLanguageMode}
+                  onLanguageChange={handleLanguageChange}
+                  arabicOnly={isArabicOnly}
                   showBookmarks={showBookmarks}
                   bmLabels={bmLabels}
                   onToggleBookmark={handleToggleBookmark}
@@ -1042,13 +1040,11 @@ export const App: React.FC = () => {
                   expMode={expMode}
                   onChangeExpMode={handleChangeExpMode}
                   shuffleChoices={shuffleChoices}
-                  onToggleShuffleChoices={handleToggleShuffleChoices}
                   shuffleQuestions={shuffleQuestions}
-                  onToggleShuffleQuestions={handleToggleShuffleQuestions}
-                  shuffleSeed={shuffleSeed}
-                  onChangeShuffleSeed={handleChangeShuffleSeed}
+                  choicesSeed={choicesSeed}
+                  questionsSeed={questionsSeed}
+                  syncTwins={syncTwins}
                   onResetModelAnswers={handleResetModelAnswers}
-                  onReshuffle={handleReshuffle}
                 />
               )}
 

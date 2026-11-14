@@ -54,8 +54,21 @@ export const ExplanatoryTablesView: React.FC<ExplanatoryTablesViewProps> = ({
     return localStorage.getItem("unified_tbl_cards") === "true";
   });
   const [expandedTables, setExpandedTables] = useState<Record<string, boolean>>({});
-  const [lectureFilter, setLectureFilter] = useState<string>(activeLectureId || "all");
+  const [lectureFilter, setLectureFilter] = useState<string>("all");
   const [copiedTableId, setCopiedTableId] = useState<string | null>(null);
+
+  const lectureTabs = useMemo(() => {
+    const counts = new Map<string, number>();
+    tables.forEach((t) => {
+      const lec = t.lec || "L1";
+      counts.set(lec, (counts.get(lec) || 0) + 1);
+    });
+    return Array.from(counts.entries()).sort((a, b) => {
+      const na = Number(a[0].replace(/\D+/g, "")) || 999;
+      const nb = Number(b[0].replace(/\D+/g, "")) || 999;
+      return na - nb;
+    });
+  }, [tables]);
 
   const handleCopyMarkdown = useCallback((table: ExplanatoryTable) => {
     const headers = table.cols.map((c) => c.label).join(" | ");
@@ -90,8 +103,11 @@ export const ExplanatoryTablesView: React.FC<ExplanatoryTablesViewProps> = ({
     }
   }, []);
 
+  // إتاحة تصفية الجداول محلياً دون حبس المستخدم في شريحة محاضرة واحدة عند الانتقال من السلايدات
   useEffect(() => {
-    setLectureFilter(activeLectureId || "all");
+    if (!activeLectureId || activeLectureId === "all") {
+      setLectureFilter("all");
+    }
   }, [activeLectureId]);
 
   const handleImportanceChange = (val: number) => {
@@ -244,6 +260,43 @@ export const ExplanatoryTablesView: React.FC<ExplanatoryTablesViewProps> = ({
         </div>
 
       </div>
+
+      {/* شريط تصفية المحاضرات والفصول للجداول */}
+      {lectureTabs.length > 1 && (
+        <div
+          className="lec-scroll-strip"
+          style={{
+            display: "flex",
+            gap: "6px",
+            overflowX: "auto",
+            flexWrap: "nowrap",
+            whiteSpace: "nowrap",
+            paddingBottom: "6px",
+            marginBottom: "10px",
+            scrollbarWidth: "none"
+          }}
+        >
+          <button
+            type="button"
+            className={`fchip ${lectureFilter === "all" ? "on" : ""}`}
+            style={{ flexShrink: 0 }}
+            onClick={() => setLectureFilter("all")}
+          >
+            كل المحاضرات ({tables.length})
+          </button>
+          {lectureTabs.map(([lec, count]) => (
+            <button
+              key={lec}
+              type="button"
+              className={`fchip ${lectureFilter === lec ? "on" : ""}`}
+              style={{ flexShrink: 0 }}
+              onClick={() => setLectureFilter(lectureFilter === lec ? "all" : lec)}
+            >
+              {lec} ({count})
+            </button>
+          ))}
+        </div>
+      )}
 
       {/* شريط البحث الموحد الأنيق للجداول */}
       <div className="unified-search-box" style={{ margin: "8px 0 16px" }}>
