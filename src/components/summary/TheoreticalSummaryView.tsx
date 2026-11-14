@@ -4,8 +4,9 @@
 // links, slide refs, full-text search and review progress. Zero Emojis.
 // ==============================================================================
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Icons } from "../icons/SvgIcons";
+import { useFitTables } from "../../lib/useFitTables";
 import type { InteractiveLink, SummaryBlock, TheoreticalSummaryData } from "../../types";
 
 interface TheoreticalSummaryViewProps {
@@ -70,6 +71,7 @@ export const TheoreticalSummaryView: React.FC<TheoreticalSummaryViewProps> = ({
   onJumpToInteractive,
   onJumpToSlide
 }) => {
+  const containerRef = useRef<HTMLDivElement>(null);
   const [query, setQuery] = useState("");
   const [activePart, setActivePart] = useState<string>(
     activeLectureId && activeLectureId !== "all" ? activeLectureId : "all"
@@ -95,6 +97,8 @@ export const TheoreticalSummaryView: React.FC<TheoreticalSummaryViewProps> = ({
       .filter((part) => !q || part.blocks.length > 0);
   }, [parts, query, activePart]);
 
+  useFitTables(containerRef, [filteredParts]);
+
   if (!data || parts.length === 0) {
     return (
       <div className="pending-box" style={{ margin: "40px auto", maxWidth: 600 }}>
@@ -118,26 +122,28 @@ export const TheoreticalSummaryView: React.FC<TheoreticalSummaryViewProps> = ({
 
         {kind === "table" && blk.table_head && blk.rows ? (
           <div className="tbl-wrap">
-            <table className="tbl summary-tbl">
-              <thead>
-                <tr>
-                  {blk.table_head.map((head, hIdx) => (
-                    <th key={hIdx}>{head}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {blk.rows.map((row, rIdx) => (
-                  <tr key={rIdx}>
-                    {row.map((cell, cIdx) => (
-                      <td key={cIdx} data-label={blk.table_head?.[cIdx] || ""}>
-                        {renderWithRefs(String(cell), onJumpToSlide)}
-                      </td>
+            <div className="tbl-scale">
+              <table className="tbl summary-tbl">
+                <thead>
+                  <tr>
+                    {blk.table_head.map((head, hIdx) => (
+                      <th key={hIdx}>{head}</th>
                     ))}
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {blk.rows.map((row, rIdx) => (
+                    <tr key={rIdx}>
+                      {row.map((cell, cIdx) => (
+                        <td key={cIdx} data-label={blk.table_head?.[cIdx] || ""}>
+                          {renderWithRefs(String(cell), onJumpToSlide)}
+                        </td>
+                      ))}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
         ) : kind === "list" && blk.items && blk.items.length > 0 ? (
           <ul className="blk-list">
@@ -196,7 +202,7 @@ export const TheoreticalSummaryView: React.FC<TheoreticalSummaryViewProps> = ({
   };
 
   return (
-    <div id="summaryView">
+    <div id="summaryView" ref={containerRef}>
       <div className="headline">
         <div className="kicker">
           <span className="dot" />

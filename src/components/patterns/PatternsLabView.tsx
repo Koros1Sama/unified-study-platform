@@ -4,8 +4,9 @@
 // and out-of-pattern exceptions. Zero Emojis.
 // ==============================================================================
 
-import React, { useMemo, useState } from "react";
+import React, { useMemo, useRef, useState } from "react";
 import { Icons } from "../icons/SvgIcons";
+import { useFitTables } from "../../lib/useFitTables";
 import type { QuestionPatternsData, PatternCase } from "../../types";
 
 interface PatternsLabViewProps {
@@ -25,9 +26,11 @@ export const PatternsLabView: React.FC<PatternsLabViewProps> = ({
   subjectCode,
   onJumpToQuestion
 }) => {
+  const containerRef = useRef<HTMLDivElement>(null);
   const [query, setQuery] = useState("");
   const [openRule, setOpenRule] = useState<string | null>(data?.rules?.[0]?.id || null);
   const [showExceptions, setShowExceptions] = useState<Record<string, boolean>>({});
+  useFitTables(containerRef, [openRule, showExceptions, query]);
 
   const rules = data?.rules || [];
   const totalCases = useMemo(
@@ -65,7 +68,7 @@ export const PatternsLabView: React.FC<PatternsLabViewProps> = ({
   }
 
   return (
-    <div id="patternsView" className="pat-view">
+    <div id="patternsView" className="pat-view" ref={containerRef}>
       <div className="headline">
         <div className="kicker">
           <span className="dot" />
@@ -111,7 +114,7 @@ export const PatternsLabView: React.FC<PatternsLabViewProps> = ({
           const isExceptionOpen = Boolean(showExceptions[rule.id]);
 
           return (
-            <section key={rule.id} className={`pat-rule ${isOpen ? "is-open" : ""}`}>
+            <section key={rule.id} id={`pat-${rule.id}`} className={`pat-rule ${isOpen ? "is-open" : ""}`}>
               <button
                 type="button"
                 className="pat-rule-head"
@@ -156,46 +159,48 @@ export const PatternsLabView: React.FC<PatternsLabViewProps> = ({
                         <span>حالات النمط المطابقة ({cases.length})</span>
                       </div>
                       <div className="pat-table-wrap">
-                        <table className="tbl pat-table">
-                          <thead>
-                            <tr>
-                              <th>النموذج</th>
-                              <th>#</th>
-                              <th>نص السؤال</th>
-                              <th>الإجابة</th>
-                              <th>ملاحظة الحسم</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {cases.map((item, idx) => (
-                              <tr key={`${rule.id}-case-${idx}`}>
-                                <td><span className="pat-model">{item.m.toUpperCase()}</span></td>
-                                <td>
-                                  {onJumpToQuestion ? (
-                                    <button
-                                      type="button"
-                                      className="ref-chip"
-                                      onClick={() => onJumpToQuestion(`${subjectCode}:${item.m}:${item.n}`)}
-                                    >
-                                      {item.n}
-                                    </button>
-                                  ) : (
-                                    item.n
-                                  )}
-                                </td>
-                                <td className="pat-q">
-                                  <div dir="ltr">{item.q}</div>
-                                  {item.q_ar && <div className="pat-q-ar">{item.q_ar}</div>}
-                                </td>
-                                <td>
-                                  <span className="pat-ans">{item.ans}</span>
-                                  {item.ans_letter && <span className="pat-letter">{item.ans_letter}</span>}
-                                </td>
-                                <td className="pat-note">{item.note || "—"}</td>
+                        <div className="tbl-scale">
+                          <table className="tbl pat-table">
+                            <thead>
+                              <tr>
+                                <th>النموذج</th>
+                                <th>#</th>
+                                <th>نص السؤال</th>
+                                <th>الإجابة</th>
+                                <th>ملاحظة الحسم</th>
                               </tr>
-                            ))}
-                          </tbody>
-                        </table>
+                            </thead>
+                            <tbody>
+                              {cases.map((item, idx) => (
+                                <tr key={`${rule.id}-case-${idx}`}>
+                                  <td><span className="pat-model">{item.m.toUpperCase()}</span></td>
+                                  <td>
+                                    {onJumpToQuestion ? (
+                                      <button
+                                        type="button"
+                                        className="ref-chip"
+                                        onClick={() => onJumpToQuestion(`${subjectCode}:${item.m}:${item.n}`)}
+                                      >
+                                        {item.n}
+                                      </button>
+                                    ) : (
+                                      item.n
+                                    )}
+                                  </td>
+                                  <td className="pat-q">
+                                    <div dir="ltr">{item.q}</div>
+                                    {item.q_ar && <div className="pat-q-ar">{item.q_ar}</div>}
+                                  </td>
+                                  <td>
+                                    <span className="pat-ans">{item.ans}</span>
+                                    {item.ans_letter && <span className="pat-letter">{item.ans_letter}</span>}
+                                  </td>
+                                  <td className="pat-note">{item.note || "—"}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
                       </div>
                     </div>
                   )}
@@ -218,31 +223,33 @@ export const PatternsLabView: React.FC<PatternsLabViewProps> = ({
 
                       {isExceptionOpen && (
                         <div className="pat-table-wrap">
-                          <table className="tbl pat-table">
-                            <thead>
-                              <tr>
-                                <th>النموذج</th>
-                                <th>#</th>
-                                <th>نص السؤال</th>
-                                <th>إجابة البنك</th>
-                                <th>التنبيه</th>
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {exceptions.map((item, idx) => (
-                                <tr key={`${rule.id}-exc-${idx}`}>
-                                  <td><span className="pat-model">{item.m.toUpperCase()}</span></td>
-                                  <td>{item.n}</td>
-                                  <td className="pat-q">
-                                    <div dir="ltr">{item.q}</div>
-                                    {item.q_ar && <div className="pat-q-ar">{item.q_ar}</div>}
-                                  </td>
-                                  <td><span className="pat-ans">{item.ans}</span></td>
-                                  <td className="pat-note">{item.note || "استثناء موثق"}</td>
+                          <div className="tbl-scale">
+                            <table className="tbl pat-table">
+                              <thead>
+                                <tr>
+                                  <th>النموذج</th>
+                                  <th>#</th>
+                                  <th>نص السؤال</th>
+                                  <th>إجابة البنك</th>
+                                  <th>التنبيه</th>
                                 </tr>
-                              ))}
-                            </tbody>
-                          </table>
+                              </thead>
+                              <tbody>
+                                {exceptions.map((item, idx) => (
+                                  <tr key={`${rule.id}-exc-${idx}`}>
+                                    <td><span className="pat-model">{item.m.toUpperCase()}</span></td>
+                                    <td>{item.n}</td>
+                                    <td className="pat-q">
+                                      <div dir="ltr">{item.q}</div>
+                                      {item.q_ar && <div className="pat-q-ar">{item.q_ar}</div>}
+                                    </td>
+                                    <td><span className="pat-ans">{item.ans}</span></td>
+                                    <td className="pat-note">{item.note || "استثناء موثق"}</td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
                         </div>
                       )}
                     </div>

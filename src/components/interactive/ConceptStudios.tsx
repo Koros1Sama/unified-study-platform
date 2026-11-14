@@ -5,8 +5,9 @@
 // Zero Emojis · 100% SVG/CSS line-art.
 // ==============================================================================
 
-import React, { useMemo, useState } from "react";
+import React, { useMemo, useRef, useState } from "react";
 import { Icons } from "../icons/SvgIcons";
+import { useFitTables } from "../../lib/useFitTables";
 
 interface ConceptStudiosProps {
   subjectCode: string;
@@ -207,8 +208,11 @@ export const ConceptStudios: React.FC<ConceptStudiosProps> = ({
   const normalizedId = normalizeStudioForSubject(subjectCode, initialStudioId);
   const initial = studios.find((studio) => studio.id === normalizedId) || studios[0];
   const initialTab = normalizeTabForStudio(initialTabId, initial?.tabs || []);
+  const containerRef = useRef<HTMLDivElement>(null);
   const [activeStudio, setActiveStudio] = useState(initial?.id || "");
   const [activeTab, setActiveTab] = useState(initialTab);
+
+  useFitTables(containerRef, [activeStudio, activeTab]);
 
   const current = studios.find((studio) => studio.id === activeStudio) || studios[0];
 
@@ -223,7 +227,7 @@ export const ConceptStudios: React.FC<ConceptStudiosProps> = ({
   }
 
   return (
-    <div id="conceptStudios">
+    <div id="conceptStudios" ref={containerRef}>
       <div className="headline">
         <div className="kicker">
           <span className="dot" />
@@ -639,26 +643,28 @@ function AcmStudio() {
       </div>
 
       <div className="tbl-wrap">
-        <table className="tbl acm-table">
-          <thead>
-            <tr>
-              <th>الذات \ الكائن</th>
-              <th>ملف A</th>
-              <th>ملف B</th>
-              <th>سجل C</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((row) => (
-              <tr key={row.s}>
-                <td><b>{row.s}</b></td>
-                <td><code className="m-ltr">{row.a}</code></td>
-                <td><code className="m-ltr">{row.b}</code></td>
-                <td><code className="m-ltr">{row.c}</code></td>
+        <div className="tbl-scale">
+          <table className="tbl acm-table">
+            <thead>
+              <tr>
+                <th>الذات \ الكائن</th>
+                <th>ملف A</th>
+                <th>ملف B</th>
+                <th>سجل C</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {rows.map((row) => (
+                <tr key={row.s}>
+                  <td><b>{row.s}</b></td>
+                  <td><code className="m-ltr">{row.a}</code></td>
+                  <td><code className="m-ltr">{row.b}</code></td>
+                  <td><code className="m-ltr">{row.c}</code></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </div>
 
       <div className="studio-note">
@@ -677,28 +683,30 @@ function MalwareMatrix() {
   return (
     <div className="studio-body">
       <div className="malware-table-wrap">
-        <table className="tbl malware-table">
-          <thead>
-            <tr>
-              <th>الصنف</th>
-              <th>يحتاج مضيفاً؟</th>
-              <th>الانتشار</th>
-              <th>السلوك</th>
-              <th>الكلمة المفتاحية</th>
-            </tr>
-          </thead>
-          <tbody>
-            {MALWARE_ROWS.map((item, idx) => (
-              <tr key={item.type} className={idx === selected ? "is-selected" : ""} onClick={() => setSelected(idx)}>
-                <td><b>{item.type}</b></td>
-                <td>{item.host}</td>
-                <td>{item.spread}</td>
-                <td>{item.behavior}</td>
-                <td><code className="m-ltr">{item.key}</code></td>
+        <div className="tbl-scale">
+          <table className="tbl malware-table">
+            <thead>
+              <tr>
+                <th>الصنف</th>
+                <th>يحتاج مضيفاً؟</th>
+                <th>الانتشار</th>
+                <th>السلوك</th>
+                <th>الكلمة المفتاحية</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {MALWARE_ROWS.map((item, idx) => (
+                <tr key={item.type} className={idx === selected ? "is-selected" : ""} onClick={() => setSelected(idx)}>
+                  <td><b>{item.type}</b></td>
+                  <td>{item.host}</td>
+                  <td>{item.spread}</td>
+                  <td>{item.behavior}</td>
+                  <td><code className="m-ltr">{item.key}</code></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </div>
 
       <div className="malware-detail">

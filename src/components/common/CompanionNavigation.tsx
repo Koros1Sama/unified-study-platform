@@ -4,9 +4,9 @@
 // Zero Emojis Standard
 // ==============================================================================
 
-import React from "react";
+import React, { useEffect, useMemo, useRef } from "react";
 import { Icons } from "../icons/SvgIcons";
-import type { ActiveView, QuestionModelInfo } from "../../types";
+import type { ActiveView, ExplanatoryTable, QuestionModelInfo } from "../../types";
 
 interface CompanionNavigationProps {
   activeView: ActiveView;
@@ -18,6 +18,15 @@ interface CompanionNavigationProps {
   selectedModelId?: string;
   onSelectModel?: (id: string) => void;
   availableViews?: Partial<Record<ActiveView, boolean>>;
+  summaryParts?: Array<{ lec: string; title: string }>;
+  emergencySections?: Array<{ id: string; nav_title?: string; title: string }>;
+  patternRules?: Array<{ id: string; title: string }>;
+  labSessions?: Array<{ id: string; title_ar: string }>;
+  tables?: ExplanatoryTable[];
+  reviewedParts?: string[];
+  reviewedSections?: string[];
+  answeredQuestions?: Record<string, { selected_answer: number; is_correct: boolean }>;
+  questions?: Array<{ model_id: string }>;
   counts?: {
     lectures?: number;
     tables?: number;
@@ -34,10 +43,221 @@ export const CompanionNavigation: React.FC<CompanionNavigationProps> = ({
   models = [],
   selectedModelId = "all",
   onSelectModel,
-  availableViews
+  availableViews,
+  summaryParts = [],
+  emergencySections = [],
+  patternRules = [],
+  labSessions = [],
+  tables = [],
+  reviewedParts = [],
+  reviewedSections = [],
+  answeredQuestions = {},
+  questions = []
 }) => {
   const can = (view: ActiveView) => availableViews?.[view] !== false;
   const showsLectureList = ["slides", "summary", "tables"].includes(activeView);
+  const bottomScrollRef = useRef<HTMLDivElement>(null);
+
+  const tableLectureIds = useMemo(() => {
+    const set = new Set<string>();
+    tables.forEach((t) => {
+      if (t.lec) set.add(t.lec);
+    });
+    return Array.from(set).sort((a, b) => {
+      const na = Number(a.replace(/\D+/g, "")) || 999;
+      const nb = Number(b.replace(/\D+/g, "")) || 999;
+      return na - nb;
+    });
+  }, [tables]);
+
+  type BottomNavItem = {
+    id: string;
+    label: string;
+    title?: string;
+    active: boolean;
+    done?: boolean;
+    onClick: () => void;
+  };
+
+  const bottomItems = useMemo<BottomNavItem[]>(() => {
+    if (activeView === "slides" && lectures.length > 0) {
+      return [
+        {
+          id: "all",
+          label: "الكل",
+          title: "كل المحاضرات",
+          active: activeLectureId === "all",
+          onClick: () => {
+            onSelectLecture?.("all");
+            window.scrollTo({ top: 0, behavior: "smooth" });
+          }
+        },
+        ...lectures.map((lec) => ({
+          id: lec.id,
+          label: lec.id,
+          title: lec.title_ar,
+          active: activeLectureId === lec.id,
+          onClick: () => {
+            onSelectLecture?.(lec.id);
+            window.scrollTo({ top: 0, behavior: "smooth" });
+          }
+        }))
+      ];
+    }
+
+    if (activeView === "summary") {
+      const list = summaryParts.length > 0 ? summaryParts.map((p) => ({ id: p.lec, title: p.title })) : lectures.map((l) => ({ id: l.id, title: l.title_ar }));
+      if (list.length === 0) return [];
+      return [
+        {
+          id: "all",
+          label: "الكل",
+          title: "كل أجزاء الملخص",
+          active: activeLectureId === "all",
+          onClick: () => {
+            onSelectLecture?.("all");
+            window.scrollTo({ top: 0, behavior: "smooth" });
+          }
+        },
+        ...list.map((p) => ({
+          id: p.id,
+          label: p.id,
+          title: p.title,
+          active: activeLectureId === p.id,
+          done: reviewedParts.includes(p.id),
+          onClick: () => {
+            onSelectLecture?.(p.id);
+            window.scrollTo({ top: 0, behavior: "smooth" });
+          }
+        }))
+      ];
+    }
+
+    if (activeView === "tables" && tableLectureIds.length > 1) {
+      return [
+        {
+          id: "all",
+          label: "الكل",
+          title: "كل الجداول",
+          active: activeLectureId === "all",
+          onClick: () => {
+            onSelectLecture?.("all");
+            window.scrollTo({ top: 0, behavior: "smooth" });
+          }
+        },
+        ...tableLectureIds.map((lecId) => ({
+          id: lecId,
+          label: lecId,
+          title: lectures.find((l) => l.id === lecId)?.title_ar || lecId,
+          active: activeLectureId === lecId,
+          onClick: () => {
+            onSelectLecture?.(activeLectureId === lecId ? "all" : lecId);
+            window.scrollTo({ top: 0, behavior: "smooth" });
+          }
+        }))
+      ];
+    }
+
+    if (activeView === "emergency" && emergencySections.length > 0) {
+      return emergencySections.map((sec) => ({
+        id: sec.id,
+        label: sec.nav_title || sec.title,
+        title: sec.title,
+        active: false,
+        done: reviewedSections.includes(sec.id),
+        onClick: () => {
+          const el = document.getElementById(sec.id);
+          if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+        }
+      }));
+    }
+
+    if (activeView === "questions" && models.length > 0) {
+      return [
+        {
+          id: "all",
+          label: "الشامل",
+          title: "البنك الموحد الكامل",
+          active: selectedModelId === "all",
+          onClick: () => {
+            onSelectModel?.("all");
+            window.scrollTo({ top: 0, behavior: "smooth" });
+          }
+        },
+        ...models.map((m) => {
+          const modelQs = questions.filter((q) => q.model_id === m.id);
+          const allRight =
+            modelQs.length > 0 &&
+            modelQs.every((q: any) => q.id && answeredQuestions[q.id]?.is_correct);
+          return {
+            id: m.id,
+            label: m.short_label || m.id.toUpperCase(),
+            title: m.title_ar,
+            active: selectedModelId === m.id,
+            done: allRight,
+            onClick: () => {
+              onSelectModel?.(m.id);
+              window.scrollTo({ top: 0, behavior: "smooth" });
+            }
+          };
+        })
+      ];
+    }
+
+    if (activeView === "patterns" && patternRules.length > 0) {
+      return patternRules.map((rule) => ({
+        id: rule.id,
+        label: rule.id.toUpperCase(),
+        title: rule.title,
+        active: false,
+        onClick: () => {
+          const el = document.getElementById(`pat-${rule.id}`);
+          if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+        }
+      }));
+    }
+
+    if (activeView === "lab" && labSessions.length > 0) {
+      return labSessions.map((s) => ({
+        id: s.id,
+        label: s.id,
+        title: s.title_ar,
+        active: false,
+        onClick: () => {
+          const el = document.getElementById(`lab-${s.id}`);
+          if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+        }
+      }));
+    }
+
+    return [];
+  }, [
+    activeView,
+    lectures,
+    activeLectureId,
+    onSelectLecture,
+    summaryParts,
+    reviewedParts,
+    tableLectureIds,
+    emergencySections,
+    reviewedSections,
+    models,
+    selectedModelId,
+    onSelectModel,
+    questions,
+    answeredQuestions,
+    patternRules,
+    labSessions
+  ]);
+
+  useEffect(() => {
+    const el = bottomScrollRef.current;
+    if (!el) return;
+    const activeBtn = el.querySelector<HTMLButtonElement>("button.active");
+    if (activeBtn) {
+      activeBtn.scrollIntoView({ inline: "center", block: "nearest", behavior: "smooth" });
+    }
+  }, [activeView, activeLectureId, selectedModelId, bottomItems.length]);
   return (
     <>
       {/* Desktop Authentic Sidebar (.side#sideNav) */}
@@ -272,39 +492,24 @@ export const CompanionNavigation: React.FC<CompanionNavigationProps> = ({
         <div className="side-kbd">Ctrl+B لإخفاء / إظهار القائمة · Z للتكبير</div>
       </nav>
 
-      {/* شريط التنقل السفلي للهواتف الأصيل (.bottom-nav) — مخفي تلقائياً على الشاشات المكتبية */}
-      <nav className="bottom-nav" id="bottomNav" aria-label="التنقل السريع للهواتف">
-        <div className="bn-lecs">
-          {[
-            { id: "slides" as ActiveView, label: "السلايدات" },
-            { id: "summary" as ActiveView, label: "الملخص" },
-            { id: "emergency" as ActiveView, label: "الإنقاذ" },
-            { id: "tables" as ActiveView, label: "الجداول" },
-            { id: "questions" as ActiveView, label: "النماذج" },
-            { id: "interactive" as ActiveView, label: "التفاعلي" },
-            { id: "exam" as ActiveView, label: "الاختبار" },
-            { id: "definitions" as ActiveView, label: "التعاريف" },
-            { id: "glossary" as ActiveView, label: "المعجم" },
-            { id: "patterns" as ActiveView, label: "الأنماط" },
-            { id: "lab" as ActiveView, label: "المعمل" },
-            { id: "explorer" as ActiveView, label: "المستكشف" }
-          ]
-            .filter((item) => can(item.id))
-            .map((item) => {
-            const isActive = activeView === item.id;
-            return (
+      {/* شريط الفصول والأجزاء والنماذج السفلي للهواتف الأصيل (.bottom-nav) — بدون تكرار لأقسام التوبار */}
+      {bottomItems.length > 0 && (
+        <nav className="bottom-nav" id="bottomNav" aria-label="الفصول والأجزاء">
+          <div className="bn-lecs" ref={bottomScrollRef}>
+            {bottomItems.map((item) => (
               <button
                 key={item.id}
                 type="button"
-                className={isActive ? "active" : ""}
-                onClick={() => onSelectView(item.id)}
+                className={`${item.active ? "active" : ""} ${item.done ? "done" : ""}`.trim()}
+                onClick={item.onClick}
+                title={item.title || item.label}
               >
                 <span>{item.label}</span>
               </button>
-            );
-          })}
-        </div>
-      </nav>
+            ))}
+          </div>
+        </nav>
+      )}
     </>
   );
 };

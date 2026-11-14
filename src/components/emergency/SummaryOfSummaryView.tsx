@@ -4,9 +4,10 @@
 // cards · tf_list · timeline. Search, doctor tips, review marks. Zero Emojis.
 // ==============================================================================
 
-import React, { useMemo, useState } from "react";
+import React, { useMemo, useRef, useState } from "react";
 import { Icons } from "../icons/SvgIcons";
 import { CramInteractiveWidget } from "./CramInteractiveWidget";
+import { useFitTables } from "../../lib/useFitTables";
 import type {
   SummaryOfSummaryData,
   SummaryOfSummarySection,
@@ -63,6 +64,7 @@ export const SummaryOfSummaryView: React.FC<SummaryOfSummaryViewProps> = ({
   onToggleReviewed,
   onJumpToSlide
 }) => {
+  const containerRef = useRef<HTMLDivElement>(null);
   const [selectedSectionFilter, setSelectedSectionFilter] = useState<string>("all");
   const [query, setQuery] = useState("");
   const [showTips, setShowTips] = useState(true);
@@ -77,6 +79,8 @@ export const SummaryOfSummaryView: React.FC<SummaryOfSummaryViewProps> = ({
       return sectionSearchBlob(section).includes(q);
     });
   }, [sections, selectedSectionFilter, query]);
+
+  useFitTables(containerRef, [filteredSections]);
 
   if (!data || sections.length === 0) {
     return (
@@ -94,7 +98,7 @@ export const SummaryOfSummaryView: React.FC<SummaryOfSummaryViewProps> = ({
   const progressPct = Math.round((reviewedCount / sections.length) * 100);
 
   return (
-    <div id="emergencyView">
+    <div id="emergencyView" ref={containerRef}>
       <div className="headline">
         <div className="kicker">
           <span className="dot" />
@@ -276,34 +280,36 @@ export const SummaryOfSummaryView: React.FC<SummaryOfSummaryViewProps> = ({
               {sec.type === "table" && sec.head && sec.rows && (
                 <>
                   <div className="em-table-wrap">
-                    <table className="em-table">
-                      <thead>
-                        <tr>
-                          {sec.head.map((h, hIdx) => (
-                            <th key={hIdx}>{h}</th>
-                          ))}
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {sec.rows.map((row, rIdx) => (
-                          <tr key={rIdx}>
-                            {row.map((cell, cIdx) => {
-                              const content = String(cell);
-                              const isCode = /^[A-Za-z0-9_^{}()[\]|*+?.,<>=·\s-]+$/.test(content) && /[A-Za-z]/.test(content) && cIdx > 0;
-                              return (
-                                <td key={cIdx}>
-                                  {isCode ? (
-                                    <code className="m-ltr" dir="ltr">{content}</code>
-                                  ) : (
-                                    renderWithSlideRefs(content, onJumpToSlide)
-                                  )}
-                                </td>
-                              );
-                            })}
+                    <div className="tbl-scale">
+                      <table className="em-table">
+                        <thead>
+                          <tr>
+                            {sec.head.map((h, hIdx) => (
+                              <th key={hIdx}>{h}</th>
+                            ))}
                           </tr>
-                        ))}
-                      </tbody>
-                    </table>
+                        </thead>
+                        <tbody>
+                          {sec.rows.map((row, rIdx) => (
+                            <tr key={rIdx}>
+                              {row.map((cell, cIdx) => {
+                                const content = String(cell);
+                                const isCode = /^[A-Za-z0-9_^{}()[\]|*+?.,<>=·\s-]+$/.test(content) && /[A-Za-z]/.test(content) && cIdx > 0;
+                                return (
+                                  <td key={cIdx}>
+                                    {isCode ? (
+                                      <code className="m-ltr" dir="ltr">{content}</code>
+                                    ) : (
+                                      renderWithSlideRefs(content, onJumpToSlide)
+                                    )}
+                                  </td>
+                                );
+                              })}
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
                   </div>
 
                   {sec.callout && (

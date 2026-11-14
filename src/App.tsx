@@ -74,6 +74,7 @@ export const App: React.FC = () => {
     if (initialStored?.lec) return initialStored.lec;
     return "all";
   });
+  const [tablesLectureFilter, setTablesLectureFilter] = useState<string>("all");
   const [selectedModelId, setSelectedModelId] = useState<string>(() => {
     if (initialHash.model) return initialHash.model;
     if (initialStored?.model) return initialStored.model;
@@ -330,6 +331,7 @@ export const App: React.FC = () => {
   useEffect(() => {
     let isCancelled = false;
     setLoading(true);
+    setTablesLectureFilter("all");
 
     Promise.all([
       DataService.loadSubjectBundle(currentSubjectCode),
@@ -943,12 +945,21 @@ export const App: React.FC = () => {
           activeView={activeView}
           onSelectView={handleSelectView}
           lectures={bundle?.lectures || []}
-          activeLectureId={activeLectureId}
-          onSelectLecture={handleSelectLecture}
+          activeLectureId={activeView === "tables" ? tablesLectureFilter : activeLectureId}
+          onSelectLecture={activeView === "tables" ? setTablesLectureFilter : handleSelectLecture}
           models={bundle?.question_models || []}
           selectedModelId={selectedModelId}
           onSelectModel={handleSelectModel}
           availableViews={availableViews}
+          summaryParts={bundle?.summary?.parts || []}
+          emergencySections={bundle?.emergency?.sections || []}
+          patternRules={bundle?.patterns?.rules || []}
+          labSessions={bundle?.lab?.sessions || []}
+          tables={bundle?.tables || []}
+          reviewedParts={userProgress?.reviewed_parts || []}
+          reviewedSections={userProgress?.reviewed_sections || []}
+          answeredQuestions={userProgress?.answered_questions || {}}
+          questions={bundle?.questions || []}
           counts={{
             lectures: bundle?.lectures?.length || 0,
             tables: bundle?.tables?.length || 0,
@@ -1014,7 +1025,8 @@ export const App: React.FC = () => {
                   memorizedTableIds={userProgress?.memorized_tables || []}
                   onToggleMemorize={handleToggleMemorizeTable}
                   onJumpToSlide={handleJumpToSlide}
-                  activeLectureId={activeLectureId}
+                  activeLectureId={tablesLectureFilter}
+                  onSelectLecture={setTablesLectureFilter}
                 />
               )}
 

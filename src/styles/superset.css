@@ -865,28 +865,29 @@
 .tbl-force-cards table.tbl td > span:last-child { flex: 1; min-width: 0; }
 .tbl-force-cards .imp-dot { margin-top: 6px; }
 
-/* Mobile: every table becomes stacked cards */
+/* Mobile: keep authentic desktop-scaled proportional tables via fitTables (.tbl-scale) */
+.tbl-wrap,
+.em-table-wrap,
+.pat-table-wrap,
+.malware-table-wrap {
+  overflow-x: auto;
+  border: 1px solid var(--ln);
+  border-radius: 10px;
+}
+.tbl-scale {
+  transform-origin: top right;
+  will-change: transform;
+}
+
 @media (max-width: 760px) {
-  .tbl-wrap { overflow: visible; border: none; background: transparent; }
-  .tbl-scale { transform: none !important; width: 100% !important; height: auto !important; }
-  table.tbl, table.em-table, table.pat-table, table.malware-table { min-width: 0; width: 100%; }
-  table.tbl thead, table.em-table thead, table.malware-table thead { display: none; }
-  table.tbl tbody, table.tbl tr, table.tbl td,
-  table.em-table tbody, table.em-table tr, table.em-table td,
-  table.malware-table tbody, table.malware-table tr, table.malware-table td { display: block; width: 100% !important; }
-  table.tbl tr, table.em-table tr, table.malware-table tr {
-    background: var(--sf); border: 1px solid var(--ln); border-radius: var(--r-m);
-    margin-bottom: 8px; padding: 6px 10px;
+  .tbl-list:not(.tbl-force-cards) table.tbl,
+  table.summary-tbl,
+  table.em-table,
+  table.acm-table,
+  table.malware-table,
+  table.pat-table {
+    min-width: 520px;
   }
-  table.tbl td, table.em-table td, table.malware-table td {
-    display: flex; gap: 10px; padding: 5px 0; border: none;
-    text-align: right !important; direction: rtl !important;
-  }
-  table.tbl td::before, table.em-table td::before, table.malware-table td::before {
-    content: attr(data-label);
-    flex: none; width: 94px; font-size: 0.68rem; font-weight: 800; color: var(--acc);
-  }
-  .em-table td::before { content: "—"; color: var(--ln); }
   .tbl-legend, .tbl-search { margin-inline-start: 0; width: 100%; }
   .tbl-search input { width: 100%; }
 }
@@ -1591,9 +1592,33 @@
   .bank-toolbar { gap: 6px; }
   .manual-q-input { width: 100%; }
   .manual-q-input input { width: 100%; }
-  .bottom-nav .bn-lecs { display: flex; overflow-x: auto; scrollbar-width: none; }
+  .bottom-nav .bn-lecs { display: flex; overflow-x: auto; scrollbar-width: none; gap: 6px; }
   .bottom-nav .bn-lecs::-webkit-scrollbar { display: none; }
-  .bottom-nav .bn-lecs button { flex: 0 0 auto; min-width: 64px; }
+  .bottom-nav .bn-lecs button {
+    flex: 0 0 auto;
+    min-width: 52px;
+    padding: 6px 12px;
+    white-space: nowrap;
+    font-size: 0.72rem;
+    flex-direction: row;
+    gap: 4px;
+  }
+}
+
+/* إخفاء ذكي وسلس للهيدر العلوي دون تداخل مع النقر أو السايدبار */
+.topbar {
+  transition: transform 0.3s cubic-bezier(0.22, 1, 0.36, 1), background 0.25s var(--ease);
+  will-change: transform;
+}
+.topbar.topbar-hidden,
+body.header-hidden .topbar {
+  transform: translateY(-100%);
+  pointer-events: none;
+}
+.topbar.topbar-hidden:focus-within,
+body.header-hidden .topbar:focus-within {
+  transform: translateY(0);
+  pointer-events: auto;
 }
 
 /* ==============================================================================

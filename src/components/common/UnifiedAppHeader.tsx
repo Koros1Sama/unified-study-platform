@@ -106,6 +106,8 @@ export const UnifiedAppHeader: React.FC<UnifiedAppHeaderProps> = ({
   const [theme, setTheme] = useState<string>(() => localStorage.getItem("unified_theme") || "amber");
   const [mode, setMode] = useState<"dark" | "light">(() => (localStorage.getItem("unified_mode") as "dark" | "light") || "dark");
   const lastScrollY = useRef(0);
+  const anchorScrollY = useRef(0);
+  const scrollDirRef = useRef<"up" | "down" | null>(null);
   const setPanelRef = useRef<HTMLDivElement>(null);
   const btnSetRef = useRef<HTMLButtonElement>(null);
   const navWrapRef = useRef<HTMLDivElement>(null);
@@ -221,26 +223,84 @@ export const UnifiedAppHeader: React.FC<UnifiedAppHeaderProps> = ({
     };
   }, [isSetOpen]);
 
-  // إخفاء التوبار عند النزول وإظهاره عند الصعود (مع إبقائه ظاهراً دائماً إن كانت الإعدادات مفتوحة)
+  // إظهار الهيدر عند تبديل القسم أو المادة
   useEffect(() => {
-    const handleScroll = () => {
-      const currentScrollY = window.scrollY;
+    setIsHidden(false);
+    const curY = typeof window !== "undefined" ? window.scrollY : 0;
+    lastScrollY.current = curY;
+    anchorScrollY.current = curY;
+    scrollDirRef.current = null;
+  }, [activeView, currentSubject.code]);
+
+  // مزامنة كلاس body.header-hidden لتحريك السايدبار والهيدر بسلاسة على سطح المكتب والجوال
+  useEffect(() => {
+    document.body.classList.toggle("header-hidden", isHidden);
+    return () => {
+      document.body.classList.remove("header-hidden");
+    };
+  }, [isHidden]);
+
+  // إخفاء ذكي غير مزعج للتوبار (Hysteresis لمنع الاهتزاز + استجابة للحركة الهادئة + إظهار عند قرب المؤشر من الحافة العليا)
+  useEffect(() => {
+    let ticking = false;
+
+    const updateOnScroll = () => {
+      ticking = false;
+      const curY = window.scrollY;
       if (isSetOpen) {
-        // عند فتح الإعدادات يظل التوبار ثابتاً ولا تغلق اللوحة أثناء التمرير
         setIsHidden(false);
-        lastScrollY.current = currentScrollY;
+        lastScrollY.current = curY;
+        anchorScrollY.current = curY;
+        scrollDirRef.current = null;
         return;
       }
-      if (currentScrollY > 100 && currentScrollY > lastScrollY.current + 8) {
-        setIsHidden(true);
-      } else if (currentScrollY < lastScrollY.current - 8 || currentScrollY <= 20) {
+
+      const prevY = lastScrollY.current;
+      if (curY <= 24) {
+        setIsHidden(false);
+        scrollDirRef.current = null;
+        anchorScrollY.current = curY;
+      } else if (curY > prevY) {
+        if (scrollDirRef.current !== "down") {
+          scrollDirRef.current = "down";
+          anchorScrollY.current = prevY;
+        }
+        if (curY > 96 && curY - anchorScrollY.current >= 40) {
+          setIsHidden(true);
+          anchorScrollY.current = curY;
+        }
+      } else if (curY < prevY) {
+        if (scrollDirRef.current !== "up") {
+          scrollDirRef.current = "up";
+          anchorScrollY.current = prevY;
+        }
+        if (anchorScrollY.current - curY >= 28 || curY <= 48) {
+          setIsHidden(false);
+          anchorScrollY.current = curY;
+        }
+      }
+      lastScrollY.current = curY;
+    };
+
+    const handleScroll = () => {
+      if (!ticking) {
+        ticking = true;
+        window.requestAnimationFrame(updateOnScroll);
+      }
+    };
+
+    const handleMouseMove = (e: MouseEvent) => {
+      if (e.clientY <= 12) {
         setIsHidden(false);
       }
-      lastScrollY.current = currentScrollY;
     };
 
     window.addEventListener("scroll", handleScroll, { passive: true });
-    return () => window.removeEventListener("scroll", handleScroll);
+    window.addEventListener("mousemove", handleMouseMove, { passive: true });
+    return () => {
+      window.removeEventListener("scroll", handleScroll);
+      window.removeEventListener("mousemove", handleMouseMove);
+    };
   }, [isSetOpen]);
 
   const toggleMode = () => {

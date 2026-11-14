@@ -4,8 +4,9 @@
 // Directive 2 & Rule 8: 100% Mathematical SVG Line-Art · Zero Emojis Standard
 // ==============================================================================
 
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useRef } from "react";
 import { Icons } from "../icons/SvgIcons";
+import { useFitTables } from "../../lib/useFitTables";
 
 interface InteractiveStudioHostProps {
   subjectCode: string;
@@ -38,9 +39,12 @@ export const InteractiveStudioHost: React.FC<InteractiveStudioHostProps> = ({
   initialTabId = "sim",
   onReturnToSummary
 }) => {
+  const containerRef = useRef<HTMLDivElement>(null);
   const initialNorm = useMemo(() => normalizeStudio(initialStudioId), [initialStudioId]);
   const [activeStudioId, setActiveStudioId] = useState<string>(initialNorm.studioId);
   const [activeTabId, setActiveTabId] = useState<string>(initialTabId || initialNorm.defaultTab);
+
+  useFitTables(containerRef, [activeStudioId, activeTabId]);
 
   // مزامنة فورية عند تغير المعرف أو التبويب القادم من الملخص
   useEffect(() => {
@@ -338,7 +342,7 @@ export const InteractiveStudioHost: React.FC<InteractiveStudioHostProps> = ({
   const currentStudio = studios.find((s) => s.id === activeStudioId) || studios[0];
 
   return (
-    <div>
+    <div ref={containerRef}>
       {/* الترويسة العلوية وبطاقة التنقل بين الاستوديوهات */}
       <div className="card" style={{ marginBottom: "20px" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "10px" }}>

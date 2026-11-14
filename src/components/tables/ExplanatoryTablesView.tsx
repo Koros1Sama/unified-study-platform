@@ -6,6 +6,7 @@
 
 import React, { useState, useMemo, useRef, useCallback, useEffect } from "react";
 import { Icons } from "../icons/SvgIcons";
+import { useFitTables } from "../../lib/useFitTables";
 import type { ExplanatoryTable } from "../../types";
 
 interface ExplanatoryTablesViewProps {
@@ -14,6 +15,7 @@ interface ExplanatoryTablesViewProps {
   onToggleMemorize: (tableId: string) => void;
   onJumpToSlide: (ref: string) => void;
   activeLectureId?: string;
+  onSelectLecture?: (lec: string) => void;
 }
 
 export function getColPercentages(colsCount: number): string[] {
@@ -41,7 +43,8 @@ export const ExplanatoryTablesView: React.FC<ExplanatoryTablesViewProps> = ({
   memorizedTableIds,
   onToggleMemorize,
   onJumpToSlide,
-  activeLectureId
+  activeLectureId,
+  onSelectLecture
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const [minImportance, setMinImportance] = useState<number>(() => {
@@ -103,12 +106,19 @@ export const ExplanatoryTablesView: React.FC<ExplanatoryTablesViewProps> = ({
     }
   }, []);
 
-  // إتاحة تصفية الجداول محلياً دون حبس المستخدم في شريحة محاضرة واحدة عند الانتقال من السلايدات
+  // إتاحة تصفية الجداول محلياً ومزامنتها عند اختيار فصل من التبويب أو الشريط السفلي
   useEffect(() => {
-    if (!activeLectureId || activeLectureId === "all") {
+    if (onSelectLecture) {
+      setLectureFilter(activeLectureId || "all");
+    } else if (!activeLectureId || activeLectureId === "all") {
       setLectureFilter("all");
     }
-  }, [activeLectureId]);
+  }, [activeLectureId, onSelectLecture]);
+
+  const setLectureFilterSync = (lec: string) => {
+    setLectureFilter(lec);
+    onSelectLecture?.(lec);
+  };
 
   const handleImportanceChange = (val: number) => {
     setMinImportance(val);
@@ -122,39 +132,11 @@ export const ExplanatoryTablesView: React.FC<ExplanatoryTablesViewProps> = ({
     });
   };
 
-  // محرك fitTables لتحجيم الجداول بدقة
-  const fitTables = useCallback(() => {
-    if (!containerRef.current) return;
-    const wraps = containerRef.current.querySelectorAll<HTMLDivElement>(".tbl-wrap");
-    wraps.forEach((wrap) => {
-      const sc = wrap.querySelector<HTMLDivElement>(".tbl-scale");
-      const tbl = wrap.querySelector<HTMLTableElement>("table.tbl");
-      if (!sc || !tbl) return;
-      sc.style.transform = "none";
-      sc.style.height = "";
-      const w = tbl.offsetWidth;
-      const avail = wrap.clientWidth;
-      if (w > avail + 1 && avail > 0) {
-        const k = avail / w;
-        sc.style.transform = `scale(${k})`;
-        sc.style.transformOrigin = "top right";
-        sc.style.width = `${w}px`;
-        wrap.style.height = `${Math.ceil(tbl.offsetHeight * k) + 4}px`;
-      } else {
-        wrap.style.height = "";
-        sc.style.width = "";
-      }
-    });
-  }, []);
-
-  useEffect(() => {
-    const timer = setTimeout(fitTables, 60);
-    window.addEventListener("resize", fitTables);
-    return () => {
-      clearTimeout(timer);
-      window.removeEventListener("resize", fitTables);
-    };
-  }, [fitTables, tables, minImportance, showSavedOnly, searchQuery, forceCards, expandedTables, lectureFilter]);
+  useFitTables(
+    containerRef,
+    [tables, minImportance, showSavedOnly, searchQuery, expandedTables, lectureFilter],
+    forceCards
+  );
 
   const filteredTables = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
@@ -280,7 +262,7 @@ export const ExplanatoryTablesView: React.FC<ExplanatoryTablesViewProps> = ({
             type="button"
             className={`fchip ${lectureFilter === "all" ? "on" : ""}`}
             style={{ flexShrink: 0 }}
-            onClick={() => setLectureFilter("all")}
+            onClick={() => setLectureFilterSync("all")}
           >
             كل المحاضرات ({tables.length})
           </button>
@@ -290,7 +272,7 @@ export const ExplanatoryTablesView: React.FC<ExplanatoryTablesViewProps> = ({
               type="button"
               className={`fchip ${lectureFilter === lec ? "on" : ""}`}
               style={{ flexShrink: 0 }}
-              onClick={() => setLectureFilter(lectureFilter === lec ? "all" : lec)}
+              onClick={() => setLectureFilterSync(lectureFilter === lec ? "all" : lec)}
             >
               {lec} ({count})
             </button>

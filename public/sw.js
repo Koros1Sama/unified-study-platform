@@ -5,8 +5,8 @@
 
 const CORE_PREFIX = "usp-core-";
 const RUNTIME_PREFIX = "usp-runtime-";
-const CORE = "usp-core-v16";
-const RUNTIME = "usp-runtime-v16";
+const CORE = "usp-core-v17";
+const RUNTIME = "usp-runtime-v17";
 
 const CORE_ASSETS = [
   "./",
