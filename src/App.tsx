@@ -165,7 +165,26 @@ export const App: React.FC = () => {
   const [expMode, setExpMode] = useState<ExplanationMode>(() => {
     return (localStorage.getItem("unified_exp_mode") as ExplanationMode) || "always";
   });
+  const [expPromptSeen, setExpPromptSeen] = useState<boolean>(() => {
+    return localStorage.getItem("unified_exp_prompt_seen") === "1";
+  });
+  const [openSettingsRequest, setOpenSettingsRequest] = useState<{
+    group: string;
+    highlightId?: string;
+    nonce: number;
+  } | null>(null);
   const [isBmModalOpen, setIsBmModalOpen] = useState<boolean>(false);
+
+  const handleDismissExpPrompt = useCallback(() => {
+    setExpPromptSeen(true);
+    localStorage.setItem("unified_exp_prompt_seen", "1");
+  }, []);
+
+  const handleOpenExpSettings = useCallback(() => {
+    setExpPromptSeen(true);
+    localStorage.setItem("unified_exp_prompt_seen", "1");
+    setOpenSettingsRequest({ group: "qbank", highlightId: "setGroupExp", nonce: Date.now() });
+  }, []);
 
   // حالة العودة المزدوجة للقفزات التفاعلية
   const [lastViewBeforeJump, setLastViewBeforeJump] = useState<ActiveView | null>(null);
@@ -936,6 +955,7 @@ export const App: React.FC = () => {
         fontScale={fontScale}
         onChangeFontScale={handleChangeFontScale}
         onExportProgress={handleExportProgress}
+        openSettingsRequest={openSettingsRequest}
       />
 
       {/* التخطيط الكانوني الأصيل (.layout) */}
@@ -1035,6 +1055,7 @@ export const App: React.FC = () => {
                   subjectCode={currentSubjectCode}
                   questions={bundle?.questions || []}
                   models={bundle?.question_models || []}
+                  lectures={bundle?.lectures || []}
                   selectedModelId={selectedModelId}
                   onSelectModel={handleSelectModel}
                   userProgress={userProgress || { subject_code: currentSubjectCode, memorized_tables: [], answered_questions: {}, bookmarks: {}, exam_history: [], updated_at: "" }}
@@ -1051,6 +1072,9 @@ export const App: React.FC = () => {
                   onOpenBmLabelModal={() => setIsBmModalOpen(true)}
                   expMode={expMode}
                   onChangeExpMode={handleChangeExpMode}
+                  expPromptSeen={expPromptSeen}
+                  onDismissExpPrompt={handleDismissExpPrompt}
+                  onOpenExpSettings={handleOpenExpSettings}
                   shuffleChoices={shuffleChoices}
                   shuffleQuestions={shuffleQuestions}
                   choicesSeed={choicesSeed}
@@ -1072,10 +1096,15 @@ export const App: React.FC = () => {
                 <ExamSimulator
                   questions={bundle?.questions || []}
                   models={bundle?.question_models || []}
+                  lectures={bundle?.lectures || []}
                   examHistory={userProgress?.exam_history || []}
                   onRecordResult={handleRecordExamResult}
                   onJumpToSlide={handleJumpToSlide}
                   languageMode={effectiveLanguageMode}
+                  expMode={expMode}
+                  expPromptSeen={expPromptSeen}
+                  onDismissExpPrompt={handleDismissExpPrompt}
+                  onOpenExpSettings={handleOpenExpSettings}
                 />
               )}
 

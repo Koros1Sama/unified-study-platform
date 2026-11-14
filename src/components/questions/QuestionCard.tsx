@@ -29,6 +29,10 @@ interface QuestionCardProps {
   expMode?: ExplanationMode;
   onOpenTwinModal?: (question: UnifiedQuestion) => void;
   twinNumber?: number;
+  isRetestQuestion?: boolean;
+  expPromptSeen?: boolean;
+  onDismissExpPrompt?: () => void;
+  onOpenExpSettings?: () => void;
 }
 
 export function parseDistractorItem(item: DistractorDetail | string | undefined): DistractorDetail {
@@ -75,7 +79,11 @@ const QuestionCardComponent: React.FC<QuestionCardProps> = ({
   onOpenBmLabelModal,
   expMode = "always",
   onOpenTwinModal,
-  twinNumber
+  twinNumber,
+  isRetestQuestion = false,
+  expPromptSeen = true,
+  onDismissExpPrompt,
+  onOpenExpSettings
 }) => {
   const isEssay = question.type === "essay";
   const isAnswered = Boolean(userAnswer) && !isEssay && (userAnswer?.selected_answer ?? -1) >= 0;
@@ -175,6 +183,12 @@ const QuestionCardComponent: React.FC<QuestionCardProps> = ({
         )}
 
         <span className="q-orig-model-badge">{question.model_id.toUpperCase()}</span>
+
+        {isRetestQuestion && (
+          <span className="retest-q-badge" title="سؤال لإعادة اختبار الأخطاء السابقة">
+            إعادة اختبار
+          </span>
+        )}
 
         {question.is_ai_predicted && (
           <span className="q-ai-badge">تنبؤ ذكي</span>
@@ -457,16 +471,32 @@ const QuestionCardComponent: React.FC<QuestionCardProps> = ({
               <div className="q-verdict-row">
                 <span className={`q-verdict ${isCorrect ? "ok" : "err"}`}>
                   {isCorrect ? <Icons.Check size={16} /> : <Icons.Cross size={16} />}
-                  <span>{isCorrect ? "إجابة صحيحة ومطابقة للبنك المعتمد" : "إجابة خاطئة — راجع تفنيد الخيارات أدناه"}</span>
+                  <span>
+                    {isCorrect
+                      ? "إجابة صحيحة!"
+                      : `إجابة خاطئة — الصحيح: ${
+                          question.type === "tf"
+                            ? languageMode === "ar"
+                              ? question.correct_answer === 0
+                                ? "ص"
+                                : "خ"
+                              : question.correct_answer === 0
+                              ? "T"
+                              : "F"
+                            : String.fromCharCode(65 + question.correct_answer)
+                        }`}
+                  </span>
                 </span>
 
                 <div style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}>
                   <button
                     type="button"
-                    className="ref-chip q-toggle-exp-btn"
+                    className={`ref-chip q-toggle-exp-btn ${showExplanation ? "is-active" : ""}`}
                     onClick={() => setShowExplanation(!showExplanation)}
+                    title={showExplanation ? "طي الشرح والتعليل المفصل" : "عرض الشرح والتعليل المفصل"}
                   >
-                    <span>{showExplanation ? "طي التعليل" : "فتح التعليل المفصل"}</span>
+                    {showExplanation ? <Icons.EyeOff size={13} /> : <Icons.Eye size={13} />}
+                    <span>{showExplanation ? "إخفاء الشرح" : "عرض الشرح والتعليل"}</span>
                   </button>
 
                   {!readOnly && (
@@ -495,6 +525,38 @@ const QuestionCardComponent: React.FC<QuestionCardProps> = ({
 
               {showExplanation && (
                 <div className="q-exp-body">
+                  {!expPromptSeen && (
+                    <div className="q-exp-prompt-banner">
+                      <div className="q-exp-prompt-content">
+                        <Icons.Eye size={16} />
+                        <span>ألا يعجبك ظهور الشرح تلقائياً؟ ادخل الإعدادات لتغيير ذلك وضبطه</span>
+                      </div>
+                      <div className="q-exp-prompt-actions">
+                        <button
+                          type="button"
+                          className="q-exp-prompt-btn"
+                          title="تخصيص وضع ظهور الشرح والتعليل من لوحة الإعدادات"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onOpenExpSettings?.();
+                          }}
+                        >
+                          ضبط الإعدادات
+                        </button>
+                        <button
+                          type="button"
+                          className="q-exp-prompt-close"
+                          title="إغلاق هذه الرسالة وعدم إظهارها مجدداً"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onDismissExpPrompt?.();
+                          }}
+                        >
+                          فهمت
+                        </button>
+                      </div>
+                    </div>
+                  )}
                   {/* الخيار الصائب المعتمد */}
                   <div className={`why-item correct ${selectedIdx === question.correct_answer ? "user-picked" : ""}`}>
                     <div className="w-head">

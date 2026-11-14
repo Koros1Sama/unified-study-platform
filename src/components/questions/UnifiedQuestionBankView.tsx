@@ -28,6 +28,7 @@ interface UnifiedQuestionBankViewProps {
   subjectCode: string;
   questions: UnifiedQuestion[];
   models: QuestionModelInfo[];
+  lectures?: Array<{ id: string; title_ar: string }>;
   userProgress: UserStudyProgress;
   onAnswerQuestion: (questionId: string, answerIdx: number, isCorrect: boolean, twinGroupId?: string) => void;
   onJumpToSlide?: (ref: string) => void;
@@ -44,6 +45,9 @@ interface UnifiedQuestionBankViewProps {
   onOpenBmLabelModal?: () => void;
   expMode?: ExplanationMode;
   onChangeExpMode?: (mode: ExplanationMode) => void;
+  expPromptSeen?: boolean;
+  onDismissExpPrompt?: () => void;
+  onOpenExpSettings?: () => void;
   shuffleChoices?: boolean;
   shuffleQuestions?: boolean;
   choicesSeed?: number;
@@ -119,6 +123,7 @@ export const UnifiedQuestionBankView: React.FC<UnifiedQuestionBankViewProps> = (
   subjectCode,
   questions,
   models,
+  lectures: subjectLectures = [],
   userProgress,
   onAnswerQuestion,
   onJumpToSlide,
@@ -135,6 +140,9 @@ export const UnifiedQuestionBankView: React.FC<UnifiedQuestionBankViewProps> = (
   onOpenBmLabelModal,
   expMode = "always",
   onChangeExpMode,
+  expPromptSeen = true,
+  onDismissExpPrompt,
+  onOpenExpSettings,
   shuffleChoices = false,
   shuffleQuestions = false,
   choicesSeed = 1,
@@ -155,12 +163,61 @@ export const UnifiedQuestionBankView: React.FC<UnifiedQuestionBankViewProps> = (
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [lectureFilter, setLectureFilter] = useState<string>("all");
   const [manualFilter, setManualFilter] = useState<string>("");
-  const [retest, setRetest] = useState<null | "wrong">(null);
-  const [retestIds, setRetestIds] = useState<Set<string>>(new Set());
-  const [retestAnswered, setRetestAnswered] = useState<Set<string>>(new Set());
+  const retestStorageKey = `unified_retest_${subjectCode}`;
+  const [retest, setRetest] = useState<null | "wrong">(() => {
+    try {
+      const saved = sessionStorage.getItem(retestStorageKey);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed?.ids?.length) return "wrong";
+      }
+    } catch {}
+    return null;
+  });
+  const [retestIds, setRetestIds] = useState<Set<string>>(() => {
+    try {
+      const saved = sessionStorage.getItem(retestStorageKey);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed?.ids)) return new Set(parsed.ids);
+      }
+    } catch {}
+    return new Set();
+  });
+  const [retestAnswered, setRetestAnswered] = useState<Set<string>>(() => {
+    try {
+      const saved = sessionStorage.getItem(retestStorageKey);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed?.answers) return new Set(Object.keys(parsed.answers));
+      }
+    } catch {}
+    return new Set();
+  });
   const [retestAnswers, setRetestAnswers] = useState<
     Record<string, { selected_answer: number; is_correct: boolean }>
-  >({});
+  >(() => {
+    try {
+      const saved = sessionStorage.getItem(retestStorageKey);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed?.answers) return parsed.answers;
+      }
+    } catch {}
+    return {};
+  });
+  const [retestOrigAns, setRetestOrigAns] = useState<
+    Record<string, { selected_answer: number; is_correct: boolean }>
+  >(() => {
+    try {
+      const saved = sessionStorage.getItem(retestStorageKey);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed?.origAns) return parsed.origAns;
+      }
+    } catch {}
+    return {};
+  });
   const [activeTwinModalQ, setActiveTwinModalQ] = useState<UnifiedQuestion | null>(null);
   const [visibleLimit, setVisibleLimit] = useState<number>(40);
   const [tooltipState, setTooltipState] = useState<{
@@ -407,54 +464,146 @@ export const UnifiedQuestionBankView: React.FC<UnifiedQuestionBankViewProps> = (
     };
   }, [modelQuestions, answeredMap]);
 
-  const insights = useMemo(() => {
-    const map = new Map<string, { total: number; answered: number; right: number }>();
-    modelQuestions.forEach((q) => {
-      const lec = questionLecture(q);
-      const cur = map.get(lec) || { total: 0, answered: 0, right: 0 };
-      cur.total++;
-      const ans = answeredMap[q.id];
-      if (ans && ans.selected_answer >= 0) {
-        cur.answered++;
-        if (ans.is_correct) cur.right++;
+  // التحليل الذكي للأداء عبر كل المحاضرات أو النماذج (مطابق لـ RM_Viewer)
+  const smartInsights = useMemo(() => {
+    const hasLecData =
+      subjectLectures.length > 0 &&
+      questions.some((q) => Boolean(q.lecture_id || (q.slide_ref && q.slide_ref.includes("-"))));
+
+    const groupMap = new Map<
+      string,
+      { id: string; name: string; total: number; answered: number; correct: number; wrong: number }
+    >();
+
+    questions.forEach((q) => {
+      const groupId = hasLecData ? questionLecture(q) : q.model_id;
+      if (!groupId || groupId === "عام") {
+        if (hasLecData) return;
       }
-      map.set(lec, cur);
+      const ans = answeredMap[q.id];
+      if (!ans || ans.selected_answer < 0) return;
+
+      let groupName = groupId;
+      if (hasLecData) {
+        const lecMeta = subjectLectures.find((l) => l.id === groupId);
+        groupName = lecMeta ? `${groupId} · ${lecMeta.title_ar}` : groupId;
+      } else {
+        const modMeta = models.find((m) => m.id === groupId);
+        groupName = modMeta ? modMeta.short_label || modMeta.title_ar || groupId : groupId;
+      }
+
+      const row = groupMap.get(groupId) || {
+        id: groupId,
+        name: groupName,
+        total: 0,
+        answered: 0,
+        correct: 0,
+        wrong: 0
+      };
+      row.answered++;
+      if (ans.is_correct) row.correct++;
+      else row.wrong++;
+      groupMap.set(groupId, row);
     });
 
-    return Array.from(map.entries())
-      .map(([lec, cur]) => ({
-        lec,
-        total: cur.total,
-        answered: cur.answered,
-        right: cur.right,
-        accuracy: cur.answered > 0 ? Math.round((cur.right / cur.answered) * 100) : null
-      }))
-      .sort((a, b) => a.lec.localeCompare(b.lec, "en"));
-  }, [modelQuestions, answeredMap]);
+    const rows = Array.from(groupMap.values()).sort((a, b) => {
+      const ra = a.answered > 0 ? a.correct / a.answered : 1;
+      const rb = b.answered > 0 ? b.correct / b.answered : 1;
+      if (ra !== rb) return ra - rb;
+      return b.wrong - a.wrong;
+    });
 
-  const weakLectures = useMemo(
-    () => insights.filter((i) => i.accuracy !== null && i.answered >= 3 && i.accuracy < 60),
-    [insights]
-  );
+    const totalAns = rows.reduce((s, r) => s + r.answered, 0);
+    const totalCorrect = rows.reduce((s, r) => s + r.correct, 0);
+    const totalWrong = rows.reduce((s, r) => s + r.wrong, 0);
+    const acc = totalAns > 0 ? Math.round((totalCorrect / totalAns) * 100) : 0;
+    const isWeakRow = (r: { wrong: number; answered: number; correct: number }) =>
+      r.wrong > 0 && (r.answered >= 3 ? r.correct / r.answered < 0.75 : true);
+    const weakTargets = rows.filter((r) => r.wrong > 0).slice(0, 3);
 
-  const startRetest = (kind: "wrong" = "wrong") => {
+    return { rows, totalAns, totalCorrect, totalWrong, acc, isWeakRow, weakTargets, hasLecData };
+  }, [questions, answeredMap, subjectLectures, models]);
+
+  // حفظ جلسة إعادة الاختبار في sessionStorage لحماية التقدم
+  useEffect(() => {
+    try {
+      if (!retest || retestIds.size === 0) {
+        sessionStorage.removeItem(retestStorageKey);
+      } else {
+        sessionStorage.setItem(
+          retestStorageKey,
+          JSON.stringify({
+            ids: Array.from(retestIds),
+            answers: retestAnswers,
+            origAns: retestOrigAns
+          })
+        );
+      }
+    } catch {}
+  }, [retest, retestIds, retestAnswers, retestOrigAns, retestStorageKey]);
+
+  // بدء جلسة إعادة اختبار ذكية تحفظ لقطة من الإجابات السابقة دون إتلاف سجل الطالب
+  const startRetest = (customIds?: string[]) => {
     const ids = new Set<string>();
-    modelQuestions.forEach((q) => {
-      const a = answeredMap[q.id];
-      if (a && !a.is_correct && a.selected_answer >= 0) ids.add(q.id);
-    });
-    setRetest(kind);
+    const origSnap: Record<string, { selected_answer: number; is_correct: boolean }> = {};
+
+    if (customIds && customIds.length > 0) {
+      customIds.forEach((id) => {
+        ids.add(id);
+        const a = answeredMap[id];
+        if (a && a.selected_answer >= 0) origSnap[id] = a;
+      });
+    } else {
+      modelQuestions.forEach((q) => {
+        const a = answeredMap[q.id];
+        if (a && !a.is_correct && a.selected_answer >= 0) {
+          ids.add(q.id);
+          origSnap[q.id] = a;
+        }
+      });
+    }
+
+    if (ids.size === 0) return;
+
+    setRetest("wrong");
     setRetestIds(ids);
     setRetestAnswers({});
     setRetestAnswered(new Set());
+    setRetestOrigAns(origSnap);
     setVisibleLimit(Math.max(40, ids.size));
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  const reviewWeakTarget = (targetId: string) => {
+    const isModel = models.some((m) => m.id === targetId);
+    const targetWrongIds = questions
+      .filter((q) => {
+        const match = isModel ? q.model_id === targetId : questionLecture(q) === targetId;
+        if (!match) return false;
+        const a = answeredMap[q.id];
+        return Boolean(a && !a.is_correct && a.selected_answer >= 0);
+      })
+      .map((q) => q.id);
+
+    if (targetWrongIds.length === 0) return;
+    if (isModel) {
+      setSelectedModelId(targetId);
+      setLectureFilter("all");
+    } else {
+      setSelectedModelId("all");
+      setLectureFilter(targetId);
+    }
+    setFilterState("all");
+    startRetest(targetWrongIds);
   };
 
   const stopRetest = () => {
+    // الإجابات التي لم يُجب عليها الطالب داخل جلسة الإعادة بقيت محفوظة كما هي في السجل الأصلي
     setRetest(null);
     setRetestIds(new Set());
     setRetestAnswers({});
     setRetestAnswered(new Set());
+    setRetestOrigAns({});
   };
 
   const handleAnswerWithRetest = (
@@ -485,10 +634,8 @@ export const UnifiedQuestionBankView: React.FC<UnifiedQuestionBankViewProps> = (
           next.add(qId);
           return next;
         });
-        // حفظ التحسين في السجل الأساسي عند الإجابة الصائبة
-        if (ok) {
-          onAnswerQuestion(qId, idx, ok, twinGroupId);
-        }
+        // تحديث السجل الرئيسي عند حل السؤال في جلسة الإعادة (الصواب يُصلح الخطأ فوراً)
+        onAnswerQuestion(qId, idx, ok, twinGroupId);
       }
     } else {
       onAnswerQuestion(qId, idx, ok, twinGroupId);
@@ -767,49 +914,35 @@ export const UnifiedQuestionBankView: React.FC<UnifiedQuestionBankViewProps> = (
 
       {retest && (
         <div className={`retest-banner ${retestRemaining === 0 ? "is-done" : ""}`}>
-          <div className="retest-banner-text">
-            {retestRemaining === 0 ? <Icons.Check size={18} /> : <Icons.Reset size={18} />}
-            <div style={{ display: "flex", flexDirection: "column", gap: "2px" }}>
-              <span style={{ fontWeight: 800 }}>
-                {retestRemaining === 0
-                  ? `أنهيت جلسة إعادة ${retest === "wrong" ? "الأسئلة الخاطئة" : "الأسئلة المعلّمة"}`
-                  : `جلسة إعادة ${retest === "wrong" ? "الأسئلة الخاطئة" : "الأسئلة المعلّمة"}`}
-              </span>
-              <small style={{ color: "var(--ink-m)" }}>
-                {retestRemaining === 0
-                  ? retestSessionStats.wrong === 0
-                    ? "أجبت عن جميع الأسئلة بشكل صحيح — أحسنت!"
-                    : `أنهيت ${retestSessionStats.total} سؤالاً · صحيح ${retestSessionStats.correct} · لا يزال خطأ ${retestSessionStats.wrong}`
-                  : `أعد الإجابة على هذه الأسئلة بنفسك · أجبت ${retestSessionStats.answered} من ${retestSessionStats.total} · صحيح ${retestSessionStats.correct} · خطأ ${retestSessionStats.wrong}`}
-              </small>
+          <div className="rt-ic">
+            {retestRemaining === 0 ? <Icons.Check size={21} /> : <Icons.Rotate size={21} />}
+          </div>
+          <div className="rt-body">
+            <div className="rt-title">
+              {retestRemaining === 0
+                ? "أنهيت جلسة إعادة اختبار الأخطاء"
+                : "جلسة إعادة اختبار الأخطاء"}
+            </div>
+            <div className="rt-sub">
+              {retestRemaining === 0
+                ? retestSessionStats.wrong === 0
+                  ? "أجبت عن جميع الأسئلة بشكل صحيح — أحسنت!"
+                  : `أنهيت ${retestSessionStats.total} سؤالاً · صحيح ${retestSessionStats.correct} · لا يزال خطأ ${retestSessionStats.wrong}`
+                : `أعد الإجابة على هذه الأسئلة بنفسك · أجبت ${retestSessionStats.answered} من ${retestSessionStats.total} · صحيح ${retestSessionStats.correct}`}
+            </div>
+            <div className="rt-bar">
+              <i
+                style={{
+                  width: `${retestIds.size > 0 ? Math.round((retestAnswered.size / retestIds.size) * 100) : 0}%`
+                }}
+              />
             </div>
           </div>
 
-          <div
-            className="rt-bar"
-            style={{
-              width: "100%",
-              height: "6px",
-              background: "var(--sf2)",
-              borderRadius: "999px",
-              overflow: "hidden",
-              margin: "6px 0"
-            }}
-          >
-            <div
-              style={{
-                width: `${retestIds.size > 0 ? Math.round((retestAnswered.size / retestIds.size) * 100) : 0}%`,
-                height: "100%",
-                background: retestRemaining === 0 ? "var(--ok)" : "var(--acc)",
-                transition: "width 0.25s ease"
-              }}
-            />
-          </div>
-
-          <div style={{ display: "flex", gap: "8px", alignItems: "center", flexWrap: "wrap" }}>
+          <div className="rt-actions">
             {retestSessionStats.wrong > 0 && (
-              <button type="button" className="btn btn-sm btn-primary" onClick={retryRemainingWrong}>
-                <Icons.Rotate size={13} />
+              <button type="button" className="rt-btn rt-btn-primary" onClick={retryRemainingWrong}>
+                <Icons.Rotate size={14} />
                 <span>
                   {retestSessionStats.wrong === retestSessionStats.total && retestRemaining === 0
                     ? "أعد المحاولة من جديد"
@@ -817,66 +950,102 @@ export const UnifiedQuestionBankView: React.FC<UnifiedQuestionBankViewProps> = (
                 </span>
               </button>
             )}
-            <button type="button" className="btn btn-sm" onClick={stopRetest}>
-              <Icons.Back size={13} />
-              <span>إنهاء المراجعة والعودة للبنك</span>
+            <button type="button" className="rt-btn" onClick={stopRetest}>
+              <Icons.Back size={14} />
+              <span>إنهاء المراجعة</span>
             </button>
           </div>
         </div>
       )}
 
-      <div className="model-insights">
-        <div className="model-insights-head">
-          <Icons.Target size={16} />
-          <span>خريطة الإتقان بحسب المحاضرة</span>
-        </div>
-        <div className="ins-grid">
-          {insights.map((entry) => {
-            const isWeak = entry.accuracy !== null && entry.answered >= 3 && entry.accuracy < 60;
-            return (
-              <button
-                key={entry.lec}
-                type="button"
-                className={`ins-lec ${isWeak ? "is-weak" : ""} ${lectureFilter === entry.lec ? "active" : ""}`}
-                onClick={() => setLectureFilter(lectureFilter === entry.lec ? "all" : entry.lec)}
-                title="تصفية البنك على هذه المحاضرة"
-              >
-                <span className="ins-lec-name">{entry.lec}</span>
-                <span className="ins-lec-meta">
-                  {entry.answered} / {entry.total}
-                </span>
-                <span className="ins-lec-bar">
-                  <span style={{ width: `${entry.accuracy ?? 0}%` }} />
-                </span>
-                <b>{entry.accuracy === null ? "—" : `${entry.accuracy}%`}</b>
-              </button>
-            );
-          })}
-        </div>
-        {weakLectures.length > 0 && (
-          <div className="ins-weak-note" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "8px" }}>
-            <div style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}>
-              <Icons.Warning size={14} />
+      {!retest && (
+        <div className="model-insights">
+          {smartInsights.totalAns < 1 ? (
+            <div className="ins-empty">
+              <Icons.Award size={16} />
               <span>
-                محاضرات تحتاج مراجعة عاجلة: <b>{weakLectures.map((entry) => entry.lec).join(" · ")}</b>
+                {smartInsights.hasLecData
+                  ? "أجب على أسئلتك الأولى ليبدأ التحليل الذكي ويوصيك بالمحاضرات التي تحتاج مراجعة."
+                  : "أجب على أسئلتك الأولى ليبدأ التحليل الذكي ويوصيك بالنماذج التي تحتاج مراجعة."}
               </span>
             </div>
-            <button
-              type="button"
-              className="btn btn-sm"
-              style={{ padding: "3px 10px", fontSize: "0.78rem" }}
-              onClick={() => {
-                if (weakLectures[0]) {
-                  setLectureFilter(weakLectures[0].lec);
-                  setFilterState("wrong");
-                }
-              }}
-            >
-              مراجعة أضعف محاضرة ({weakLectures[0]?.lec})
-            </button>
-          </div>
-        )}
-      </div>
+          ) : (
+            <div className="insights-card">
+              <div className="ins-head">
+                <div className="ins-ic">
+                  <Icons.Award size={20} />
+                </div>
+                <div className="ins-titles">
+                  <div className="ins-title">التحليل الذكي لأدائك</div>
+                  <div className="ins-sub">
+                    {smartInsights.hasLecData
+                      ? "مبني على إجاباتك السابقة عبر كل المحاضرات"
+                      : "مبني على إجاباتك السابقة عبر كل النماذج"}
+                  </div>
+                </div>
+                <div className="ins-overall">
+                  <span className="ins-stat">
+                    الدقة <b>{smartInsights.acc}%</b>
+                  </span>
+                  <span className="ins-stat">
+                    خطأ <b style={{ color: "var(--err)" }}>{smartInsights.totalWrong}</b>
+                  </span>
+                  <span className="ins-stat">
+                    أجبت <b>{smartInsights.totalAns}</b>
+                  </span>
+                </div>
+              </div>
+
+              <div className="ins-lecs">
+                {smartInsights.rows.map((r) => {
+                  const pct = r.answered > 0 ? Math.round((r.correct / r.answered) * 100) : 0;
+                  const weak = smartInsights.isWeakRow(r);
+                  return (
+                    <div key={r.id} className={`ins-lec ${weak ? "is-weak" : ""}`}>
+                      <div className="ins-lec-top">
+                        <span className="ins-lec-name" title={r.name}>{r.name}</span>
+                        <span className="ins-lec-pct">{pct}%</span>
+                      </div>
+                      <div className="ins-bar">
+                        <i style={{ width: `${pct}%` }} />
+                      </div>
+                      <div className="ins-lec-foot">
+                        <span className="ins-lec-meta">صحيح {r.correct} · خطأ {r.wrong}</span>
+                        <button
+                          type="button"
+                          className="ins-btn"
+                          disabled={r.wrong === 0}
+                          title={
+                            r.wrong > 0
+                              ? `أعد اختبار أسئلة ${r.name} التي أخطأت فيها`
+                              : "لا أخطاء في هذا القسم"
+                          }
+                          onClick={() => reviewWeakTarget(r.id)}
+                        >
+                          <Icons.Rotate size={12} />
+                          <span>أعد اختبار</span>
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {smartInsights.weakTargets.length > 0 ? (
+                <div className="ins-tip warn">
+                  التوصية: ركّز على{" "}
+                  <b>{smartInsights.weakTargets.map((r) => r.name).join("، ")}</b> — هذه أضعف
+                  نقاطك من حيث نسبة الأخطاء، ابدأ بإعادة اختبارها.
+                </div>
+              ) : (
+                <div className="ins-tip">
+                  أداؤك ممتاز حتى الآن — لا توجد أخطاء مسجّلة، واصل التقدّم.
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* شريط الفلاتر الأساسي مع العدادات الحية المطابق لـ RM_Viewer */}
       <div className="fchips bank-toolbar">
@@ -897,15 +1066,15 @@ export const UnifiedQuestionBankView: React.FC<UnifiedQuestionBankViewProps> = (
           </button>
         ))}
 
-        <button
+                <button
           type="button"
           className={`fchip fchip-review-wrong ${statusCounts.wrong === 0 ? "is-empty" : ""}`}
-          onClick={() => startRetest("wrong")}
+          onClick={() => startRetest()}
           disabled={statusCounts.wrong === 0}
-          title="جلسة مركزة على الأسئلة التي أخطأت فيها فقط"
+          title="ابدأ جلسة إعادة اختبار للأسئلة التي أخطأت فيها في هذا النطاق دون إتلاف إجاباتك"
         >
           <Icons.Reset size={13} />
-          جلسة الأخطاء{statusCounts.wrong > 0 ? ` (${statusCounts.wrong})` : ""}
+          إعادة اختبار الأخطاء{statusCounts.wrong > 0 ? ` (${statusCounts.wrong})` : ""}
         </button>
 
         {/* مبدّل لغة الأسئلة خارج الإعدادات */}
@@ -1256,6 +1425,10 @@ export const UnifiedQuestionBankView: React.FC<UnifiedQuestionBankViewProps> = (
                 expMode={activeExpMode}
                 onOpenTwinModal={(targetQ) => setActiveTwinModalQ(targetQ)}
                 twinNumber={twinNumberMap[q.id]}
+                isRetestQuestion={Boolean(retest)}
+                expPromptSeen={expPromptSeen}
+                onDismissExpPrompt={onDismissExpPrompt}
+                onOpenExpSettings={onOpenExpSettings}
               />
             );
           })}

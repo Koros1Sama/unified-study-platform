@@ -8,15 +8,20 @@ import React, { useState, useEffect, useMemo, useRef } from "react";
 import { Icons } from "../icons/SvgIcons";
 import { QuestionCard } from "./QuestionCard";
 import { SmartTranslateTooltip } from "../common/SmartTranslateTooltip";
-import type { UnifiedQuestion, UserStudyProgress } from "../../types";
+import type { ExplanationMode, UnifiedQuestion, UserStudyProgress } from "../../types";
 
 interface ExamSimulatorProps {
   questions: UnifiedQuestion[];
   models?: Array<{ id: string; title_ar: string; short_label?: string }>;
+  lectures?: Array<{ id: string; title_ar: string }>;
   examHistory?: UserStudyProgress["exam_history"];
   onRecordResult: (result: { total: number; score: number; timeSpentSec: number; mode: string }) => void;
   onJumpToSlide?: (ref: string) => void;
   languageMode?: "smart" | "en" | "ar" | "both";
+  expMode?: ExplanationMode;
+  expPromptSeen?: boolean;
+  onDismissExpPrompt?: () => void;
+  onOpenExpSettings?: () => void;
 }
 
 type ReviewFilter = "all" | "wrong" | "correct" | "unanswered" | "flagged";
@@ -33,10 +38,15 @@ function gradeFor(percent: number) {
 export const ExamSimulator: React.FC<ExamSimulatorProps> = ({
   questions,
   models = [],
+  lectures = [],
   examHistory = [],
   onRecordResult,
   onJumpToSlide,
-  languageMode = "smart"
+  languageMode = "smart",
+  expMode = "always",
+  expPromptSeen = true,
+  onDismissExpPrompt,
+  onOpenExpSettings
 }) => {
   const [examState, setExamState] = useState<"setup" | "running" | "results">("setup");
   const [scope, setScope] = useState<string>("all");
@@ -93,9 +103,12 @@ export const ExamSimulator: React.FC<ExamSimulatorProps> = ({
     [questions, scope]
   );
 
-  const startExam = () => {
-    const shuffled = [...pool].sort(() => Math.random() - 0.5);
-    const selected = shuffled.slice(0, Math.min(questionCount, pool.length));
+  const startExam = (customPool?: UnifiedQuestion[]) => {
+    const source = customPool && customPool.length > 0 ? customPool : pool;
+    const shuffled = [...source].sort(() => Math.random() - 0.5);
+    const selected = customPool && customPool.length > 0
+      ? shuffled
+      : shuffled.slice(0, Math.min(questionCount, source.length));
     setExamQuestions(selected);
     setCurrentIdx(0);
     setUserAnswers({});
@@ -105,6 +118,7 @@ export const ExamSimulator: React.FC<ExamSimulatorProps> = ({
     setSecondsRemaining(totalSecs);
     setTimeSpent(0);
     setExamState("running");
+    window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
   const finishExam = () => {
@@ -266,7 +280,7 @@ export const ExamSimulator: React.FC<ExamSimulatorProps> = ({
             )}
           </div>
 
-          <button type="button" className="btn btn-primary exam-start-btn" onClick={startExam}>
+          <button type="button" className="btn btn-primary exam-start-btn" onClick={() => startExam()}>
             بدء جلسة الامتحان الآن ({Math.min(questionCount, pool.length)} سؤالاً)
           </button>
 
@@ -339,6 +353,10 @@ export const ExamSimulator: React.FC<ExamSimulatorProps> = ({
             onShowTranslate={handleShowTranslate}
             onScheduleHideTranslate={handleScheduleHideTranslate}
             languageMode={languageMode}
+            expMode={expMode}
+            expPromptSeen={expPromptSeen}
+            onDismissExpPrompt={onDismissExpPrompt}
+            onOpenExpSettings={onOpenExpSettings}
           />
         )}
 
@@ -415,21 +433,44 @@ export const ExamSimulator: React.FC<ExamSimulatorProps> = ({
   const grade = gradeFor(percent);
   const elapsed = timerMode === "countdown" ? timeLimitMinutes * 60 - secondsRemaining : timeSpent;
 
+  const wrongOrUnansweredQuestions = examQuestions.filter((q) => {
+    const ans = userAnswers[q.id];
+    return !ans || ans.selected_answer < 0 || !ans.is_correct;
+  });
+  const flaggedQuestionsList = examQuestions.filter((q) => flagged.has(q.id));
+
   const byLecture = (() => {
-    const map = new Map<string, { total: number; correct: number }>();
+    const hasLec = lectures.length > 0 && examQuestions.some((q) => Boolean(q.lecture_id || q.slide_ref));
+    const map = new Map<string, { label: string; total: number; correct: number; wrong: number }>();
     examQuestions.forEach((q) => {
-      const lec = q.lecture_id || (q.slide_ref ? q.slide_ref.split("-")[0] : "عام");
-      const entry = map.get(lec) || { total: 0, correct: 0 };
+      const key = hasLec
+        ? q.lecture_id || (q.slide_ref ? q.slide_ref.split("-")[0] : "عام")
+        : q.model_id;
+      const label = hasLec
+        ? (() => {
+            const lm = lectures.find((l) => l.id === key);
+            return lm ? `${key} · ${lm.title_ar}` : key;
+          })()
+        : (() => {
+            const mm = models.find((m) => m.id === key);
+            return mm ? mm.short_label || mm.title_ar : key;
+          })();
+      const entry = map.get(key) || { label, total: 0, correct: 0, wrong: 0 };
       entry.total++;
       if (userAnswers[q.id]?.is_correct) entry.correct++;
-      map.set(lec, entry);
+      else entry.wrong++;
+      map.set(key, entry);
     });
-    return Array.from(map.entries()).map(([lec, entry]) => ({
-      lec,
-      ...entry,
-      pct: Math.round((entry.correct / entry.total) * 100)
-    }));
+    return Array.from(map.entries())
+      .map(([lec, entry]) => ({
+        lec,
+        ...entry,
+        pct: Math.round((entry.correct / entry.total) * 100)
+      }))
+      .sort((a, b) => a.pct - b.pct);
   })();
+
+  const weakestAreas = byLecture.filter((b) => b.wrong > 0).slice(0, 3);
 
   const reviewList = examQuestions.filter((q) => {
     const ans = userAnswers[q.id];
@@ -454,22 +495,67 @@ export const ExamSimulator: React.FC<ExamSimulatorProps> = ({
             <p>
               أجبت بشكل صحيح عن {totalScore} من أصل {examQuestions.length} سؤالاً في مدة {formatTime(elapsed)}.
             </p>
-            <div className="exam-result-actions">
-              <button type="button" className="btn btn-primary" onClick={() => setExamState("setup")}>
-                جلسة جديدة
+            <div className="exam-result-actions" style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+              {wrongOrUnansweredQuestions.length > 0 && (
+                <button
+                  type="button"
+                  className="btn btn-primary"
+                  style={{ background: "var(--ok)", borderColor: "var(--ok)", color: "#fff" }}
+                  onClick={() => startExam(wrongOrUnansweredQuestions)}
+                >
+                  <Icons.Rotate size={15} />
+                  <span>إعادة اختبار الأخطاء فقط ({wrongOrUnansweredQuestions.length})</span>
+                </button>
+              )}
+              {flaggedQuestionsList.length > 0 && (
+                <button
+                  type="button"
+                  className="btn"
+                  style={{ background: "var(--warn)", borderColor: "var(--warn)", color: "#000" }}
+                  onClick={() => startExam(flaggedQuestionsList)}
+                >
+                  <Icons.Flag size={15} />
+                  <span>إعادة اختبار المميزة ({flaggedQuestionsList.length})</span>
+                </button>
+              )}
+              <button type="button" className="btn" onClick={() => startExam()}>
+                <Icons.Shuffle size={15} />
+                <span>اختبار جديد بنفس الإعدادات</span>
+              </button>
+              <button type="button" className="btn" onClick={() => setExamState("setup")}>
+                <Icons.Settings size={15} />
+                <span>تعديل الإعدادات</span>
               </button>
             </div>
+          </div>
+        </div>
+
+        <div className={`exam-rec-card ${weakestAreas.length > 0 ? "is-warn" : ""}`}>
+          <div className="exam-rec-head">
+            <Icons.Award size={16} />
+            <span>التوصية الذكية للمراجعة قبل الامتحان النهائي</span>
+          </div>
+          <div className="exam-rec-text">
+            {weakestAreas.length === 0 ? (
+              "أداء متفوق! أجبت على جميع الأسئلة بشكل صحيح. يمكنك خوض اختبار شامل جديد لرفع سرعة الاستجابة."
+            ) : (
+              <>
+                أضعف محاورك في هذه المحاولة:{" "}
+                <b>{weakestAreas.map((w) => `${w.label} (${w.pct}%)`).join(" · ")}</b>. اضغط على
+                «إعادة اختبار الأخطاء فقط» لإعادة تدريب الأسئلة الخاطئة والمتروكة حتى تتقنها بنسبة 100%.
+              </>
+            )}
           </div>
         </div>
 
         <div className="exam-mastery">
           <div className="exam-mastery-head">
             <Icons.Target size={15} />
-            <span>الإتقان بحسب المحاضرة</span>
+            <span>تحليل الإتقان التفصيلي</span>
           </div>
           {byLecture.map((entry) => (
             <div key={entry.lec} className="exam-mastery-row">
-              <span className="exam-mastery-lec">{entry.lec}</span>
+              <span className="exam-mastery-lec" title={entry.label}>{entry.label}</span>
               <span className="exam-mastery-bar"><span style={{ width: `${entry.pct}%` }} /></span>
               <b>{entry.correct} / {entry.total} ({entry.pct}%)</b>
             </div>
@@ -508,6 +594,10 @@ export const ExamSimulator: React.FC<ExamSimulatorProps> = ({
             onShowTranslate={handleShowTranslate}
             onScheduleHideTranslate={handleScheduleHideTranslate}
             languageMode={languageMode}
+            expMode={expMode}
+            expPromptSeen={expPromptSeen}
+            onDismissExpPrompt={onDismissExpPrompt}
+            onOpenExpSettings={onOpenExpSettings}
             readOnly
           />
         ))}

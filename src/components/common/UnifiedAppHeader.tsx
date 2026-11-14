@@ -59,6 +59,7 @@ interface UnifiedAppHeaderProps {
   onPromptPwaInstall?: () => void;
   isIos?: boolean;
   isDesktop?: boolean;
+  openSettingsRequest?: { group: string; highlightId?: string; nonce: number } | null;
 }
 
 export const UnifiedAppHeader: React.FC<UnifiedAppHeaderProps> = ({
@@ -98,7 +99,8 @@ export const UnifiedAppHeader: React.FC<UnifiedAppHeaderProps> = ({
   isPwaInstalled = false,
   onPromptPwaInstall,
   isIos = false,
-  isDesktop = false
+  isDesktop = false,
+  openSettingsRequest = null
 }) => {
   const [isHidden, setIsHidden] = useState(false);
   const [isSetOpen, setIsSetOpen] = useState(false);
@@ -195,6 +197,27 @@ export const UnifiedAppHeader: React.FC<UnifiedAppHeaderProps> = ({
     localStorage.setItem("unified_theme", theme);
     localStorage.setItem("unified_mode", mode);
   }, [theme, mode]);
+
+  // إغلاق لوحة الإعدادات عند النقر بالخارج أو الضغط على زر ESC
+  useEffect(() => {
+    if (!openSettingsRequest) return;
+    setIsHidden(false);
+    setIsSetOpen(true);
+    setOpenSettingGroup(openSettingsRequest.group);
+    if (openSettingsRequest.highlightId) {
+      const targetId = openSettingsRequest.highlightId;
+      const t = window.setTimeout(() => {
+        const grp = document.getElementById(targetId);
+        if (grp) {
+          grp.scrollIntoView({ behavior: "smooth", block: "center" });
+          grp.classList.remove("glow-pulse");
+          void grp.offsetWidth;
+          grp.classList.add("glow-pulse");
+        }
+      }, 90);
+      return () => window.clearTimeout(t);
+    }
+  }, [openSettingsRequest]);
 
   // إغلاق لوحة الإعدادات عند النقر بالخارج أو الضغط على زر ESC
   useEffect(() => {

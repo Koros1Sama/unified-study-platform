@@ -1082,45 +1082,31 @@
 .model-progress-text { display: flex; justify-content: space-between; font-size: 0.78rem; color: var(--ink-m); margin-bottom: 6px; }
 .model-progress-text b { color: var(--acc); font-family: var(--fm); }
 
-.retest-banner {
-  display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap;
-  padding: 10px 14px; margin-bottom: 12px;
-  border: 1px solid color-mix(in srgb, var(--warn) 40%, var(--ln));
-  border-radius: var(--r-m); background: var(--warn-g);
+.retest-q-badge {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 2px 9px; border-radius: var(--r-pill);
+  font-size: 0.68rem; font-weight: 800;
+  background: color-mix(in srgb, var(--err) 14%, var(--sf));
+  color: var(--err);
+  border: 1px solid color-mix(in srgb, var(--err) 35%, transparent);
 }
-.retest-banner-text { display: flex; align-items: center; gap: 7px; font-size: 0.84rem; color: var(--warn); font-weight: 700; }
-.retest-banner-text b { font-family: var(--fm); }
 
-.model-insights {
-  border: 1px solid var(--ln); border-radius: var(--r-m);
-  background: var(--bg-s); padding: 11px 13px; margin-bottom: 13px;
+.exam-rec-card {
+  margin-top: 14px; padding: 13px 15px;
+  border-radius: var(--r-m);
+  background: color-mix(in srgb, var(--acc) 7%, var(--sf));
+  border: 1px solid color-mix(in srgb, var(--acc) 30%, var(--ln));
 }
-.model-insights-head {
+.exam-rec-card.is-warn {
+  background: color-mix(in srgb, var(--err) 7%, var(--sf));
+  border-color: color-mix(in srgb, var(--err) 32%, var(--ln));
+}
+.exam-rec-head {
   display: flex; align-items: center; gap: 7px;
-  font-size: 0.84rem; font-weight: 800; color: var(--acc); margin-bottom: 9px;
+  font-size: 0.85rem; font-weight: 800; color: var(--acc); margin-bottom: 5px;
 }
-.ins-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 7px; }
-.ins-lec {
-  display: grid; grid-template-columns: auto 1fr auto; grid-template-areas: "name meta pct" "bar bar bar";
-  gap: 4px 8px; align-items: center;
-  padding: 7px 9px; border-radius: var(--r-s);
-  background: var(--sf); border: 1px solid var(--ln-s);
-  color: var(--ink); font-family: inherit; text-align: right; cursor: pointer;
-}
-.ins-lec:hover { border-color: var(--acc); }
-.ins-lec.active { border-color: var(--acc); background: var(--acc-g); }
-.ins-lec.is-weak { border-color: color-mix(in srgb, var(--err) 45%, var(--ln)); }
-.ins-lec-name { grid-area: name; font-family: var(--fm); font-size: 0.72rem; font-weight: 800; color: var(--acc); }
-.ins-lec-meta { grid-area: meta; font-size: 0.68rem; color: var(--ink-m); }
-.ins-lec-bar { grid-area: bar; height: 5px; border-radius: 999px; background: var(--sf2); overflow: hidden; display: block; }
-.ins-lec-bar > span { display: block; height: 100%; background: var(--ok); }
-.ins-lec.is-weak .ins-lec-bar > span { background: var(--err); }
-.ins-lec b { grid-area: pct; font-family: var(--fm); font-size: 0.7rem; color: var(--ink); }
-.ins-weak-note {
-  display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
-  margin-top: 8px; padding-top: 8px; border-top: 1px dashed var(--ln);
-  font-size: 0.76rem; color: var(--err);
-}
+.exam-rec-card.is-warn .exam-rec-head { color: var(--err); }
+.exam-rec-text { font-size: 0.82rem; line-height: 1.75; color: var(--ink); }
 
 .bank-toolbar { align-items: center; gap: 8px; }
 .bank-search {
