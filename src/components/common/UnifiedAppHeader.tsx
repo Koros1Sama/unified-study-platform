@@ -110,6 +110,77 @@ export const UnifiedAppHeader: React.FC<UnifiedAppHeaderProps> = ({
   const lastScrollY = useRef(0);
   const setPanelRef = useRef<HTMLDivElement>(null);
   const btnSetRef = useRef<HTMLButtonElement>(null);
+  const navWrapRef = useRef<HTMLDivElement>(null);
+  const [navOverflow, setNavOverflow] = useState<{ canStart: boolean; canEnd: boolean }>({
+    canStart: false,
+    canEnd: false
+  });
+
+  const updateNavOverflow = () => {
+    const el = navWrapRef.current;
+    if (!el) return;
+    const maxScroll = el.scrollWidth - el.clientWidth;
+    if (maxScroll <= 4) {
+      setNavOverflow({ canStart: false, canEnd: false });
+      return;
+    }
+    const isRtl = getComputedStyle(el).direction === "rtl";
+    const sl = el.scrollLeft;
+    if (isRtl) {
+      const distFromStart = Math.abs(sl);
+      setNavOverflow({
+        canStart: distFromStart > 4,
+        canEnd: distFromStart < maxScroll - 4
+      });
+    } else {
+      setNavOverflow({
+        canStart: sl > 4,
+        canEnd: sl < maxScroll - 4
+      });
+    }
+  };
+
+  useEffect(() => {
+    updateNavOverflow();
+    const el = navWrapRef.current;
+    window.addEventListener("resize", updateNavOverflow);
+    el?.addEventListener("scroll", updateNavOverflow, { passive: true });
+    return () => {
+      window.removeEventListener("resize", updateNavOverflow);
+      el?.removeEventListener("scroll", updateNavOverflow);
+    };
+  }, [currentSubject.code, activeView, availableViews]);
+
+  useEffect(() => {
+    const el = navWrapRef.current;
+    if (!el) return;
+    const activeEl = el.querySelector(".seg-pill.active") as HTMLElement | null;
+    if (activeEl) {
+      activeEl.scrollIntoView({ inline: "nearest", block: "nearest", behavior: "smooth" });
+    }
+    const id = window.setTimeout(updateNavOverflow, 180);
+    return () => window.clearTimeout(id);
+  }, [activeView, currentSubject.code]);
+
+  const handleNavWheel = (e: React.WheelEvent<HTMLDivElement>) => {
+    const el = navWrapRef.current;
+    if (!el) return;
+    if (el.scrollWidth <= el.clientWidth + 4) return;
+    if (Math.abs(e.deltaY) > Math.abs(e.deltaX)) {
+      e.preventDefault();
+      const isRtl = getComputedStyle(el).direction === "rtl";
+      el.scrollLeft += isRtl ? -e.deltaY : e.deltaY;
+    }
+  };
+
+  const scrollNavBy = (dir: "start" | "end") => {
+    const el = navWrapRef.current;
+    if (!el) return;
+    const isRtl = getComputedStyle(el).direction === "rtl";
+    const step = 220;
+    const delta = dir === "end" ? (isRtl ? -step : step) : (isRtl ? step : -step);
+    el.scrollBy({ left: delta, behavior: "smooth" });
+  };
 
   const can = (view: ActiveView) => availableViews?.[view] !== false;
 
@@ -212,8 +283,20 @@ export const UnifiedAppHeader: React.FC<UnifiedAppHeaderProps> = ({
           </span>
         </div>
 
-        {/* Central Segmented Pills Navigation — كل الأقسام معروضة مباشرة بدون قائمة المزيد */}
-        <div className="top-nav-wrap">
+        {/* Central Segmented Pills Navigation — تمرير سلس بدون قص أي تبويب */}
+        <div className="top-nav-shell">
+          {navOverflow.canStart && (
+            <button
+              type="button"
+              className="nav-scroll-btn"
+              onClick={() => scrollNavBy("start")}
+              aria-label="التمرير لبداية الأقسام"
+              title="التمرير لبداية الأقسام"
+            >
+              <Icons.ChevronRight size={14} />
+            </button>
+          )}
+          <div className="top-nav-wrap" ref={navWrapRef} onWheel={handleNavWheel}>
           <div className="seg-pills">
             <button
               type="button"
@@ -419,6 +502,18 @@ export const UnifiedAppHeader: React.FC<UnifiedAppHeaderProps> = ({
                 <span className="txt">عربي</span>
               </button>
             </div>
+          )}
+          </div>
+          {navOverflow.canEnd && (
+            <button
+              type="button"
+              className="nav-scroll-btn"
+              onClick={() => scrollNavBy("end")}
+              aria-label="التمرير لبقية الأقسام"
+              title="التمرير لبقية الأقسام"
+            >
+              <Icons.ChevronLeft size={14} />
+            </button>
           )}
         </div>
 

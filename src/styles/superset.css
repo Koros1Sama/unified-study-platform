@@ -13,16 +13,49 @@
   flex: 1 1 auto;
   min-width: 0;
   display: flex;
-  justify-content: center;
+  align-items: center;
+  justify-content: flex-start;
   overflow-x: auto;
+  scroll-behavior: smooth;
   scrollbar-width: none;
   -webkit-overflow-scrolling: touch;
 }
 .top-nav-wrap::-webkit-scrollbar { display: none; }
 
+.top-nav-shell {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  position: relative;
+}
+
+.nav-scroll-btn {
+  flex: 0 0 auto;
+  width: 26px;
+  height: 26px;
+  border-radius: 999px;
+  border: 1px solid var(--ln);
+  background: var(--sf2);
+  color: var(--ink-m);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  padding: 0;
+}
+.nav-scroll-btn:hover {
+  border-color: var(--acc);
+  color: var(--acc);
+  background: var(--sf);
+}
+
 .seg-pills {
   max-width: none;
   width: max-content;
+  margin-inline: auto;
   overflow: visible;
   gap: 2px;
 }
@@ -1408,6 +1441,7 @@
 }
 
 @media (max-width: 900px) {
+  .top-nav-shell { grid-area: nav; width: 100%; min-width: 0; }
   .seg-pills { max-width: none; width: max-content; overflow: visible; flex: 0 0 auto; }
   .more-wrap { position: static; }
   .more-menu {
