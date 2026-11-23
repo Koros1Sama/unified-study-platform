@@ -7,6 +7,7 @@
 import React, { useState, useMemo, useRef, useCallback, useEffect } from "react";
 import { Icons } from "../icons/SvgIcons";
 import { useFitTables } from "../../lib/useFitTables";
+import { matchesNormalizedTerms, sanitizeStudyHtml, stripHtmlTags } from "../../lib/textUtils";
 import type { ExplanatoryTable } from "../../types";
 
 interface ExplanatoryTablesViewProps {
@@ -74,12 +75,14 @@ export const ExplanatoryTablesView: React.FC<ExplanatoryTablesViewProps> = ({
   }, [tables]);
 
   const handleCopyMarkdown = useCallback((table: ExplanatoryTable) => {
-    const headers = table.cols.map((c) => c.label).join(" | ");
+    const cleanCell = (raw: string) =>
+      stripHtmlTags(String(raw)).replace(/\|/g, "\\|").replace(/\r?\n+/g, " ").trim();
+    const headers = table.cols.map((c) => cleanCell(c.label)).join(" | ");
     const separator = table.cols.map(() => "---").join(" | ");
     const rowsText = table.rows
-      .map((r) => r.map((cell) => String(cell).replace(/\n/g, " ")).join(" | "))
+      .map((r) => `| ${r.map((cell) => cleanCell(cell)).join(" | ")} |`)
       .join("\n");
-    const md = `### ${table.title_ar} (${table.title})\n\n| ${headers} |\n| ${separator} |\n| ${rowsText} |\n`;
+    const md = `### ${table.title_ar}${table.title ? ` (${table.title})` : ""}\n\n| ${headers} |\n| ${separator} |\n${rowsText}\n`;
 
     const fallbackCopy = (text: string) => {
       try {
@@ -139,36 +142,32 @@ export const ExplanatoryTablesView: React.FC<ExplanatoryTablesViewProps> = ({
   );
 
   const filteredTables = useMemo(() => {
-    const q = searchQuery.trim().toLowerCase();
+    const hasQuery = Boolean(searchQuery.trim());
     return tables
       .filter((table) => {
         if (lectureFilter !== "all" && table.lec !== lectureFilter) return false;
         if (showSavedOnly && !memorizedTableIds.includes(table.id)) return false;
-        if (q) {
-          const matchesTitle =
-            (table.title_ar || "").toLowerCase().includes(q) ||
-            (table.title || "").toLowerCase().includes(q);
+        if (hasQuery) {
+          const matchesTitle = matchesNormalizedTerms(`${table.title_ar || ""} ${table.title || ""}`, searchQuery);
           const matchesContent = table.rows.some((row) =>
-            row.some((cell) => String(cell).toLowerCase().includes(q))
+            matchesNormalizedTerms(row.map((cell) => stripHtmlTags(String(cell))).join(" "), searchQuery)
           );
           if (!matchesTitle && !matchesContent) return false;
         }
         return table.imps.some((imp) => imp >= minImportance);
       })
       .map((table) => {
+        const inTitle = hasQuery && matchesNormalizedTerms(`${table.title_ar || ""} ${table.title || ""}`, searchQuery);
         const rows = table.rows
           .map((row, index) => ({ row, index, imp: table.imps[index] || 1 }))
           .filter((entry) => entry.imp >= minImportance)
           .filter((entry) => {
-            if (!q) return true;
-            const inTitle =
-              (table.title_ar || "").toLowerCase().includes(q) ||
-              (table.title || "").toLowerCase().includes(q);
-            if (inTitle) return true;
-            return entry.row.some((cell) => String(cell).toLowerCase().includes(q));
+            if (!hasQuery || inTitle) return true;
+            return matchesNormalizedTerms(entry.row.map((cell) => stripHtmlTags(String(cell))).join(" "), searchQuery);
           });
         return { table, rows };
-      });
+      })
+      .filter(({ rows }) => rows.length > 0);
   }, [tables, showSavedOnly, memorizedTableIds, searchQuery, minImportance, lectureFilter]);
 
   const visibleRowTotal = filteredTables.reduce((sum, entry) => sum + entry.rows.length, 0);
@@ -415,7 +414,7 @@ export const ExplanatoryTablesView: React.FC<ExplanatoryTablesViewProps> = ({
                                   title={`أهمية امتحانية: ${imp} من 5 (${IMPORTANCE_LABEL[imp]})`}
                                 />
                               )}
-                              <span dangerouslySetInnerHTML={{ __html: String(cell) }} />
+                              <span dangerouslySetInnerHTML={{ __html: sanitizeStudyHtml(String(cell)) }} />
                             </td>
                           ))}
                         </tr>

@@ -66,7 +66,7 @@ export const OfflineManagerModal: React.FC<OfflineManagerModalProps> = ({
       let count = 0;
 
       for (const url of resources) {
-        const match = await cache.match(url);
+        const match = await cache.match(url, { ignoreSearch: true });
         if (match) count++;
       }
 
@@ -117,61 +117,71 @@ export const OfflineManagerModal: React.FC<OfflineManagerModalProps> = ({
     setIsDownloading(true);
     abortRef.current = false;
     setErrorCount(0);
+    (window as Window & { __OFFLINE_DOWNLOADING__?: boolean }).__OFFLINE_DOWNLOADING__ = true;
 
-    const resources = getResourceList();
-    const cacheName = `usp-offline-${currentSubjectCode}`;
-    const cache = await caches.open(cacheName);
+    try {
+      const resources = getResourceList();
+      const cacheName = `usp-offline-${currentSubjectCode}`;
+      const cache = await caches.open(cacheName);
 
-    // حصر الملفات المتبقية فقط التي لم يتم تحميلها بعد
-    const todo: string[] = [];
-    for (const url of resources) {
-      const match = await cache.match(url);
-      if (!match) todo.push(url);
-    }
-
-    if (todo.length === 0) {
-      setIsDownloading(false);
-      setStatusText("جميع الملفات مخزنة ومحدثة بالفعل!");
-      setProgressPct(100);
-      return;
-    }
-
-    let nextIdx = 0;
-    let completed = cachedCount;
-    let failed = 0;
-    const concurrency = 4; // 4 خيوط متوازية لمنع اختناق السوكيت
-
-    const worker = async () => {
-      while (!abortRef.current) {
-        if (nextIdx >= todo.length) break;
-        const currentUrl = todo[nextIdx++];
-
-        try {
-          const res = await fetchWithRetry(currentUrl);
-          await cache.put(currentUrl, res);
-          completed++;
-          setCachedCount(completed);
-          const pct = Math.round((completed / resources.length) * 100);
-          setProgressPct(pct);
-          setStatusText(`جاري التحميل والتخزين: ${completed} من ${resources.length} (${pct}%)`);
-        } catch (_) {
-          failed++;
-          setErrorCount(failed);
-        }
+      // حصر الملفات المتبقية فقط التي لم يتم تحميلها بعد
+      const todo: string[] = [];
+      for (const url of resources) {
+        const match = await cache.match(url, { ignoreSearch: true });
+        if (!match) todo.push(url);
       }
-    };
 
-    const workers = Array.from({ length: Math.min(concurrency, todo.length) }, () => worker());
-    await Promise.all(workers);
+      if (todo.length === 0) {
+        setStatusText("جميع الملفات مخزنة ومحدثة بالفعل!");
+        setProgressPct(100);
+        return;
+      }
 
-    setIsDownloading(false);
-    if (abortRef.current) {
-      setStatusText("تم إيقاف التحميل مؤقتاً — يمكنك استئنافه في أي وقت");
-    } else if (failed > 0) {
-      setStatusText(`اكتمل التحميل مع تعثر ${failed} ملف — يمكنك النقر مجدداً للاستئناف`);
-    } else {
-      setStatusText("اكتمل التحميل بنجاح تام! المادة جاهزة للدراسة بدون إنترنت.");
-      setProgressPct(100);
+      let nextIdx = 0;
+      let completed = resources.length - todo.length;
+      setCachedCount(completed);
+      let failed = 0;
+      const concurrency = 4; // 4 خيوط متوازية لمنع اختناق السوكيت
+
+      const worker = async () => {
+        while (!abortRef.current) {
+          if (nextIdx >= todo.length) break;
+          const currentUrl = todo[nextIdx++];
+
+          try {
+            const res = await fetchWithRetry(currentUrl);
+            const ct = (res.headers.get("content-type") || "").toLowerCase();
+            if (ct.includes("text/html")) {
+              throw new Error("Unexpected HTML fallback");
+            }
+            await cache.put(currentUrl, res);
+            completed++;
+            setCachedCount(completed);
+            const pct = Math.round((completed / resources.length) * 100);
+            setProgressPct(pct);
+            setStatusText(`جاري التحميل والتخزين: ${completed} من ${resources.length} (${pct}%)`);
+          } catch (_) {
+            failed++;
+            setErrorCount(failed);
+          }
+        }
+      };
+
+      const workers = Array.from({ length: Math.min(concurrency, todo.length) }, () => worker());
+      await Promise.all(workers);
+
+      if (abortRef.current) {
+        setStatusText("تم إيقاف التحميل مؤقتاً — يمكنك استئنافه في أي وقت");
+      } else if (failed > 0) {
+        setStatusText(`اكتمل التحميل مع تعثر ${failed} ملف — يمكنك النقر مجدداً للاستئناف`);
+      } else {
+        setStatusText("اكتمل التحميل بنجاح تام! المادة جاهزة للدراسة بدون إنترنت.");
+        setProgressPct(100);
+      }
+    } finally {
+      setIsDownloading(false);
+      (window as Window & { __OFFLINE_DOWNLOADING__?: boolean }).__OFFLINE_DOWNLOADING__ = false;
+      window.dispatchEvent(new CustomEvent("offline-download-complete"));
     }
   };
 

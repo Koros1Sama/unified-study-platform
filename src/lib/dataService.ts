@@ -1,10 +1,10 @@
 // ==============================================================================
 // المنصة التعليمية الموحدة — محول البيانات ثنائي المصدر (Dual-Source Adapter)
-// Supabase Delta Sync + Dexie IndexedDB + Offline JSON Fallback
+// Dexie IndexedDB + Offline JSON Bundles + Lazy Supabase Delta Sync + Backup I/O
 // ==============================================================================
 
 import { db } from "./db";
-import { supabase, isSupabaseConfigured } from "./supabase";
+import { safeJsonParse } from "./textUtils";
 import type {
   SubjectMeta,
   Lecture,
@@ -21,8 +21,11 @@ import type {
   LabAppendix
 } from "../types";
 
+export const APP_DATA_VERSION = 19;
+
 const SYNC_KEY_PREFIX = "unified_sync_";
 const BUNDLE_VERSION_KEY = "unified_bundle_version_";
+const CUSTOM_SUBJECTS_KEY = "unified_custom_subjects";
 let subjectsCache: SubjectMeta[] = [];
 
 const BASE_URL = (import.meta.env.BASE_URL || "/").replace(/\/+$/, "") + "/";
@@ -37,6 +40,96 @@ export function resolveAssetUrl(url?: string): string {
 function resolveDataPath(path: string): string {
   return resolveAssetUrl(path);
 }
+
+function isJsonResponse(res: Response): boolean {
+  const ct = res.headers.get("content-type") || "";
+  return ct.includes("application/json") || ct.includes("+json") || ct === "";
+}
+
+function normalizeOptText(text?: string): string {
+  return String(text || "").trim().toLowerCase().replace(/\s+/g, " ");
+}
+
+function getCustomSubjects(): SubjectMeta[] {
+  return safeJsonParse<SubjectMeta[]>(localStorage.getItem(CUSTOM_SUBJECTS_KEY), []);
+}
+
+function mergeWithCustomSubjects(base: SubjectMeta[]): SubjectMeta[] {
+  const custom = getCustomSubjects();
+  if (custom.length === 0) return base;
+  const existingCodes = new Set(base.map((s) => s.code));
+  const extra = custom.filter((s) => s?.code && !existingCodes.has(s.code));
+  return [...extra, ...base];
+}
+
+const DEFAULT_SUBJECTS: SubjectMeta[] = [
+  {
+    code: "toc",
+    name_ar: "نظرية الحوسبة",
+    name_en: "Theory of Computation",
+    term: 1,
+    professor_name: "د. رويدا العامري",
+    accent_color: "#f5b13d",
+    icon_name: "cpu",
+    is_active: true,
+    page_layout: "slides"
+  },
+  {
+    code: "rm",
+    name_ar: "منهجية البحث العلمي",
+    name_en: "Research Methodology",
+    term: 1,
+    professor_name: "أ.د. مالك الجبري",
+    accent_color: "#38bdf8",
+    icon_name: "compass",
+    is_active: true,
+    page_layout: "slides"
+  },
+  {
+    code: "sec",
+    name_ar: "أمن المعلومات والشبكات",
+    name_en: "Information Security",
+    term: 1,
+    professor_name: "د. عبدالواسع العزاني",
+    accent_color: "#fb7185",
+    icon_name: "shield",
+    is_active: true,
+    page_layout: "slides"
+  },
+  {
+    code: "se",
+    name_ar: "هندسة البرمجيات",
+    name_en: "Software Engineering",
+    term: 1,
+    professor_name: "د. عمار الجوفي",
+    accent_color: "#34d399",
+    icon_name: "layers",
+    is_active: true,
+    page_layout: "slides"
+  },
+  {
+    code: "pm",
+    name_ar: "إدارة المشاريع",
+    name_en: "Project Management",
+    term: 2,
+    professor_name: "د. منصور نعمان",
+    accent_color: "#eab308",
+    icon_name: "award",
+    is_active: true,
+    page_layout: "slides"
+  },
+  {
+    code: "phy",
+    name_ar: "فيزياء (الحوسبة الكمية)",
+    name_en: "Physics (Quantum Computing)",
+    term: 2,
+    professor_name: "د. محمد شكري",
+    accent_color: "#22d3ee",
+    icon_name: "cpu",
+    is_active: true,
+    page_layout: "book"
+  }
+];
 
 export interface SubjectBundle {
   meta: SubjectMeta;
@@ -53,199 +146,157 @@ export interface SubjectBundle {
   questions: UnifiedQuestion[];
 }
 
+export interface FullProgressBackup {
+  backup_version: number;
+  exported_at: string;
+  subjects: Record<string, UserStudyProgress>;
+}
+
+type ProgressListField =
+  | "memorized_tables"
+  | "mastered_definitions"
+  | "reviewed_sections"
+  | "reviewed_parts"
+  | "flagged_questions";
+
+function extractModulesFromRecords(
+  records: Array<{ module_type: string; payload: unknown }>
+): Pick<
+  SubjectBundle,
+  "emergency" | "tables" | "summary" | "definitions" | "glossary" | "patterns" | "lab"
+> {
+  const out: Pick<
+    SubjectBundle,
+    "emergency" | "tables" | "summary" | "definitions" | "glossary" | "patterns" | "lab"
+  > = {};
+  for (const m of records) {
+    if (m.module_type === "emergency_cram") out.emergency = m.payload as SummaryOfSummaryData;
+    else if (m.module_type === "explanatory_tables") out.tables = m.payload as ExplanatoryTable[];
+    else if (m.module_type === "summary") out.summary = m.payload as TheoreticalSummaryData;
+    else if (m.module_type === "definitions") out.definitions = m.payload as DefinitionBank;
+    else if (m.module_type === "glossary") out.glossary = m.payload as GlossaryData;
+    else if (m.module_type === "patterns") out.patterns = m.payload as QuestionPatternsData;
+    else if (m.module_type === "lab") out.lab = m.payload as LabAppendix;
+  }
+  return out;
+}
+
+function fallbackSubjectMeta(code: string): SubjectMeta {
+  return (
+    subjectsCache.find((s) => s.code === code) || {
+      code,
+      name_ar: code.toUpperCase(),
+      name_en: code.toUpperCase(),
+      term: 1,
+      professor_name: "",
+      accent_color: "#f5b13d"
+    }
+  );
+}
+
+async function toggleProgressListItem(
+  subjectCode: string,
+  field: ProgressListField,
+  itemId: string
+): Promise<UserStudyProgress> {
+  const progress = await DataService.getUserProgress(subjectCode);
+  const current = progress[field] ? [...progress[field]!] : [];
+  const idx = current.indexOf(itemId);
+  if (idx >= 0) current.splice(idx, 1);
+  else current.push(itemId);
+  progress[field] = current;
+  progress.updated_at = new Date().toISOString();
+  await db.user_study_progress.put(progress);
+  return progress;
+}
+
 export const DataService = {
-  /**
-   * جلب قائمة المواد المتاحة مع الكاش المحلي
-   */
   async getSubjects(): Promise<SubjectMeta[]> {
     try {
-      const res = await fetch(resolveDataPath("data/subjects.json?v=18"), { cache: "no-cache" });
-      if (res.ok) {
-        const subjects: SubjectMeta[] = await res.json();
-        subjectsCache = subjects;
-        await db.subjects.bulkPut(subjects);
-        return subjects;
+      const res = await fetch(resolveDataPath(`data/subjects.json?v=${APP_DATA_VERSION}`), {
+        cache: "no-cache"
+      });
+      if (res.ok && isJsonResponse(res)) {
+        const fetched: SubjectMeta[] = await res.json();
+        const merged = mergeWithCustomSubjects(fetched);
+        subjectsCache = merged;
+        await db.subjects.bulkPut(merged);
+        return merged;
       }
     } catch (err) {
       console.warn("Could not fetch subjects.json, using cached manifest", err);
     }
 
     const cached = await db.subjects.toArray();
-    if (cached && cached.length > 0) {
-      subjectsCache = cached;
-      return cached;
+    if (cached.length > 0) {
+      const merged = mergeWithCustomSubjects(cached);
+      subjectsCache = merged;
+      return merged;
     }
 
-    // القائمة الافتراضية المضمنة في حال عدم وجود ملف خارجي بعد
-    const defaultSubjects: SubjectMeta[] = [
-      {
-        code: "toc",
-        name_ar: "نظرية الحوسبة",
-        name_en: "Theory of Computation",
-        term: 1,
-        professor_name: "د. رويدا العامري",
-        accent_color: "#f5b13d",
-        icon_name: "cpu",
-        is_active: true
-      },
-      {
-        code: "rm",
-        name_ar: "منهجية البحث العلمي",
-        name_en: "Research Methodology",
-        term: 1,
-        professor_name: "أ.د. مالك الجبري",
-        accent_color: "#38bdf8",
-        icon_name: "compass",
-        is_active: true
-      },
-      {
-        code: "sec",
-        name_ar: "أمن المعلومات والشبكات",
-        name_en: "Information Security",
-        term: 1,
-        professor_name: "د. عبدالملك المأخذي",
-        accent_color: "#fb7185",
-        icon_name: "shield",
-        is_active: true
-      },
-      {
-        code: "se",
-        name_ar: "هندسة البرمجيات",
-        name_en: "Software Engineering",
-        term: 1,
-        professor_name: "د. عمار الجوفي",
-        accent_color: "#34d399",
-        icon_name: "layers",
-        is_active: true
-      },
-      {
-        code: "pm",
-        name_ar: "إدارة المشاريع",
-        name_en: "Project Management",
-        term: 2,
-        professor_name: "د. منصور نعمان",
-        accent_color: "#eab308",
-        icon_name: "award",
-        is_active: true
-      },
-      {
-        code: "phy",
-        name_ar: "فيزياء (الحوسبة الكمية)",
-        name_en: "Physics (Quantum Computing)",
-        term: 2,
-        professor_name: "د. محمد شكري",
-        accent_color: "#22d3ee",
-        icon_name: "cpu",
-        is_active: true
-      },
-      {
-        code: "ap",
-        name_ar: "البرمجة المتقدمة",
-        name_en: "Advanced Programming",
-        term: 1,
-        professor_name: "د. مراد العريقي",
-        accent_color: "#a78bfa",
-        icon_name: "code",
-        is_active: true
-      },
-      {
-        code: "ai",
-        name_ar: "الذكاء الاصطناعي",
-        name_en: "Artificial Intelligence",
-        term: 1,
-        professor_name: "د. مأمون الشرجبي",
-        accent_color: "#f43f5e",
-        icon_name: "bot",
-        is_active: true
-      },
-      {
-        code: "hci",
-        name_ar: "تفاعل الإنسان والحاسوب",
-        name_en: "Human-Computer Interaction",
-        term: 1,
-        professor_name: "د. مروة المخلافي",
-        accent_color: "#22d3ee",
-        icon_name: "users",
-        is_active: true
-      }
-    ];
-
-    await db.subjects.bulkPut(defaultSubjects);
-    return defaultSubjects;
+    const fallback = mergeWithCustomSubjects(DEFAULT_SUBJECTS);
+    subjectsCache = fallback;
+    await db.subjects.bulkPut(fallback);
+    return fallback;
   },
 
-  /**
-   * جلب حزمة بيانات المادة كاملة (IndexedDB -> JSON fallback -> Supabase delta)
-   */
-  async loadSubjectBundle(code: string): Promise<SubjectBundle> {
-    // 1. التحقق من وجود البيانات في IndexedDB
-    const cachedLectures = await db.lectures.where("subject_code").equals(code).sortBy("sort_order");
-    const cachedQuestions = await db.questions.where("subject_code").equals(code).toArray();
-    const cachedModels = await db.question_models.where("subject_code").equals(code).toArray();
-    const cachedModules = await db.study_modules.where("subject_code").equals(code).toArray();
+  async saveCustomSubject(subject: SubjectMeta): Promise<SubjectMeta[]> {
+    const existing = getCustomSubjects().filter((s) => s.code !== subject.code);
+    const updatedCustom = [subject, ...existing];
+    localStorage.setItem(CUSTOM_SUBJECTS_KEY, JSON.stringify(updatedCustom));
+    await db.subjects.put(subject);
+    subjectsCache = [subject, ...subjectsCache.filter((s) => s.code !== subject.code)];
+    return subjectsCache;
+  },
 
-    let emergencyData: SummaryOfSummaryData | undefined;
-    let tablesData: ExplanatoryTable[] | undefined;
-    let summaryData: TheoreticalSummaryData | undefined;
-    let definitionsData: DefinitionBank | undefined;
-    let glossaryData: GlossaryData | undefined;
-    let patternsData: QuestionPatternsData | undefined;
-    let labData: LabAppendix | undefined;
+  async loadSubjectBundle(
+    code: string,
+    onDeltaSynced?: (updatedCount: number) => void
+  ): Promise<SubjectBundle> {
+    const [cachedLectures, cachedQuestions, cachedModels, cachedModules] = await Promise.all([
+      db.lectures.where("subject_code").equals(code).sortBy("sort_order"),
+      db.questions.where("subject_code").equals(code).toArray(),
+      db.question_models.where("subject_code").equals(code).toArray(),
+      db.study_modules.where("subject_code").equals(code).toArray()
+    ]);
 
-    cachedModules.forEach((m) => {
-      if (m.module_type === "emergency_cram") emergencyData = m.payload as SummaryOfSummaryData;
-      if (m.module_type === "explanatory_tables") tablesData = m.payload as ExplanatoryTable[];
-      if (m.module_type === "summary") summaryData = m.payload as TheoreticalSummaryData;
-      if (m.module_type === "definitions") definitionsData = m.payload as DefinitionBank;
-      if (m.module_type === "glossary") glossaryData = m.payload as GlossaryData;
-      if (m.module_type === "patterns") patternsData = m.payload as QuestionPatternsData;
-      if (m.module_type === "lab") labData = m.payload as LabAppendix;
-    });
+    const modules = extractModulesFromRecords(cachedModules);
 
     if (subjectsCache.length === 0) {
       await this.getSubjects();
     }
     const expectedVersion =
-      subjectsCache.find((s) => s.code === code)?.bundle_version || 3;
+      subjectsCache.find((s) => s.code === code)?.bundle_version || 8;
     const cachedVersion = Number(localStorage.getItem(`${BUNDLE_VERSION_KEY}${code}`) || 0);
     const hasCachedContent = cachedLectures.length > 0 || cachedQuestions.length > 0;
 
-    // إذا كانت البيانات محفوظة بنفس إصدار الحزمة، نعيدها فوراً ونجري فحص المزامنة في الخلفية
     if (hasCachedContent && cachedVersion === expectedVersion) {
-      const subject = (await db.subjects.get(code)) || {
-        code,
-        name_ar: code.toUpperCase(),
-        name_en: code.toUpperCase(),
-        term: 1,
-        professor_name: "",
-        accent_color: "#f5b13d"
-      };
+      const [subjectRecord, cachedSlides] = await Promise.all([
+        db.subjects.get(code),
+        db.slides.where("subject_code").equals(code).toArray()
+      ]);
 
-      const cachedSlides = await db.slides.where("subject_code").equals(code).toArray();
-
-      // مزامنة خلفية للفرق من سوبابيس إن وجد
-      this.syncDeltaFromSupabase(code).catch((e) => console.debug("Delta sync skipped:", e));
+      this.syncDeltaFromSupabase(code)
+        .then((count) => {
+          if (count > 0 && onDeltaSynced) onDeltaSynced(count);
+        })
+        .catch((e) => console.debug("Delta sync skipped:", e));
 
       return {
-        meta: subject,
+        meta: subjectRecord || fallbackSubjectMeta(code),
         lectures: cachedLectures,
         slides: cachedSlides,
-        emergency: emergencyData,
-        tables: tablesData,
-        summary: summaryData,
-        definitions: definitionsData,
-        glossary: glossaryData,
-        patterns: patternsData,
-        lab: labData,
+        ...modules,
         question_models: cachedModels,
         questions: cachedQuestions
       };
     }
 
-    // 2. جلب أحدث حزمة من ملف JSON المحلي (ثم حفظها في الكاش)
     try {
-      const res = await fetch(resolveDataPath(`data/${code}/bundle.json?v=18`), { cache: "no-cache" });
-      if (res.ok) {
+      const res = await fetch(resolveDataPath(`data/${code}/bundle.json?v=${APP_DATA_VERSION}`), {
+        cache: "no-cache"
+      });
+      if (res.ok && isJsonResponse(res)) {
         const bundle: SubjectBundle = await res.json();
         await this.persistBundleToIndexedDB(bundle);
         localStorage.setItem(
@@ -255,46 +306,26 @@ export const DataService = {
         return bundle;
       }
     } catch (err) {
-      console.warn(`Could not load /data/${code}/bundle.json:`, err);
+      console.warn(`Could not load data/${code}/bundle.json:`, err);
     }
 
-    // 3. في حال تعذر الشبكة، نستخدم الكاش القديم إن وجد
     if (hasCachedContent) {
-      const cachedSlides = await db.slides.where("subject_code").equals(code).toArray();
-      const subject = (await db.subjects.get(code)) || {
-        code,
-        name_ar: code.toUpperCase(),
-        name_en: code.toUpperCase(),
-        term: 1,
-        professor_name: "",
-        accent_color: "#f5b13d"
-      };
+      const [subjectRecord, cachedSlides] = await Promise.all([
+        db.subjects.get(code),
+        db.slides.where("subject_code").equals(code).toArray()
+      ]);
       return {
-        meta: subject,
+        meta: subjectRecord || fallbackSubjectMeta(code),
         lectures: cachedLectures,
         slides: cachedSlides,
-        emergency: emergencyData,
-        tables: tablesData,
-        summary: summaryData,
-        definitions: definitionsData,
-        glossary: glossaryData,
-        patterns: patternsData,
-        lab: labData,
+        ...modules,
         question_models: cachedModels,
         questions: cachedQuestions
       };
     }
 
-    // في حال تعذر الجلب الكامل، نرجع هيكلاً فارغاً صالحاً
     const subjects = await this.getSubjects();
-    const meta = subjects.find((s) => s.code === code) || {
-      code,
-      name_ar: code.toUpperCase(),
-      name_en: code.toUpperCase(),
-      term: 1,
-      professor_name: "",
-      accent_color: "#f5b13d"
-    };
+    const meta = subjects.find((s) => s.code === code) || fallbackSubjectMeta(code);
 
     return {
       meta,
@@ -308,9 +339,6 @@ export const DataService = {
     };
   },
 
-  /**
-   * حفظ الحزمة المسترجعة محلياً في IndexedDB للتحميل اللحظي
-   */
   async persistBundleToIndexedDB(bundle: SubjectBundle): Promise<void> {
     const {
       meta,
@@ -327,6 +355,9 @@ export const DataService = {
       questions
     } = bundle;
 
+    const code = meta?.code;
+    if (!code) return;
+
     await db.transaction(
       "rw",
       [
@@ -338,101 +369,73 @@ export const DataService = {
         db.questions
       ],
       async () => {
-        if (meta) await db.subjects.put(meta);
-        if (lectures && lectures.length > 0) await db.lectures.bulkPut(lectures);
-        if (slides && slides.length > 0) await db.slides.bulkPut(slides);
-        if (question_models && question_models.length > 0) {
-          const modelsWithCode = question_models.map((m) => ({ ...m, subject_code: meta.code }));
+        // حذف السجلات السابقة للمقرر لمنع بقاء أسئلة أو شرائح محذوفة كأشباح بعد ترقية الحزمة
+        await Promise.all([
+          db.lectures.where("subject_code").equals(code).delete(),
+          db.slides.where("subject_code").equals(code).delete(),
+          db.question_models.where("subject_code").equals(code).delete(),
+          db.questions.where("subject_code").equals(code).delete(),
+          db.study_modules.where("subject_code").equals(code).delete()
+        ]);
+
+        await db.subjects.put(meta);
+        if (lectures?.length) await db.lectures.bulkPut(lectures);
+        if (slides?.length) await db.slides.bulkPut(slides);
+        if (question_models?.length) {
+          const modelsWithCode = question_models.map((m) => ({ ...m, subject_code: code }));
           await db.question_models.bulkPut(modelsWithCode);
         }
-        if (questions && questions.length > 0) await db.questions.bulkPut(questions);
+        if (questions?.length) await db.questions.bulkPut(questions);
 
         const now = new Date().toISOString();
-        if (emergency) {
-          await db.study_modules.put({
-            id: `${meta.code}_emergency_cram`,
-            subject_code: meta.code,
-            module_type: "emergency_cram",
-            payload: emergency,
-            version: 1,
-            updated_at: now
-          });
-        }
-        if (tables) {
-          await db.study_modules.put({
-            id: `${meta.code}_explanatory_tables`,
-            subject_code: meta.code,
-            module_type: "explanatory_tables",
-            payload: tables,
-            version: 1,
-            updated_at: now
-          });
-        }
-        if (summary) {
-          await db.study_modules.put({
-            id: `${meta.code}_summary`,
-            subject_code: meta.code,
-            module_type: "summary",
-            payload: summary,
-            version: 1,
-            updated_at: now
-          });
-        }
-        if (definitions) {
-          await db.study_modules.put({
-            id: `${meta.code}_definitions`,
-            subject_code: meta.code,
-            module_type: "definitions",
-            payload: definitions,
-            version: 1,
-            updated_at: now
-          });
-        }
-        if (glossary) {
-          await db.study_modules.put({
-            id: `${meta.code}_glossary`,
-            subject_code: meta.code,
-            module_type: "glossary",
-            payload: glossary,
-            version: 1,
-            updated_at: now
-          });
-        }
-        if (patterns) {
-          await db.study_modules.put({
-            id: `${meta.code}_patterns`,
-            subject_code: meta.code,
-            module_type: "patterns",
-            payload: patterns,
-            version: 1,
-            updated_at: now
-          });
-        }
-        if (lab) {
-          await db.study_modules.put({
-            id: `${meta.code}_lab`,
-            subject_code: meta.code,
-            module_type: "lab",
-            payload: lab,
-            version: 1,
-            updated_at: now
-          });
+        const moduleEntries: Array<{
+          type:
+            | "emergency_cram"
+            | "explanatory_tables"
+            | "summary"
+            | "definitions"
+            | "glossary"
+            | "patterns"
+            | "lab";
+          payload: unknown;
+        }> = [
+          { type: "emergency_cram", payload: emergency },
+          { type: "explanatory_tables", payload: tables },
+          { type: "summary", payload: summary },
+          { type: "definitions", payload: definitions },
+          { type: "glossary", payload: glossary },
+          { type: "patterns", payload: patterns },
+          { type: "lab", payload: lab }
+        ];
+
+        for (const entry of moduleEntries) {
+          if (entry.payload !== undefined) {
+            await db.study_modules.put({
+              id: `${code}_${entry.type}`,
+              subject_code: code,
+              module_type: entry.type,
+              payload: entry.payload,
+              version: meta.bundle_version || 1,
+              updated_at: now
+            });
+          }
         }
       }
     );
   },
 
-  /**
-   * المزامنة الذكية للفرق فقط مع Supabase (updated_at > last_sync)
-   */
-  async syncDeltaFromSupabase(subjectCode: string): Promise<void> {
-    if (!isSupabaseConfigured || !supabase) return;
+  async syncDeltaFromSupabase(subjectCode: string): Promise<number> {
+    if (!import.meta.env.VITE_SUPABASE_URL || !import.meta.env.VITE_SUPABASE_ANON_KEY) {
+      return 0;
+    }
 
     try {
+      const { supabase, isSupabaseConfigured } = await import("./supabase");
+      if (!isSupabaseConfigured || !supabase) return 0;
+
       const syncKey = `${SYNC_KEY_PREFIX}${subjectCode}`;
       const lastSync = localStorage.getItem(syncKey) || "1970-01-01T00:00:00Z";
 
-      // فحص الأسئلة المحدثة بعد آخر مزامنة
       const { data: updatedQuestions, error } = await supabase
         .from("questions")
         .select("*")
@@ -441,20 +444,35 @@ export const DataService = {
 
       if (error) throw error;
 
+      let count = 0;
       if (updatedQuestions && updatedQuestions.length > 0) {
-        await db.questions.bulkPut(updatedQuestions);
-        console.info(`[Sync] Synced ${updatedQuestions.length} updated questions for ${subjectCode}`);
+        const validRows = updatedQuestions.filter(
+          (row): row is UnifiedQuestion =>
+            Boolean(
+              row &&
+                typeof row.id === "string" &&
+                typeof row.subject_code === "string" &&
+                typeof row.model_id === "string" &&
+                (row.type === "essay" ||
+                  (Array.isArray(row.options_en) &&
+                    row.options_en.length >= 2 &&
+                    typeof row.correct_answer === "number"))
+            )
+        );
+        if (validRows.length > 0) {
+          await db.questions.bulkPut(validRows);
+          count = validRows.length;
+        }
       }
 
       localStorage.setItem(syncKey, new Date().toISOString());
+      return count;
     } catch (err) {
       console.warn(`[Sync] Supabase sync skipped or failed for ${subjectCode}:`, err);
+      return 0;
     }
   },
 
-  /**
-   * جلب تقدم ومحفوظات الطالب
-   */
   async getUserProgress(subjectCode: string): Promise<UserStudyProgress> {
     const saved = await db.user_study_progress.get(subjectCode);
     if (saved) return saved;
@@ -463,6 +481,7 @@ export const DataService = {
       subject_code: subjectCode,
       memorized_tables: [],
       answered_questions: {},
+      bookmarks: {},
       exam_history: [],
       updated_at: new Date().toISOString()
     };
@@ -470,9 +489,6 @@ export const DataService = {
     return initial;
   },
 
-  /**
-   * حفظ إجابة سؤال مع المزامنة التوأمية الثنائية اللحظية (Twin Sync)
-   */
   async saveAnswer(
     subjectCode: string,
     questionId: string,
@@ -485,26 +501,53 @@ export const DataService = {
 
     if (selectedAnswer < 0) {
       delete progress.answered_questions[questionId];
-      // المزامنة التوأمية عند إلغاء الاختيار
       if (twinGroupId) {
-        const twins = await db.questions.where("twin_group_id").equals(twinGroupId).toArray();
+        const twins = await db.questions
+          .where("twin_group_id")
+          .equals(twinGroupId)
+          .filter((q) => q.subject_code === subjectCode)
+          .toArray();
         for (const t of twins) {
           delete progress.answered_questions[t.id];
         }
       }
     } else {
-      const record = {
+      progress.answered_questions[questionId] = {
         selected_answer: selectedAnswer,
         is_correct: isCorrect,
         answered_at: now
       };
-      progress.answered_questions[questionId] = record;
 
-      // المزامنة التوأمية: إذا كان السؤال جزءاً من توأم، نعكس الإجابة على جميع توائمه في المادة
+      // مزامنة التوائم دلالياً (حسب نص الخيار / الإجابة الصحيحة الخاصة بالتوأم لا بنسخ رقم الفهرس الأعمى)
       if (twinGroupId) {
-        const twins = await db.questions.where("twin_group_id").equals(twinGroupId).toArray();
+        const twins = await db.questions
+          .where("twin_group_id")
+          .equals(twinGroupId)
+          .filter((q) => q.subject_code === subjectCode)
+          .toArray();
+        const sourceQ = twins.find((q) => q.id === questionId);
+        const pickedText = normalizeOptText(sourceQ?.options_en?.[selectedAnswer]);
+
         for (const t of twins) {
-          progress.answered_questions[t.id] = record;
+          if (t.id === questionId || t.type === "essay") continue;
+          if (isCorrect && t.correct_answer >= 0 && t.correct_answer < t.options_en.length) {
+            progress.answered_questions[t.id] = {
+              selected_answer: t.correct_answer,
+              is_correct: true,
+              answered_at: now
+            };
+          } else if (pickedText) {
+            const matchedIdx = (t.options_en || []).findIndex(
+              (opt) => normalizeOptText(opt) === pickedText
+            );
+            if (matchedIdx >= 0) {
+              progress.answered_questions[t.id] = {
+                selected_answer: matchedIdx,
+                is_correct: matchedIdx === t.correct_answer,
+                answered_at: now
+              };
+            }
+          }
         }
       }
     }
@@ -514,85 +557,26 @@ export const DataService = {
     return progress;
   },
 
-  /**
-   * حفظ أو إلغاء حفظ جدول في المفضلة
-   */
-  async toggleMemorizedTable(subjectCode: string, tableId: string): Promise<UserStudyProgress> {
-    const progress = await this.getUserProgress(subjectCode);
-    const idx = progress.memorized_tables.indexOf(tableId);
-    if (idx >= 0) {
-      progress.memorized_tables.splice(idx, 1);
-    } else {
-      progress.memorized_tables.push(tableId);
-    }
-    progress.updated_at = new Date().toISOString();
-    await db.user_study_progress.put(progress);
-    return progress;
+  toggleMemorizedTable(subjectCode: string, tableId: string): Promise<UserStudyProgress> {
+    return toggleProgressListItem(subjectCode, "memorized_tables", tableId);
   },
 
-  /**
-   * حفظ أو إلغاء إتقان تعريف مصطلح (Definitions Bank)
-   */
-  async toggleMasteredDefinition(subjectCode: string, definitionId: string): Promise<UserStudyProgress> {
-    const progress = await this.getUserProgress(subjectCode);
-    const list = progress.mastered_definitions || [];
-    const idx = list.indexOf(definitionId);
-    if (idx >= 0) list.splice(idx, 1);
-    else list.push(definitionId);
-    progress.mastered_definitions = list;
-    progress.updated_at = new Date().toISOString();
-    await db.user_study_progress.put(progress);
-    return progress;
+  toggleMasteredDefinition(subjectCode: string, definitionId: string): Promise<UserStudyProgress> {
+    return toggleProgressListItem(subjectCode, "mastered_definitions", definitionId);
   },
 
-  /**
-   * حفظ أو إلغاء مراجعة قسم من ملخص الملخص
-   */
-  async toggleReviewedSection(subjectCode: string, sectionId: string): Promise<UserStudyProgress> {
-    const progress = await this.getUserProgress(subjectCode);
-    const list = progress.reviewed_sections || [];
-    const idx = list.indexOf(sectionId);
-    if (idx >= 0) list.splice(idx, 1);
-    else list.push(sectionId);
-    progress.reviewed_sections = list;
-    progress.updated_at = new Date().toISOString();
-    await db.user_study_progress.put(progress);
-    return progress;
+  toggleReviewedSection(subjectCode: string, sectionId: string): Promise<UserStudyProgress> {
+    return toggleProgressListItem(subjectCode, "reviewed_sections", sectionId);
   },
 
-  /**
-   * حفظ أو إلغاء مراجعة جزء من الملخص النظري
-   */
-  async toggleReviewedPart(subjectCode: string, partId: string): Promise<UserStudyProgress> {
-    const progress = await this.getUserProgress(subjectCode);
-    const list = progress.reviewed_parts || [];
-    const idx = list.indexOf(partId);
-    if (idx >= 0) list.splice(idx, 1);
-    else list.push(partId);
-    progress.reviewed_parts = list;
-    progress.updated_at = new Date().toISOString();
-    await db.user_study_progress.put(progress);
-    return progress;
+  toggleReviewedPart(subjectCode: string, partId: string): Promise<UserStudyProgress> {
+    return toggleProgressListItem(subjectCode, "reviewed_parts", partId);
   },
 
-  /**
-   * حفظ أو إلغاء تعليم سؤال للمراجعة السريعة
-   */
-  async toggleFlaggedQuestion(subjectCode: string, questionId: string): Promise<UserStudyProgress> {
-    const progress = await this.getUserProgress(subjectCode);
-    const list = progress.flagged_questions || [];
-    const idx = list.indexOf(questionId);
-    if (idx >= 0) list.splice(idx, 1);
-    else list.push(questionId);
-    progress.flagged_questions = list;
-    progress.updated_at = new Date().toISOString();
-    await db.user_study_progress.put(progress);
-    return progress;
+  toggleFlaggedQuestion(subjectCode: string, questionId: string): Promise<UserStudyProgress> {
+    return toggleProgressListItem(subjectCode, "flagged_questions", questionId);
   },
 
-  /**
-   * تسجيل نتيجة امتحان جديد
-   */
   async recordExamResult(
     subjectCode: string,
     result: { total: number; score: number; timeSpentSec: number; mode: string }
@@ -607,9 +591,6 @@ export const DataService = {
     return progress;
   },
 
-  /**
-   * إضافة أو إزالة علامة لونية لسؤال مع مزامنة التوائم
-   */
   async toggleBookmark(
     subjectCode: string,
     questionId: string,
@@ -620,29 +601,20 @@ export const DataService = {
     if (!progress.bookmarks) progress.bookmarks = {};
 
     const cur = progress.bookmarks[questionId] || [];
-    const idx = cur.indexOf(color);
-    let next: string[];
-    if (idx >= 0) {
-      next = cur.filter((c) => c !== color);
-    } else {
-      next = [...cur, color];
-    }
+    const next = cur.includes(color) ? cur.filter((c) => c !== color) : [...cur, color];
 
-    if (next.length === 0) {
-      delete progress.bookmarks[questionId];
-    } else {
-      progress.bookmarks[questionId] = next;
-    }
+    if (next.length === 0) delete progress.bookmarks[questionId];
+    else progress.bookmarks[questionId] = next;
 
-    // مزامنة التوأم
     if (twinGroupId) {
-      const twins = await db.questions.where("twin_group_id").equals(twinGroupId).toArray();
+      const twins = await db.questions
+        .where("twin_group_id")
+        .equals(twinGroupId)
+        .filter((q) => q.subject_code === subjectCode)
+        .toArray();
       for (const t of twins) {
-        if (next.length === 0) {
-          delete progress.bookmarks[t.id];
-        } else {
-          progress.bookmarks[t.id] = [...next];
-        }
+        if (next.length === 0) delete progress.bookmarks[t.id];
+        else progress.bookmarks[t.id] = [...next];
       }
     }
 
@@ -651,15 +623,16 @@ export const DataService = {
     return progress;
   },
 
-  /**
-   * إلغاء اختيار إجابات نموذج محدد أو البنك بالكامل
-   */
   async resetModelAnswers(subjectCode: string, modelId: string): Promise<UserStudyProgress> {
     const progress = await this.getUserProgress(subjectCode);
     if (modelId === "all") {
       progress.answered_questions = {};
     } else {
-      const qs = await db.questions.where("model_id").equals(modelId).toArray();
+      const qs = await db.questions
+        .where("subject_code")
+        .equals(subjectCode)
+        .filter((q) => q.model_id === modelId)
+        .toArray();
       for (const q of qs) {
         delete progress.answered_questions[q.id];
       }
@@ -669,9 +642,6 @@ export const DataService = {
     return progress;
   },
 
-  /**
-   * تصفير كامل المحفوظات والتقدم لمقرر معين
-   */
   async resetSubjectProgress(subjectCode: string): Promise<UserStudyProgress> {
     const fresh: UserStudyProgress = {
       subject_code: subjectCode,
@@ -688,5 +658,84 @@ export const DataService = {
     };
     await db.user_study_progress.put(fresh);
     return fresh;
+  },
+
+  async exportAllProgress(): Promise<FullProgressBackup> {
+    const all = await db.user_study_progress.toArray();
+    const subjects: Record<string, UserStudyProgress> = {};
+    for (const row of all) {
+      if (row.subject_code) subjects[row.subject_code] = row;
+    }
+    return {
+      backup_version: 2,
+      exported_at: new Date().toISOString(),
+      subjects
+    };
+  },
+
+  async importProgressBackup(
+    raw: unknown,
+    fallbackSubjectCode: string
+  ): Promise<{ importedSubjects: string[]; activeProgress: UserStudyProgress }> {
+    if (!raw || typeof raw !== "object") {
+      throw new Error("ملف النسخة الاحتياطية غير صالح.");
+    }
+    const obj = raw as Record<string, unknown>;
+    const records: UserStudyProgress[] = [];
+
+    if (obj.subjects && typeof obj.subjects === "object" && !Array.isArray(obj.subjects)) {
+      for (const [code, val] of Object.entries(obj.subjects as Record<string, unknown>)) {
+        if (val && typeof val === "object") {
+          records.push(normalizeImportedProgress(val as Partial<UserStudyProgress>, code));
+        }
+      }
+    } else if (
+      typeof obj.subject_code === "string" ||
+      typeof obj.answered_questions === "object"
+    ) {
+      const code =
+        typeof obj.subject_code === "string" && obj.subject_code.trim()
+          ? obj.subject_code.trim()
+          : fallbackSubjectCode;
+      records.push(normalizeImportedProgress(obj as Partial<UserStudyProgress>, code));
+    }
+
+    if (records.length === 0) {
+      throw new Error("لم يتم العثور على بيانات تقدم صالحة داخل الملف.");
+    }
+
+    await db.user_study_progress.bulkPut(records);
+    const activeProgress = await this.getUserProgress(fallbackSubjectCode);
+    return {
+      importedSubjects: records.map((r) => r.subject_code),
+      activeProgress
+    };
   }
 };
+
+function normalizeImportedProgress(
+  partial: Partial<UserStudyProgress>,
+  subjectCode: string
+): UserStudyProgress {
+  return {
+    subject_code: subjectCode,
+    memorized_tables: Array.isArray(partial.memorized_tables) ? partial.memorized_tables : [],
+    answered_questions:
+      partial.answered_questions && typeof partial.answered_questions === "object"
+        ? partial.answered_questions
+        : {},
+    bookmarks:
+      partial.bookmarks && typeof partial.bookmarks === "object" ? partial.bookmarks : {},
+    exam_history: Array.isArray(partial.exam_history) ? partial.exam_history : [],
+    reviewed_sections: Array.isArray(partial.reviewed_sections) ? partial.reviewed_sections : [],
+    reviewed_parts: Array.isArray(partial.reviewed_parts) ? partial.reviewed_parts : [],
+    reviewed_capsules: Array.isArray(partial.reviewed_capsules) ? partial.reviewed_capsules : [],
+    mastered_definitions: Array.isArray(partial.mastered_definitions)
+      ? partial.mastered_definitions
+      : [],
+    flagged_questions: Array.isArray(partial.flagged_questions) ? partial.flagged_questions : [],
+    last_visited_view: partial.last_visited_view,
+    last_visited_slide: partial.last_visited_slide,
+    updated_at: new Date().toISOString()
+  };
+}

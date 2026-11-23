@@ -4,7 +4,7 @@
   "cleanUrls": true,
   "rewrites": [
     {
-      "source": "/(.*)",
+      "source": "/((?!data/|slides/|assets/|icons/|manifest\\.json|sw\\.js|favicon\\.ico).*)",
       "destination": "/index.html"
     }
   ]

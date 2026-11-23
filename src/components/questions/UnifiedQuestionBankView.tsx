@@ -5,7 +5,7 @@
 // deterministic shuffle (questions & choices) · zero emojis.
 // ==============================================================================
 
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Icons } from "../icons/SvgIcons";
 import { QuestionCard } from "./QuestionCard";
 import { TwinQuestionModal } from "./TwinQuestionModal";
@@ -15,6 +15,13 @@ import {
   sortQuestionsBySlides,
   type QuestionSortMode
 } from "../../lib/questionOrder";
+import {
+  applyOptionPermutation,
+  buildShuffledOptionPermutation,
+  createDeterministicRng,
+  fisherYatesShuffle,
+  matchesNormalizedTerms
+} from "../../lib/textUtils";
 import type {
   UnifiedQuestion,
   QuestionModelInfo,
@@ -56,19 +63,6 @@ interface UnifiedQuestionBankViewProps {
   onResetModelAnswers?: (modelId: string) => void;
 }
 
-function ordSeed(str: string) {
-  let h = 2166136261;
-  for (let i = 0; i < str.length; i++) {
-    h ^= str.charCodeAt(i);
-    h = Math.imul(h, 16777619);
-  }
-  return function () {
-    h = Math.imul(h ^ (h >>> 15), 2246822507);
-    h = Math.imul(h ^ (h >>> 13), 3266489909);
-    return (h ^= h >>> 16) >>> 0;
-  };
-}
-
 function questionLecture(q: UnifiedQuestion): string {
   if (q.lecture_id) return q.lecture_id;
   if (q.slide_ref && q.slide_ref.includes("-")) return q.slide_ref.split("-")[0];
@@ -77,10 +71,15 @@ function questionLecture(q: UnifiedQuestion): string {
 
 function parseManualFilter(
   raw: string,
-  allQuestions?: UnifiedQuestion[]
+  allQuestions?: UnifiedQuestion[],
+  twinGroups?: Map<string, UnifiedQuestion[]>
 ): { numSet: Set<number>; textQuery: string | null } | null {
   const text = raw.trim();
   if (!text) return null;
+  const maxQNum = Math.max(
+    500,
+    ...(allQuestions || []).map((q) => q.orig_q_num || 0)
+  );
   const numSet = new Set<number>();
   const parts = text.split(/[,،\s]+/).filter(Boolean);
   let hasNumber = false;
@@ -90,7 +89,8 @@ function parseManualFilter(
       hasNumber = true;
       const start = Number(range[1]);
       const end = Number(range[2]);
-      const [mn, mx] = start <= end ? [start, end] : [end, start];
+      const mn = Math.max(1, Math.min(start, end));
+      const mx = Math.min(maxQNum, Math.max(start, end));
       for (let n = mn; n <= mx; n++) numSet.add(n);
     } else if (/^\d+$/.test(part)) {
       hasNumber = true;
@@ -98,24 +98,23 @@ function parseManualFilter(
     }
   }
 
-  // إضافة أرقام التوائم للأسئلة المحددة تلقائياً لضمان عدم إخفاء السؤال التوأم
-  if (hasNumber && allQuestions && numSet.size > 0) {
+  // إضافة أرقام التوائم للأسئلة المحددة بتعقيد O(n) بدلاً من O(n^2)
+  if (hasNumber && allQuestions && twinGroups && numSet.size > 0) {
     const twinsToAdd: number[] = [];
-    allQuestions.forEach((q) => {
+    for (const q of allQuestions) {
       if (numSet.has(q.orig_q_num) && q.twin_group_id) {
-        allQuestions.forEach((other) => {
-          if (other.twin_group_id === q.twin_group_id && other.id !== q.id) {
-            twinsToAdd.push(other.orig_q_num);
-          }
-        });
+        const group = twinGroups.get(q.twin_group_id) || [];
+        for (const other of group) {
+          if (other.id !== q.id) twinsToAdd.push(other.orig_q_num);
+        }
       }
-    });
+    }
     twinsToAdd.forEach((n) => numSet.add(n));
   }
 
   return {
     numSet,
-    textQuery: hasNumber ? null : text.toLowerCase()
+    textQuery: hasNumber ? null : text
   };
 }
 
@@ -252,7 +251,6 @@ export const UnifiedQuestionBankView: React.FC<UnifiedQuestionBankViewProps> = (
   };
 
   const answeredMap = userProgress.answered_questions || {};
-  const flaggedIds = userProgress.flagged_questions || [];
   const bookmarksMap = userProgress.bookmarks || {};
 
   const modelQuestions = useMemo(
@@ -260,23 +258,34 @@ export const UnifiedQuestionBankView: React.FC<UnifiedQuestionBankViewProps> = (
     [questions, selectedModelId]
   );
 
+  const twinGroupsMap = useMemo(() => {
+    const groups = new Map<string, UnifiedQuestion[]>();
+    for (const q of questions) {
+      if (!q.twin_group_id) continue;
+      const list = groups.get(q.twin_group_id) || [];
+      list.push(q);
+      groups.set(q.twin_group_id, list);
+    }
+    return groups;
+  }, [questions]);
+
   const activeTwinTarget = useMemo(() => {
     if (!activeTwinModalQ || !activeTwinModalQ.twin_group_id) return undefined;
-    return questions.find(
-      (q) => q.twin_group_id === activeTwinModalQ.twin_group_id && q.id !== activeTwinModalQ.id
-    );
-  }, [activeTwinModalQ, questions]);
+    const group = twinGroupsMap.get(activeTwinModalQ.twin_group_id) || [];
+    return group.find((q) => q.id !== activeTwinModalQ.id);
+  }, [activeTwinModalQ, twinGroupsMap]);
 
   const twinNumberMap = useMemo(() => {
     const map: Record<string, number> = {};
-    questions.forEach((q) => {
-      if (q.twin_group_id) {
-        const other = questions.find((o) => o.twin_group_id === q.twin_group_id && o.id !== q.id);
+    twinGroupsMap.forEach((group) => {
+      if (group.length < 2) return;
+      for (const q of group) {
+        const other = group.find((o) => o.id !== q.id);
         if (other) map[q.id] = other.orig_q_num;
       }
     });
     return map;
-  }, [questions]);
+  }, [twinGroupsMap]);
 
   const lectures = useMemo(() => {
     const map = new Map<string, number>();
@@ -287,7 +296,10 @@ export const UnifiedQuestionBankView: React.FC<UnifiedQuestionBankViewProps> = (
     return Array.from(map.entries()).sort((a, b) => a[0].localeCompare(b[0], "en"));
   }, [modelQuestions]);
 
-  const manualData = useMemo(() => parseManualFilter(manualFilter, questions), [manualFilter, questions]);
+  const manualData = useMemo(
+    () => parseManualFilter(manualFilter, questions, twinGroupsMap),
+    [manualFilter, questions, twinGroupsMap]
+  );
 
   // حساب أعداد العلامات الملونة في النموذج الحالي
   const bookmarkCounts = useMemo(() => {
@@ -329,11 +341,10 @@ export const UnifiedQuestionBankView: React.FC<UnifiedQuestionBankViewProps> = (
   const activeAnsCount = statusCounts.solved;
 
   const filteredQuestions = useMemo(() => {
-    const q = searchQuery.trim().toLowerCase();
+    const q = searchQuery.trim();
 
     return modelQuestions.filter((question) => {
       if (retest && !retestIds.has(question.id)) return false;
-      // خلال جلسة الإعادة لا نخفي السؤال فور إجابته بل نبقيه ليرى الطالب التعليل
       if (lectureFilter !== "all" && questionLecture(question) !== lectureFilter) return false;
 
       if (manualData) {
@@ -346,14 +357,11 @@ export const UnifiedQuestionBankView: React.FC<UnifiedQuestionBankViewProps> = (
             ...(question.options_ar || []),
             question.why_correct || "",
             question.slide_ref || ""
-          ]
-            .join(" ")
-            .toLowerCase();
-          if (!haystack.includes(manualData.textQuery)) return false;
+          ].join(" ");
+          if (!matchesNormalizedTerms(haystack, manualData.textQuery)) return false;
         }
       }
 
-      // فلتر العلامات الملونة
       if (showBookmarks && filterBm !== "all") {
         const qBms = bookmarksMap[question.id] || [];
         if (!qBms.includes(filterBm)) return false;
@@ -375,10 +383,8 @@ export const UnifiedQuestionBankView: React.FC<UnifiedQuestionBankViewProps> = (
           ...(question.options_ar || []),
           question.why_correct,
           question.slide_ref || ""
-        ]
-          .join(" ")
-          .toLowerCase();
-        if (!haystack.includes(q)) return false;
+        ].join(" ");
+        if (!matchesNormalizedTerms(haystack, q)) return false;
       }
       return true;
     });
@@ -396,7 +402,6 @@ export const UnifiedQuestionBankView: React.FC<UnifiedQuestionBankViewProps> = (
     searchQuery
   ]);
 
-  // ترتيب الأسئلة: يدعم الترتيب الطبيعي (أو العشوائي من الإعدادات)، والترتيب حسب التشابه، والترتيب حسب الدروس والسلايدات
   const orderedQuestions = useMemo(() => {
     if (sortMode === "similarity") {
       return sortQuestionsBySimilarity(filteredQuestions);
@@ -411,23 +416,12 @@ export const UnifiedQuestionBankView: React.FC<UnifiedQuestionBankViewProps> = (
 
     filteredQuestions.forEach((q) => {
       const a = retest ? retestAnswers[q.id] : answeredMap[q.id];
-      if (a && a.selected_answer >= 0) {
-        answered.push(q);
-      } else {
-        unanswered.push(q);
-      }
+      if (a && a.selected_answer >= 0) answered.push(q);
+      else unanswered.push(q);
     });
 
     const seedStr = `${subjectCode}#${selectedModelId}#unans#${questionsSeed}`;
-    const rnd = ordSeed(seedStr);
-    const shuffledUnanswered = [...unanswered];
-    for (let i = shuffledUnanswered.length - 1; i > 0; i--) {
-      const j = rnd() % (i + 1);
-      const tmp = shuffledUnanswered[i];
-      shuffledUnanswered[i] = shuffledUnanswered[j];
-      shuffledUnanswered[j] = tmp;
-    }
-
+    const shuffledUnanswered = fisherYatesShuffle(unanswered, createDeterministicRng(seedStr));
     return [...answered, ...shuffledUnanswered];
   }, [
     filteredQuestions,
@@ -440,6 +434,19 @@ export const UnifiedQuestionBankView: React.FC<UnifiedQuestionBankViewProps> = (
     retest,
     retestAnswers
   ]);
+
+  // حساب خلط الخيارات الذكي بشكل محفوظ (Memoized) يحمي الخيارات الموضعية ويحافظ على كفاءة React.memo
+  const shuffledChoiceCache = useMemo(() => {
+    const map = new Map<string, { perm: number[]; question: UnifiedQuestion }>();
+    if (!shuffleChoices) return map;
+    for (const q of questions) {
+      if (q.type === "essay" || !q.options_en || q.options_en.length < 2) continue;
+      const seedStr = `${subjectCode}#${q.id}#opts#${choicesSeed}`;
+      const perm = buildShuffledOptionPermutation(q.options_en, q.options_ar, seedStr);
+      map.set(q.id, { perm, question: applyOptionPermutation(q, perm) });
+    }
+    return map;
+  }, [questions, shuffleChoices, subjectCode, choicesSeed]);
 
   const visibleQuestions = useMemo(
     () => orderedQuestions.slice(0, visibleLimit),
@@ -606,41 +613,44 @@ export const UnifiedQuestionBankView: React.FC<UnifiedQuestionBankViewProps> = (
     setRetestOrigAns({});
   };
 
-  const handleAnswerWithRetest = (
-    qId: string,
-    idx: number,
-    ok: boolean,
-    twinGroupId?: string
-  ) => {
-    if (retest) {
-      if (idx < 0) {
-        setRetestAnswers((prev) => {
-          const next = { ...prev };
-          delete next[qId];
-          return next;
-        });
-        setRetestAnswered((prev) => {
-          const next = new Set(prev);
-          next.delete(qId);
-          return next;
-        });
+  const handleAnswerWithRetest = useCallback(
+    (qId: string, idx: number, ok: boolean, twinGroupId?: string) => {
+      const cachedShuffle = shuffledChoiceCache.get(qId);
+      const origIdx =
+        cachedShuffle && idx >= 0 && idx < cachedShuffle.perm.length
+          ? cachedShuffle.perm[idx]
+          : idx;
+
+      if (retest) {
+        if (origIdx < 0) {
+          setRetestAnswers((prev) => {
+            const next = { ...prev };
+            delete next[qId];
+            return next;
+          });
+          setRetestAnswered((prev) => {
+            const next = new Set(prev);
+            next.delete(qId);
+            return next;
+          });
+        } else {
+          setRetestAnswers((prev) => ({
+            ...prev,
+            [qId]: { selected_answer: origIdx, is_correct: ok }
+          }));
+          setRetestAnswered((prev) => {
+            const next = new Set(prev);
+            next.add(qId);
+            return next;
+          });
+          onAnswerQuestion(qId, origIdx, ok, twinGroupId);
+        }
       } else {
-        setRetestAnswers((prev) => ({
-          ...prev,
-          [qId]: { selected_answer: idx, is_correct: ok }
-        }));
-        setRetestAnswered((prev) => {
-          const next = new Set(prev);
-          next.add(qId);
-          return next;
-        });
-        // تحديث السجل الرئيسي عند حل السؤال في جلسة الإعادة (الصواب يُصلح الخطأ فوراً)
-        onAnswerQuestion(qId, idx, ok, twinGroupId);
+        onAnswerQuestion(qId, origIdx, ok, twinGroupId);
       }
-    } else {
-      onAnswerQuestion(qId, idx, ok, twinGroupId);
-    }
-  };
+    },
+    [retest, onAnswerQuestion, shuffledChoiceCache]
+  );
 
   const retestRemaining = retest ? Math.max(0, retestIds.size - retestAnswered.size) : 0;
 
@@ -678,8 +688,34 @@ export const UnifiedQuestionBankView: React.FC<UnifiedQuestionBankViewProps> = (
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
+  // القفز المضمون للسؤال المستهدف: إزالة الفلاتر الحاجبة، ضبط النموذج، وتوسيع حد العرض
   useEffect(() => {
     if (!focusQuestionId) return;
+    const targetQ = questions.find((q) => q.id === focusQuestionId);
+    if (targetQ) {
+      if (selectedModelId !== "all" && targetQ.model_id !== selectedModelId) {
+        setSelectedModelId("all");
+      }
+      if (retest && !retestIds.has(focusQuestionId)) {
+        stopRetest();
+      }
+      if (searchQuery) setSearchQuery("");
+      if (lectureFilter !== "all" && questionLecture(targetQ) !== lectureFilter) {
+        setLectureFilter("all");
+      }
+      if (filterState !== "all") setFilterState("all");
+      if (filterBm !== "all") setFilterBm("all");
+      if (manualFilter) setManualFilter("");
+    }
+  }, [focusQuestionId, questions]);
+
+  useEffect(() => {
+    if (!focusQuestionId) return;
+    const idx = orderedQuestions.findIndex((q) => q.id === focusQuestionId);
+    if (idx >= 0 && idx >= visibleLimit) {
+      setVisibleLimit(idx + 12);
+      return;
+    }
     const timer = setTimeout(() => {
       const el = document.getElementById(`q-${focusQuestionId}`);
       if (el) {
@@ -687,9 +723,13 @@ export const UnifiedQuestionBankView: React.FC<UnifiedQuestionBankViewProps> = (
         el.classList.add("focus-glow");
         setTimeout(() => el.classList.remove("focus-glow"), 2500);
       }
-    }, 200);
+    }, 180);
     return () => clearTimeout(timer);
-  }, [focusQuestionId]);
+  }, [focusQuestionId, orderedQuestions, visibleLimit]);
+
+  const handleCloseTooltip = useCallback(() => {
+    setTooltipState((s) => ({ ...s, visible: false }));
+  }, []);
 
   const getModelScore = (mId: string) => {
     const qs = mId === "all" ? questions : questions.filter((x) => x.model_id === mId);
@@ -733,11 +773,12 @@ export const UnifiedQuestionBankView: React.FC<UnifiedQuestionBankViewProps> = (
         activeTag === "SELECT" ||
         (document.activeElement as HTMLElement)?.isContentEditable;
       if (isInput || e.ctrlKey || e.metaKey || e.altKey) return;
+      // حماية: عدم تنفيذ اختصارات البنك عند فتح أي نافذة منبثقة أو لايت بوكس
+      if (document.querySelector('[role="dialog"], #lightboxModal')) return;
 
       const qCards = Array.from(document.querySelectorAll<HTMLElement>(".q-card"));
       if (qCards.length === 0) return;
 
-      // العثور على بطاقة السؤال الأكثر تمركزاً في منتصف الشاشة حالياً
       const viewportMid = window.innerHeight * 0.45;
       let activeCard: HTMLElement | null = null;
       let minDistance = Infinity;
@@ -756,37 +797,26 @@ export const UnifiedQuestionBankView: React.FC<UnifiedQuestionBankViewProps> = (
 
       const activeIdx = qCards.indexOf(activeCard);
 
-      // J: السؤال التالي
       if (e.key.toLowerCase() === "j") {
         e.preventDefault();
         const nextCard = qCards[Math.min(qCards.length - 1, activeIdx + 1)];
-        if (nextCard) {
-          nextCard.scrollIntoView({ behavior: "smooth", block: "center" });
-        }
+        if (nextCard) nextCard.scrollIntoView({ behavior: "smooth", block: "center" });
         return;
       }
 
-      // K: السؤال السابق
       if (e.key.toLowerCase() === "k") {
         e.preventDefault();
         const prevCard = qCards[Math.max(0, activeIdx - 1)];
-        if (prevCard) {
-          prevCard.scrollIntoView({ behavior: "smooth", block: "center" });
-        }
+        if (prevCard) prevCard.scrollIntoView({ behavior: "smooth", block: "center" });
         return;
       }
 
-      // 1 أو 2 أو 3 أو 4 (أو A, B, C, D): اختيار الإجابة
-      const optMap: Record<string, number> = {
-        "1": 0, "a": 0,
-        "2": 1, "b": 1,
-        "3": 2, "c": 2,
-        "4": 3, "d": 3
-      };
-      const optIdx = optMap[e.key.toLowerCase()];
+      // 1-4 لاختيار الخيار دون التصادم مع مفتاح B للعلامات
+      const optMap: Record<string, number> = { "1": 0, "2": 1, "3": 2, "4": 3 };
+      const optIdx = optMap[e.key];
       if (optIdx !== undefined) {
         const optBtns = activeCard.querySelectorAll<HTMLButtonElement>(".opt-btn");
-        if (optBtns && optBtns[optIdx]) {
+        if (optBtns[optIdx]) {
           e.preventDefault();
           optBtns[optIdx].click();
           return;
@@ -795,7 +825,7 @@ export const UnifiedQuestionBankView: React.FC<UnifiedQuestionBankViewProps> = (
 
       // E: كشف أو طي الشرح والتعليل
       if (e.key.toLowerCase() === "e") {
-        const whyBtn = activeCard.querySelector<HTMLButtonElement>(".q-btn.why, .essay-reveal");
+        const whyBtn = activeCard.querySelector<HTMLButtonElement>(".q-toggle-exp-btn, .essay-reveal");
         if (whyBtn) {
           e.preventDefault();
           whyBtn.click();
@@ -803,7 +833,7 @@ export const UnifiedQuestionBankView: React.FC<UnifiedQuestionBankViewProps> = (
         }
       }
 
-      // B أو F: إضافة أو إزالة العلامة المرجعية الملونة
+      // B أو F: فتح قائمة العلامات المرجعية الملونة
       if (e.key.toLowerCase() === "b" || e.key.toLowerCase() === "f") {
         const bmBtn = activeCard.querySelector<HTMLButtonElement>(".q-bm-btn, .bm-btn");
         if (bmBtn) {
@@ -1351,59 +1381,15 @@ export const UnifiedQuestionBankView: React.FC<UnifiedQuestionBankViewProps> = (
       ) : (
         <div id="bankCards" style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
           {visibleQuestions.map((q, idx) => {
-            // معالجة لخبطة خيارات السؤال إن كانت مفعلة
-            let renderedQ = q;
+            const cachedShuffle = shuffledChoiceCache.get(q.id);
+            const renderedQ = cachedShuffle ? cachedShuffle.question : q;
             let currentAnswer = retest ? retestAnswers[q.id] : answeredMap[q.id];
-            let onAnswerHandler = handleAnswerWithRetest;
 
-            if (shuffleChoices && q.options_en && q.options_en.length >= 2) {
-              const seedStr = `${subjectCode}#${q.id}#opts#${choicesSeed}`;
-              const rnd = ordSeed(seedStr);
-              const perm = q.options_en.map((_, i) => i);
-              for (let i = perm.length - 1; i > 0; i--) {
-                const j = rnd() % (i + 1);
-                const tmp = perm[i];
-                perm[i] = perm[j];
-                perm[j] = tmp;
+            if (cachedShuffle && currentAnswer && currentAnswer.selected_answer >= 0) {
+              const shuffledPick = cachedShuffle.perm.indexOf(currentAnswer.selected_answer);
+              if (shuffledPick >= 0 && shuffledPick !== currentAnswer.selected_answer) {
+                currentAnswer = { ...currentAnswer, selected_answer: shuffledPick };
               }
-
-              const newOptsEn = perm.map((origIdx) => q.options_en[origIdx]);
-              const newOptsAr = q.options_ar ? perm.map((origIdx) => q.options_ar[origIdx]) : [];
-              const newCorrect = perm.indexOf(q.correct_answer);
-
-              // إعادة تعيين تفنيد الخيارات
-              let newDistractor: Record<string, any> | undefined = undefined;
-              if (q.distractor_analysis) {
-                newDistractor = {};
-                perm.forEach((origIdx, newIdx) => {
-                  if (q.distractor_analysis?.[String(origIdx)] !== undefined) {
-                    newDistractor![String(newIdx)] = q.distractor_analysis[String(origIdx)];
-                  }
-                });
-              }
-
-              renderedQ = {
-                ...q,
-                options_en: newOptsEn,
-                options_ar: newOptsAr,
-                correct_answer: newCorrect,
-                distractor_analysis: newDistractor || q.distractor_analysis
-              };
-
-              // إعادة تعيين إجابة المستخدم المختارة للموضع المخلوط
-              if (currentAnswer && currentAnswer.selected_answer >= 0) {
-                const shuffledPick = perm.indexOf(currentAnswer.selected_answer);
-                currentAnswer = {
-                  ...currentAnswer,
-                  selected_answer: shuffledPick >= 0 ? shuffledPick : currentAnswer.selected_answer
-                };
-              }
-
-              // معالج الإجابة يعيد التحويل للأصل
-              onAnswerHandler = (qId, ansIdx, isCorrect, twinGroupId) => {
-                const origIdx = ansIdx >= 0 && ansIdx < perm.length ? perm[ansIdx] : ansIdx;
-                handleAnswerWithRetest(qId, origIdx, isCorrect, twinGroupId);
-              };
             }
 
             return (
@@ -1412,7 +1398,7 @@ export const UnifiedQuestionBankView: React.FC<UnifiedQuestionBankViewProps> = (
                 question={renderedQ}
                 displayNumber={q.orig_q_num || idx + 1}
                 userAnswer={currentAnswer}
-                onAnswer={onAnswerHandler}
+                onAnswer={handleAnswerWithRetest}
                 onJumpToSlide={onJumpToSlide}
                 onShowTranslate={handleShowTranslate}
                 onScheduleHideTranslate={handleScheduleHideTranslate}
@@ -1459,7 +1445,7 @@ export const UnifiedQuestionBankView: React.FC<UnifiedQuestionBankViewProps> = (
         visible={tooltipState.visible}
         textAr={tooltipState.text}
         position={tooltipState.pos}
-        onClose={() => setTooltipState((s) => ({ ...s, visible: false }))}
+        onClose={handleCloseTooltip}
         onMouseEnterTooltip={handleCancelHideTranslate}
         onMouseLeaveTooltip={handleScheduleHideTranslate}
       />

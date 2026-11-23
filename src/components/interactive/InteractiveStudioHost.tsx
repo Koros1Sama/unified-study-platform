@@ -15,9 +15,18 @@ interface InteractiveStudioHostProps {
   onReturnToSummary?: () => void;
 }
 
-// تطبيع وتعيين معرفات الاستوديوهات الواردة من روابط الملخص
-function normalizeStudio(id: string): { studioId: string; defaultTab: string } {
+// تطبيع وتعيين معرفات الاستوديوهات الواردة من روابط الملخص بحسب المادة
+function normalizeStudio(
+  id: string | undefined,
+  subjectCode: string
+): { studioId: string; defaultTab: string } {
   const lower = (id || "").toLowerCase();
+  if (subjectCode === "rm" && (!lower || lower === "automata_simulator")) {
+    return { studioId: "research_matrix", defaultTab: "matrix" };
+  }
+  if (lower.includes("powerset")) {
+    return { studioId: "automata_simulator", defaultTab: "converter" };
+  }
   if (lower.includes("chomsky") || lower.includes("hierarchy")) {
     return { studioId: "chomsky_hierarchy", defaultTab: "hierarchy" };
   }
@@ -33,34 +42,48 @@ function normalizeStudio(id: string): { studioId: string; defaultTab: string } {
   return { studioId: "automata_simulator", defaultTab: "sim" };
 }
 
+function normalizeInteractiveTab(studioId: string, rawTab: string | undefined, defaultTab: string): string {
+  if (!rawTab) return defaultTab;
+  const map: Record<string, string> = {
+    "hierarchy-venn": "hierarchy",
+    simulator: "sim",
+    "tape-sim": "sim"
+  };
+  const mapped = map[rawTab] || rawTab;
+  const validTabs: Record<string, string[]> = {
+    automata_simulator: ["sim", "trace", "rules", "nfa-tree", "converter"],
+    chomsky_hierarchy: ["hierarchy", "comparison"],
+    research_matrix: ["matrix", "sampling"],
+    pda_studio: ["sim"],
+    turing_studio: ["sim"]
+  };
+  return validTabs[studioId]?.includes(mapped) ? mapped : defaultTab;
+}
+
 export const InteractiveStudioHost: React.FC<InteractiveStudioHostProps> = ({
   subjectCode,
-  initialStudioId = "automata_simulator",
-  initialTabId = "sim",
+  initialStudioId,
+  initialTabId,
   onReturnToSummary
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
-  const initialNorm = useMemo(() => normalizeStudio(initialStudioId), [initialStudioId]);
+  const initialNorm = useMemo(
+    () => normalizeStudio(initialStudioId, subjectCode),
+    [initialStudioId, subjectCode]
+  );
   const [activeStudioId, setActiveStudioId] = useState<string>(initialNorm.studioId);
-  const [activeTabId, setActiveTabId] = useState<string>(initialTabId || initialNorm.defaultTab);
+  const [activeTabId, setActiveTabId] = useState<string>(() =>
+    normalizeInteractiveTab(initialNorm.studioId, initialTabId, initialNorm.defaultTab)
+  );
 
   useFitTables(containerRef, [activeStudioId, activeTabId]);
 
-  // مزامنة فورية عند تغير المعرف أو التبويب القادم من الملخص
+  // مزامنة فورية عند تغير المقرر أو المعرف أو التبويب القادم من الملخص
   useEffect(() => {
-    const norm = normalizeStudio(initialStudioId);
+    const norm = normalizeStudio(initialStudioId, subjectCode);
     setActiveStudioId(norm.studioId);
-    if (initialTabId && initialTabId !== "sim" && initialTabId !== "hierarchy" && initialTabId !== "matrix") {
-      // إذا كان التبويب مخصصاً مثل nfa-tree أو comparison أو sampling
-      if (initialTabId === "hierarchy-venn") {
-        setActiveTabId("hierarchy");
-      } else {
-        setActiveTabId(initialTabId);
-      }
-    } else {
-      setActiveTabId(initialTabId || norm.defaultTab);
-    }
-  }, [initialStudioId, initialTabId]);
+    setActiveTabId(normalizeInteractiveTab(norm.studioId, initialTabId, norm.defaultTab));
+  }, [subjectCode, initialStudioId, initialTabId]);
 
   // ----------------------------------------------------------------------------
   // 1. حالة محاكي الآلات المنتهية الصورية (DFA Simulator State)
@@ -178,21 +201,32 @@ export const InteractiveStudioHost: React.FC<InteractiveStudioHostProps> = ({
     return Math.ceil(populationN / denominator);
   }, [populationN, marginE]);
 
-  // تحديد المنهجية الموصى بها ديناميكياً
+  // تحديد المنهجية الموصى بها ديناميكياً (تشمل الغرض وطبيعة البيانات والأفق الزمني)
   const methodologyRecommendation = useMemo(() => {
+    const horizonNote =
+      timeHorizon === "longitudinal"
+        ? " مع تصميم طولي تتبعي لقياس التغير عبر فترات زمنية متعاقبة (Panel / Cohort)."
+        : " مع تصميم مقطعي مستعرض يلتقط الظاهرة في نقطة زمنية واحدة (Cross-sectional).";
+
     if (dataNature === "quantitative") {
       if (researchPurpose === "explanatory") {
         return {
           title: "المنهج التجريبي أو المسح السببي (Experimental / Causal-Comparative)",
-          tool: "استبانة مغلقة مقننة، اختبارات قياسية قبلية وبعدية",
-          sampleStrategy: "عينة احتمالية طبقية أو عشوائية بسيطة بحجم إحصائي كافٍ",
+          tool: "استبانة مغلقة مقننة، اختبارات قياسية قبلية وبعدية" + horizonNote,
+          sampleStrategy:
+            timeHorizon === "longitudinal"
+              ? "عينة احتمالية ثابتة (Panel Sample) مع متابعة معدل التسرب (Attrition)"
+              : "عينة احتمالية طبقية أو عشوائية بسيطة بحجم إحصائي كافٍ",
           tip: "التركيز على ضبط المتغيرات الدخيلة، والتحقق من الصدق الظاهري والبنائي وثبات ألفا كرونباخ."
         };
       }
       return {
         title: "المنهج الوصفي المسحي (Descriptive Survey)",
-        tool: "استبيانات مقياس ليكرت الخماسي، استمارة تحليل محتوى كمي",
-        sampleStrategy: "عينة عشوائية ممثلة لمجتمع البحث الإحصائي",
+        tool: "استبيانات مقياس ليكرت الخماسي، استمارة تحليل محتوى كمي" + horizonNote,
+        sampleStrategy:
+          timeHorizon === "longitudinal"
+            ? "عينات دورية متكررة (Trend / Cohort) لرصد تطور المؤشرات زمنياً"
+            : "عينة عشوائية ممثلة لمجتمع البحث الإحصائي",
         tip: "استخدام الجداول المزدوجة ومقاييس النزعة المركزية والتشتت ومعاملات الارتباط."
       };
     }
@@ -200,25 +234,25 @@ export const InteractiveStudioHost: React.FC<InteractiveStudioHostProps> = ({
       if (researchPurpose === "exploratory") {
         return {
           title: "منهج دراسة الحالة أو النظرية المجذرة (Case Study / Grounded Theory)",
-          tool: "مقابلات شبه مهيكلة معمقة، مجموعات التركيز البؤرية (Focus Groups)",
+          tool: "مقابلات شبه مهيكلة معمقة، مجموعات التركيز البؤرية (Focus Groups)" + horizonNote,
           sampleStrategy: "عينة قصدية غرضية (Purposive Sampling) حتى الوصول لنقطة التشبع النظري",
           tip: "التركيز على صدق المعايشة، ومطابقة الأعضاء (Member Checking)، وتثليث المصادر (Triangulation)."
         };
       }
       return {
         title: "المنهج الإثنوغرافي أو الظاهراتي (Phenomenology / Ethnography)",
-        tool: "الملاحظة بالمشاركة، مذكرات الميدان التفاعلية",
+        tool: "الملاحظة بالمشاركة، مذكرات الميدان التفاعلية" + horizonNote,
         sampleStrategy: "عينات كرة الثلج أو عينات نوعية مركزة (5 إلى 25 فرداً)",
         tip: "استبعاد الانحياز الشخصي للباحث (Epoché / Bracketing) وتوثيق السياق البيئي بدقة."
       };
     }
     return {
       title: "منهج البحوث المختلطة المتتابعة أو المتزامنة (Mixed-Methods Triangulation)",
-      tool: "دمج الاستبانة الكمية مع مقابلات نوعية تفسيرية (QUAN-qual Design)",
+      tool: "دمج الاستبانة الكمية مع مقابلات نوعية تفسيرية (QUAN-qual Design)" + horizonNote,
       sampleStrategy: "عينة احتمالية للمرحلة الكمية تليها عينة قصدية للمرحلة التفسيرية",
       tip: "تكامل البيانات عند مرحلة التفسير لتعويض نقاط ضعف الأسلوب المنفرد."
     };
-  }, [dataNature, researchPurpose]);
+  }, [dataNature, researchPurpose, timeHorizon]);
 
   // ----------------------------------------------------------------------------
   // 4. حالة محاكي المكدس PDA (Pushdown Automaton)
@@ -229,38 +263,48 @@ export const InteractiveStudioHost: React.FC<InteractiveStudioHostProps> = ({
   const [pdaState, setPdaState] = useState<string>("q0");
 
   const runPdaStep = () => {
+    if (pdaState === "q_accept" || pdaState === "q_reject") return;
     if (pdaStep >= pdaInput.length) {
-      if (pdaStack.length === 1 && pdaStack[0] === "Z0") {
-        setPdaState("q_accept");
-      }
+      setPdaState(
+        pdaState === "q1" && pdaStack.length === 1 && pdaStack[0] === "Z0"
+          ? "q_accept"
+          : "q_reject"
+      );
       return;
     }
+
     const ch = pdaInput[pdaStep];
+    const nextStep = pdaStep + 1;
+    let nextStack = pdaStack;
+    let nextState = pdaState;
+
     if (pdaState === "q0") {
       if (ch === "0") {
-        setPdaStack((prev) => ["0", ...prev]);
-        setPdaStep((s) => s + 1);
-      } else if (ch === "1") {
-        if (pdaStack[0] === "0") {
-          setPdaStack((prev) => prev.slice(1));
-          setPdaState("q1");
-          setPdaStep((s) => s + 1);
-        } else {
-          setPdaState("q_reject");
-        }
+        nextStack = ["0", ...pdaStack];
+      } else if (ch === "1" && pdaStack[0] === "0") {
+        nextStack = pdaStack.slice(1);
+        nextState = "q1";
+      } else {
+        nextState = "q_reject";
       }
     } else if (pdaState === "q1") {
-      if (ch === "1") {
-        if (pdaStack[0] === "0") {
-          setPdaStack((prev) => prev.slice(1));
-          setPdaStep((s) => s + 1);
-        } else {
-          setPdaState("q_reject");
-        }
+      if (ch === "1" && pdaStack[0] === "0") {
+        nextStack = pdaStack.slice(1);
       } else {
-        setPdaState("q_reject");
+        nextState = "q_reject";
       }
     }
+
+    if (nextState !== "q_reject" && nextStep >= pdaInput.length) {
+      nextState =
+        nextState === "q1" && nextStack.length === 1 && nextStack[0] === "Z0"
+          ? "q_accept"
+          : "q_reject";
+    }
+
+    setPdaStack(nextStack);
+    setPdaState(nextState);
+    setPdaStep(nextStep);
   };
 
   const resetPda = () => {
@@ -279,8 +323,12 @@ export const InteractiveStudioHost: React.FC<InteractiveStudioHostProps> = ({
     if (headPos > 0) setHeadPos((p) => p - 1);
   };
   const moveTapeRight = () => {
-    if (headPos < tape.length - 1) setHeadPos((p) => p + 1);
-    else setTape((t) => [...t, "B"]);
+    if (headPos < tape.length - 1) {
+      setHeadPos((p) => p + 1);
+    } else {
+      setTape((t) => [...t, "B"]);
+      setHeadPos((p) => p + 1);
+    }
   };
   const writeTape = (char: string) => {
     setTape((t) => {
@@ -290,8 +338,8 @@ export const InteractiveStudioHost: React.FC<InteractiveStudioHostProps> = ({
     });
   };
 
-  // تعريف الاستوديوهات المتوفرة
-  const studios = [
+  // تعريف الاستوديوهات المتوفرة ومواءمتها للمقرر النشط
+  const allStudios = [
     {
       id: "automata_simulator",
       title: "محاكي الآلات المنتهية الصورية (DFA/NFA Simulator)",
@@ -300,7 +348,8 @@ export const InteractiveStudioHost: React.FC<InteractiveStudioHostProps> = ({
         { id: "sim", label: "المحاكي التفاعلي المتجهي" },
         { id: "trace", label: "جدول التتبع خطوة بخطوة" },
         { id: "rules", label: "دالة الانتقال والتعريف الرياضي" },
-        { id: "nfa-tree", label: "شجرة الحوسبة المتفرعة (NFA)" }
+        { id: "nfa-tree", label: "شجرة الحوسبة المتفرعة (NFA)" },
+        { id: "converter", label: "تحويل NFA → DFA (Powerset)" }
       ]
     },
     {
@@ -339,7 +388,10 @@ export const InteractiveStudioHost: React.FC<InteractiveStudioHostProps> = ({
     }
   ];
 
+  const subjectStudios = allStudios.filter((s) => s.subject === subjectCode);
+  const studios = subjectStudios.length > 0 ? subjectStudios : allStudios;
   const currentStudio = studios.find((s) => s.id === activeStudioId) || studios[0];
+  const lastDfaTransition = simHistory.length > 0 ? simHistory[simHistory.length - 1] : null;
 
   return (
     <div ref={containerRef}>
@@ -572,11 +624,47 @@ export const InteractiveStudioHost: React.FC<InteractiveStudioHostProps> = ({
                   <text x="150" y="30" fill="var(--ink)" fontSize="13" fontWeight="bold" textAnchor="middle">0</text>
 
                   {/* انتقال q0 إلى q1 (1) */}
-                  <path d="M 185 100 Q 275 70 365 100" fill="none" stroke={currentState === "q0" && inputString[simStep - 1] === "1" ? "var(--acc)" : "var(--ink-m)"} strokeWidth="2.5" markerEnd="url(#arrow)" />
+                  <path
+                    d="M 185 100 Q 275 70 365 100"
+                    fill="none"
+                    stroke={
+                      lastDfaTransition?.state === "q0" && lastDfaTransition?.next === "q1"
+                        ? "var(--acc)"
+                        : "var(--ink-m)"
+                    }
+                    strokeWidth={
+                      lastDfaTransition?.state === "q0" && lastDfaTransition?.next === "q1"
+                        ? "3.5"
+                        : "2.5"
+                    }
+                    markerEnd={
+                      lastDfaTransition?.state === "q0" && lastDfaTransition?.next === "q1"
+                        ? "url(#arrow-acc)"
+                        : "url(#arrow)"
+                    }
+                  />
                   <text x="275" y="75" fill="var(--acc)" fontSize="14" fontWeight="bold" textAnchor="middle">1</text>
 
                   {/* انتقال q1 إلى q0 (0) */}
-                  <path d="M 365 120 Q 275 150 185 120" fill="none" stroke={currentState === "q1" && inputString[simStep - 1] === "0" ? "var(--acc)" : "var(--ink-m)"} strokeWidth="2.5" markerEnd="url(#arrow)" />
+                  <path
+                    d="M 365 120 Q 275 150 185 120"
+                    fill="none"
+                    stroke={
+                      lastDfaTransition?.state === "q1" && lastDfaTransition?.next === "q0"
+                        ? "var(--acc)"
+                        : "var(--ink-m)"
+                    }
+                    strokeWidth={
+                      lastDfaTransition?.state === "q1" && lastDfaTransition?.next === "q0"
+                        ? "3.5"
+                        : "2.5"
+                    }
+                    markerEnd={
+                      lastDfaTransition?.state === "q1" && lastDfaTransition?.next === "q0"
+                        ? "url(#arrow-acc)"
+                        : "url(#arrow)"
+                    }
+                  />
                   <text x="275" y="155" fill="var(--ink-m)" fontSize="14" fontWeight="bold" textAnchor="middle">0</text>
 
                   {/* الحالة q1 (حالة القبول النهائية: دائرتان متداخلتان) */}
@@ -666,10 +754,10 @@ export const InteractiveStudioHost: React.FC<InteractiveStudioHostProps> = ({
                       <thead>
                         <tr>
                           <th>الخطوة #</th>
-                          <th>الحالة الحالية ($q_i$)</th>
-                          <th>الرمز المقروء ($\sigma$)</th>
-                          <th>صيغة الانتقال ($\delta$)</th>
-                          <th>الحالة التالية ($q_{'{i+1}'}$)</th>
+                          <th>الحالة الحالية (q<sub>i</sub>)</th>
+                          <th>الرمز المقروء (σ)</th>
+                          <th>صيغة الانتقال (δ)</th>
+                          <th>الحالة التالية (q<sub>i+1</sub>)</th>
                           <th>الشريط المتبقي</th>
                           <th>حالة القبول</th>
                         </tr>
@@ -810,6 +898,46 @@ export const InteractiveStudioHost: React.FC<InteractiveStudioHostProps> = ({
                   <circle cx="340" cy="180" r="16" fill="var(--ok)" stroke="var(--acc)" strokeWidth="2" />
                   <text x="340" y="184" dominantBaseline="middle" textAnchor="middle" fill="#fff" fontSize="11" fontWeight="bold">ACCEPT</text>
                 </svg>
+              </div>
+            </div>
+          )}
+
+          {/* تبويب خوارزمية بناء المجموعات الجزئية Powerset Construction (NFA -> DFA) */}
+          {activeTabId === "converter" && (
+            <div>
+              <h3 style={{ fontSize: "1.05rem", fontWeight: 800, marginBottom: "10px" }}>
+                خوارزمية بناء المجموعات الجزئية (Powerset / Subset Construction: NFA → DFA)
+              </h3>
+              <p style={{ fontSize: "0.88rem", color: "var(--ink-m)", marginBottom: "14px", lineHeight: 1.7 }}>
+                كل حالة في الـ DFA المكافئ هي مجموعة جزئية من حالات الـ NFA (بحد أقصى 2<sup>n</sup> حالة). أي مجموعة تحتوي حالة قبول من الـ NFA تصبح حالة قبول في الـ DFA.
+              </p>
+              <div className="tbl-wrap">
+                <div className="tbl-scale">
+                  <table className="tbl">
+                    <thead>
+                      <tr>
+                        <th>حالة DFA (مجموعة جزئية)</th>
+                        <th>عند قراءة 0</th>
+                        <th>عند قراءة 1</th>
+                        <th>التصنيف</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr>
+                        <td><code className="m-ltr">→ {"{q0}"}</code></td>
+                        <td><code className="m-ltr">{"{q0}"}</code></td>
+                        <td><code className="m-ltr">{"{q0, q1}"}</code></td>
+                        <td>حالة ابتدائية</td>
+                      </tr>
+                      <tr>
+                        <td><code className="m-ltr">* {"{q0, q1}"}</code></td>
+                        <td><code className="m-ltr">{"{q0}"}</code></td>
+                        <td><code className="m-ltr">{"{q0, q1}"}</code></td>
+                        <td>حالة قبول (تضم q1)</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
               </div>
             </div>
           )}
@@ -1269,7 +1397,7 @@ export const InteractiveStudioHost: React.FC<InteractiveStudioHostProps> = ({
               type="button"
               className="btn btn-sm btn-primary"
               onClick={runPdaStep}
-              disabled={pdaStep >= pdaInput.length}
+              disabled={pdaState === "q_accept" || pdaState === "q_reject"}
             >
               <span>خطوة للمكدس ({pdaStep}/{pdaInput.length})</span>
             </button>
@@ -1277,6 +1405,27 @@ export const InteractiveStudioHost: React.FC<InteractiveStudioHostProps> = ({
               <Icons.Reset size={14} />
               <span>إعادة ضبط</span>
             </button>
+            <span
+              style={{
+                padding: "4px 12px",
+                borderRadius: "var(--r-pill)",
+                fontWeight: 800,
+                fontSize: "0.82rem",
+                background:
+                  pdaState === "q_accept"
+                    ? "var(--ok)"
+                    : pdaState === "q_reject"
+                    ? "var(--err)"
+                    : "var(--sf2)",
+                color: pdaState === "q_accept" || pdaState === "q_reject" ? "#fff" : "var(--ink)"
+              }}
+            >
+              {pdaState === "q_accept"
+                ? "مقبولة (Accepted)"
+                : pdaState === "q_reject"
+                ? "مرفوضة (Rejected)"
+                : `الحالة: ${pdaState}`}
+            </span>
           </div>
 
           <div style={{ display: "flex", gap: "24px", justifyContent: "center", alignItems: "flex-end", padding: "20px", background: "var(--sf2)", borderRadius: "var(--r-m)" }}>
@@ -1360,12 +1509,12 @@ export const InteractiveStudioHost: React.FC<InteractiveStudioHostProps> = ({
           {/* أزرار تحريك الرأس والكتابة */}
           <div style={{ display: "flex", justifyContent: "center", gap: "10px", marginTop: "24px", flexWrap: "wrap" }}>
             <button type="button" className="btn btn-sm" onClick={moveTapeLeft} disabled={headPos <= 0}>
-              <Icons.ArrowRight size={14} />
+              <Icons.ArrowLeft size={14} />
               <span>تحريك الرأس يساراً (L)</span>
             </button>
             <button type="button" className="btn btn-sm" onClick={moveTapeRight}>
               <span>تحريك الرأس يميناً (R)</span>
-              <Icons.ArrowLeft size={14} />
+              <Icons.ArrowRight size={14} />
             </button>
             <button type="button" className="btn btn-sm" onClick={() => writeTape("0")}>
               كتابة '0'

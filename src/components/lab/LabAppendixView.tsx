@@ -4,19 +4,37 @@
 // Zero Emojis.
 // ==============================================================================
 
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { Icons } from "../icons/SvgIcons";
 import { LightboxModal } from "../slides/LightboxModal";
 import { resolveAssetUrl } from "../../lib/dataService";
+import { matchesNormalizedTerms } from "../../lib/textUtils";
 import type { LabAppendix } from "../../types";
 
 interface LabAppendixViewProps {
   data?: LabAppendix;
   subjectName?: string;
+  activeSession?: string;
+  onSelectSession?: (sessionId: string) => void;
 }
 
-export const LabAppendixView: React.FC<LabAppendixViewProps> = ({ data, subjectName }) => {
-  const [activeSession, setActiveSession] = useState<string>(() => data?.sessions?.[0]?.id || "all");
+export const LabAppendixView: React.FC<LabAppendixViewProps> = ({
+  data,
+  subjectName,
+  activeSession: controlledSession,
+  onSelectSession
+}) => {
+  const [localSession, setLocalSession] = useState<string>(() => data?.sessions?.[0]?.id || "all");
+  const activeSession = controlledSession !== undefined ? controlledSession : localSession;
+  const setActiveSession = (id: string) => {
+    setLocalSession(id);
+    onSelectSession?.(id);
+  };
+  useEffect(() => {
+    if (controlledSession === undefined && data?.sessions?.[0]?.id) {
+      setLocalSession(data.sessions[0].id);
+    }
+  }, [controlledSession, data]);
   const [query, setQuery] = useState("");
   const [showNotes, setShowNotes] = useState(true);
   const [lightboxOpen, setLightboxOpen] = useState(false);
@@ -26,17 +44,20 @@ export const LabAppendixView: React.FC<LabAppendixViewProps> = ({ data, subjectN
   const slides = data?.slides || [];
 
   const filteredSlides = useMemo(() => {
-    const q = query.trim().toLowerCase();
     return slides.filter((slide) => {
       if (activeSession !== "all" && slide.lecture_id !== activeSession) return false;
-      if (!q) return true;
-      return [slide.title, slide.content_ar, slide.content_en, slide.notes_ar, slide.ref]
-        .filter(Boolean)
-        .join(" ")
-        .toLowerCase()
-        .includes(q);
+      if (!query.trim()) return true;
+      return matchesNormalizedTerms(
+        [slide.title, slide.content_ar, slide.content_en, slide.notes_ar, slide.ref].filter(Boolean).join(" "),
+        query
+      );
     });
   }, [slides, activeSession, query]);
+
+  const lightboxSlides = useMemo(
+    () => filteredSlides.filter((s) => Boolean(s.image_url)),
+    [filteredSlides]
+  );
 
   if (!data || slides.length === 0) {
     return (
@@ -51,7 +72,7 @@ export const LabAppendixView: React.FC<LabAppendixViewProps> = ({ data, subjectN
   }
 
   const openSlide = (slideRef: string) => {
-    const idx = filteredSlides.findIndex((slide) => slide.ref === slideRef);
+    const idx = lightboxSlides.findIndex((slide) => slide.ref === slideRef);
     if (idx >= 0) {
       setCurrentIndex(idx);
       setLightboxOpen(true);
@@ -141,14 +162,21 @@ export const LabAppendixView: React.FC<LabAppendixViewProps> = ({ data, subjectN
       <div className="lab-grid">
         {filteredSlides.map((slide) => (
           <article key={slide.ref} className="lab-slide-card">
-            <button
-              type="button"
-              className="lab-slide-img"
-              onClick={() => openSlide(slide.ref)}
-              title={`تكبير شريحة ${slide.ref}`}
-            >
-              <img src={resolveAssetUrl(slide.image_url)} alt={slide.ref} loading="lazy" />
-            </button>
+            {slide.image_url ? (
+              <button
+                type="button"
+                className="lab-slide-img"
+                onClick={() => openSlide(slide.ref)}
+                title={`تكبير شريحة ${slide.ref}`}
+              >
+                <img src={resolveAssetUrl(slide.image_url)} alt={slide.ref} loading="lazy" />
+              </button>
+            ) : (
+              <div className="lab-slide-text-banner">
+                <Icons.Lab size={18} />
+                <span>مادة مرجعية نصية — {slide.ref}</span>
+              </div>
+            )}
             <div className="lab-slide-body">
               <div className="lab-slide-head">
                 <span className="slide-ref">{slide.ref}</span>
@@ -172,7 +200,7 @@ export const LabAppendixView: React.FC<LabAppendixViewProps> = ({ data, subjectN
       <LightboxModal
         isOpen={lightboxOpen}
         onClose={() => setLightboxOpen(false)}
-        slides={filteredSlides}
+        slides={lightboxSlides}
         currentIndex={currentIndex}
         onNavigate={setCurrentIndex}
       />

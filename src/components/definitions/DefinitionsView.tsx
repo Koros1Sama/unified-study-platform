@@ -6,6 +6,7 @@
 
 import React, { useState, useMemo } from "react";
 import { Icons } from "../icons/SvgIcons";
+import { matchesNormalizedTerms } from "../../lib/textUtils";
 import type { DefinitionBank, DefinitionItem, ImportanceTier } from "../../types";
 
 interface DefinitionsViewProps {
@@ -49,10 +50,6 @@ export const DEF_TIER_META: Record<
     desc: "مصطلحات تخصصية مساعدة وتراكيب إثرائية للاستزادة"
   }
 };
-
-function normalize(text: string): string {
-  return (text || "").toLowerCase();
-}
 
 export const DefinitionsView: React.FC<DefinitionsViewProps> = ({
   data,
@@ -99,19 +96,16 @@ export const DefinitionsView: React.FC<DefinitionsViewProps> = ({
   }, [items]);
 
   const filtered = useMemo(() => {
-    const q = normalize(query.trim());
     return items.filter((item) => {
       if (lectureFilter !== "all" && item.lec !== lectureFilter) return false;
       if (categoryFilter !== "all" && item.category !== categoryFilter) return false;
       if (tierFilter !== "all" && getDefinitionTier(item.importance) !== tierFilter) return false;
-      if (!q) return true;
+      if (!query.trim()) return true;
 
       const triggersText = (item.triggers || []).map((t) => `${t.en} ${t.ar || ""}`).join(" ");
       const pitfallText = item.exam_pitfall ? `${item.exam_pitfall.en || ""} ${item.exam_pitfall.ar || ""}` : "";
-      const haystack = normalize(
-        `${item.term_en} ${item.term_ar || ""} ${item.def_en} ${item.def_ar || ""} ${item.category || ""} ${triggersText} ${pitfallText}`
-      );
-      return haystack.includes(q);
+      const haystack = `${item.term_en} ${item.term_ar || ""} ${item.def_en} ${item.def_ar || ""} ${item.category || ""} ${triggersText} ${pitfallText}`;
+      return matchesNormalizedTerms(haystack, query);
     });
   }, [items, query, lectureFilter, categoryFilter, tierFilter]);
 

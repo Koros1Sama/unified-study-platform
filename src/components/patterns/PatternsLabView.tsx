@@ -7,6 +7,7 @@
 import React, { useMemo, useRef, useState } from "react";
 import { Icons } from "../icons/SvgIcons";
 import { useFitTables } from "../../lib/useFitTables";
+import { matchesNormalizedTerms } from "../../lib/textUtils";
 import type { QuestionPatternsData, PatternCase } from "../../types";
 
 interface PatternsLabViewProps {
@@ -44,14 +45,14 @@ export const PatternsLabView: React.FC<PatternsLabViewProps> = ({
 
   const filterCases = (cases?: PatternCase[]) => {
     if (!cases) return [];
-    const q = query.trim().toLowerCase();
-    if (!q) return cases;
+    if (!query.trim()) return cases;
     return cases.filter((item) =>
-      [item.q, item.q_ar, item.ans, item.ans_ar, item.note, item.trigger_word, item.m]
-        .filter(Boolean)
-        .join(" ")
-        .toLowerCase()
-        .includes(q)
+      matchesNormalizedTerms(
+        [item.q, item.q_ar, item.ans, item.ans_ar, item.note, item.trigger_word, item.m]
+          .filter(Boolean)
+          .join(" "),
+        query
+      )
     );
   };
 

@@ -1,12 +1,12 @@
 // ==============================================================================
 // المنصة التعليمية الموحدة — عامل الخدمة للأوفلاين وتفريغ الكاش (PWA Service Worker)
-// Standard Two-Tier Architecture · Cache-Busting · Zero Emojis (Rule 1 & Rule 7)
+// Two-Tier + Protected Offline Pack Caches · Same-Origin Safe · Query-Agnostic
 // ==============================================================================
 
-const CORE_PREFIX = "usp-core-";
 const RUNTIME_PREFIX = "usp-runtime-";
-const CORE = "usp-core-v18";
-const RUNTIME = "usp-runtime-v18";
+const OFFLINE_PREFIX = "usp-offline-";
+const CORE = "usp-core-v19";
+const RUNTIME = "usp-runtime-v19";
 
 const CORE_ASSETS = [
   "./",
@@ -20,7 +20,15 @@ const CORE_ASSETS = [
   "./data/subjects.json"
 ];
 
-// حدث التثبيت: تحميل الأصول الأساسية فورياً وتخطي الانتظار
+function isHtmlResponse(res) {
+  const ct = (res.headers.get("content-type") || "").toLowerCase();
+  return ct.includes("text/html");
+}
+
+function getScopedIndexUrl() {
+  return new URL("./index.html", self.registration.scope).href;
+}
+
 self.addEventListener("install", (e) => {
   e.waitUntil(
     caches
@@ -31,14 +39,13 @@ self.addEventListener("install", (e) => {
   );
 });
 
-// حدث التنشيط: ترحيل الشرائح وحذف الكاش القديم
 self.addEventListener("activate", (e) => {
   e.waitUntil(
     (async () => {
       const keys = await caches.keys();
       const targetRuntime = await caches.open(RUNTIME);
 
-      // ترحيل شرائح الكاش القديم بدفعات متوازية من 10 ملفات
+      // ترحيل الشرائح والأيقونات من كاش التشغيل السابق دون المساس بحزم الأوفلاين (usp-offline-*)
       for (const k of keys) {
         if (k.startsWith(RUNTIME_PREFIX) && k !== RUNTIME) {
           try {
@@ -56,40 +63,49 @@ self.addEventListener("activate", (e) => {
                   try {
                     const res = await oldC.match(req);
                     if (res) await targetRuntime.put(req, res);
-                  } catch (_) {}
+                  } catch {
+                    // تجاهل الملف الفردي التالف أثناء الترحيل
+                  }
                 })
               );
             }
-          } catch (_) {}
+          } catch {
+            // تجاهل تعذر قراءة كاش قديم
+          }
         }
       }
 
-      // حذف أي كاشات قديمة
+      // حذف الكاشات القديمة مع حماية كاشات حزم الأوفلاين الدائمة (usp-offline-*)
       await Promise.all(
         keys.map((k) => {
-          if (k !== CORE && k !== RUNTIME) {
+          if (k !== CORE && k !== RUNTIME && !k.startsWith(OFFLINE_PREFIX)) {
             return caches.delete(k);
           }
           return null;
         })
       );
 
-      // المطالبة الفورية بالعملاء
       await self.clients.claim();
     })()
   );
 });
 
-// استراتيجيات الجلب والشبكة (Fetch Strategies):
-// 1. طلبات التنقل (HTML): Network-First مع الرجوع لـ /index.html أوفلاين
-// 2. ملفات البيانات (/data/): Network-First لضمان أحدث التحديثات مع العمل أوفلاين
-// 3. السلايدات والوسائط (/slides/, /assets/): Cache-First للسرعة وتوفير البيانات
+async function matchAnyCache(req, ignoreSearch = false) {
+  const direct = await caches.match(req, { ignoreSearch });
+  if (direct) return direct;
+  if (!ignoreSearch) {
+    return caches.match(req, { ignoreSearch: true });
+  }
+  return undefined;
+}
+
 self.addEventListener("fetch", (e) => {
   const req = e.request;
-  const url = new URL(req.url);
-
-  // تجاهل الطلبات غير الـ GET
   if (req.method !== "GET") return;
+
+  const url = new URL(req.url);
+  // عدم اعتراض الطلبات الخارجية (مثل Supabase API أو الخطوط الخارجية أو إضافات المتصفح)
+  if (url.origin !== self.location.origin) return;
 
   // 1. طلبات التنقل (صفحات الـ SPA)
   if (req.mode === "navigate") {
@@ -98,56 +114,63 @@ self.addEventListener("fetch", (e) => {
         .then((res) => {
           if (res.ok) {
             const copy = res.clone();
-            caches.open(CORE).then((c) => c.put(req, copy));
+            caches.open(CORE).then((c) => c.put(getScopedIndexUrl(), copy));
           }
           return res;
         })
         .catch(async () => {
-          const match = await caches.match(req);
+          const match = await matchAnyCache(req, true);
           if (match) return match;
-          const fallback = await caches.match("/index.html");
+          const fallback = await caches.match(getScopedIndexUrl(), { ignoreSearch: true });
           return fallback || new Response("Offline", { status: 503, statusText: "Offline" });
         })
     );
     return;
   }
 
-  // 2. ملفات البيانات (/data/) والتهيئة
+  // 2. ملفات البيانات (/data/): الشبكة أولاً مع مطابقة كاش تتجاهل معامل ?v=...
   if (url.pathname.includes("/data/")) {
     e.respondWith(
       fetch(req)
         .then((res) => {
-          if (res.ok) {
+          if (res.ok && !isHtmlResponse(res)) {
             const copy = res.clone();
             caches.open(RUNTIME).then((c) => c.put(req, copy));
           }
           return res;
         })
-        .catch(() => caches.match(req))
+        .catch(async () => {
+          const cached = await matchAnyCache(req, true);
+          return cached || new Response("{}", { status: 503, headers: { "Content-Type": "application/json" } });
+        })
     );
     return;
   }
 
-  // 3. السلايدات والوسائط والأصول الثابتة (/slides/, /assets/, fonts)
-  if (url.pathname.includes("/slides/") || url.pathname.includes("/assets/") || url.pathname.endsWith(".png") || url.pathname.endsWith(".woff2")) {
+  // 3. السلايدات وصفحات الكتب والوسائط (/slides/, /assets/, webp, png, woff2)
+  if (
+    url.pathname.includes("/slides/") ||
+    url.pathname.includes("/assets/") ||
+    /\.(webp|png|jpg|jpeg|svg|woff2)$/i.test(url.pathname)
+  ) {
     e.respondWith(
-      caches.match(req).then((cached) => {
+      matchAnyCache(req, true).then((cached) => {
         if (cached) return cached;
         return fetch(req)
           .then((res) => {
-            if (res.ok) {
+            if (res.ok && !isHtmlResponse(res)) {
               const copy = res.clone();
               caches.open(RUNTIME).then((c) => c.put(req, copy));
             }
             return res;
           })
-          .catch(() => cached);
+          .catch(() => new Response("", { status: 503, statusText: "Offline" }));
       })
     );
     return;
   }
 
-  // 4. بقية الطلبات: الشبكة أولاً مع بديل الكاش
+  // 4. بقية أصول نفس النطاق
   e.respondWith(
     fetch(req)
       .then((res) => {
@@ -157,6 +180,9 @@ self.addEventListener("fetch", (e) => {
         }
         return res;
       })
-      .catch(() => caches.match(req))
+      .catch(async () => {
+        const cached = await matchAnyCache(req, true);
+        return cached || new Response("", { status: 503, statusText: "Offline" });
+      })
   );
 });

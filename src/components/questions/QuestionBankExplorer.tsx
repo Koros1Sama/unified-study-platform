@@ -5,32 +5,15 @@
 
 import React, { useEffect, useState, useMemo } from "react";
 import { Icons } from "../icons/SvgIcons";
+import { highlightSearchText, matchesNormalizedTerms } from "../../lib/textUtils";
 import type { UnifiedQuestion } from "../../types";
+
+export { highlightSearchText };
 
 interface QuestionBankExplorerProps {
   questions: UnifiedQuestion[];
   onJumpToQuestion: (questionId: string) => void;
   arabicOnly?: boolean;
-}
-
-export function highlightSearchText(text: string, term: string): React.ReactNode {
-  if (!term.trim() || !text) return text;
-
-  // تقسيم كلمات البحث
-  const terms = term.trim().split(/\s+/).filter(Boolean);
-  const regex = new RegExp(`(${terms.map((t) => t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|")})`, "gi");
-  const parts = text.split(regex);
-  const termSet = new Set(terms.map((t) => t.toLowerCase()));
-
-  return parts.map((part, i) =>
-    termSet.has(part.toLowerCase()) ? (
-      <mark key={i} className="hl-search">
-        {part}
-      </mark>
-    ) : (
-      part
-    )
-  );
 }
 
 export const QuestionBankExplorer: React.FC<QuestionBankExplorerProps> = ({
@@ -54,23 +37,20 @@ export const QuestionBankExplorer: React.FC<QuestionBankExplorerProps> = ({
       return questions;
     }
 
-    const term = searchTerm.toLowerCase().trim();
     return questions.filter((q) => {
       if (selectedModel !== "all" && q.model_id !== selectedModel) return false;
-      if (!term) return true;
+      if (!searchTerm.trim()) return true;
 
-      const qEn = q.question_en.toLowerCase();
-      const qAr = q.question_ar ? q.question_ar.toLowerCase() : "";
-      const optsEn = q.options_en.join(" ").toLowerCase();
-      const optsAr = q.options_ar.join(" ").toLowerCase();
+      const qText = `${q.question_en} ${q.question_ar || ""}`;
+      const optsText = `${q.options_en.join(" ")} ${q.options_ar.join(" ")}`;
 
       if (searchScope === "q") {
-        return qEn.includes(term) || qAr.includes(term);
+        return matchesNormalizedTerms(qText, searchTerm);
       }
       if (searchScope === "opts") {
-        return optsEn.includes(term) || optsAr.includes(term);
+        return matchesNormalizedTerms(optsText, searchTerm);
       }
-      return qEn.includes(term) || qAr.includes(term) || optsEn.includes(term) || optsAr.includes(term);
+      return matchesNormalizedTerms(`${qText} ${optsText}`, searchTerm);
     });
   }, [questions, searchTerm, searchScope, selectedModel]);
 

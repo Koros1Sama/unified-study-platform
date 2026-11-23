@@ -23,6 +23,7 @@ export interface SubjectMeta {
   lab_title?: string;
   data_status?: "full" | "theory-only" | "pending";
   arabic_only?: boolean;
+  page_layout?: "slides" | "book";
 }
 
 export interface Lecture {
@@ -524,6 +525,8 @@ export type ExplanationMode = "always" | "wrong_only" | "manual";
 export type QuestionSortMode = "natural" | "similarity" | "slides";
 export type BookmarkColor = "red" | "yellow" | "green" | "blue";
 export type BookmarkLabels = Record<BookmarkColor, string>;
+export type BookLayoutMode = "split" | "continuous" | "spread";
+export type BookPaperFilter = "original" | "warm" | "night";
 
 export interface ShuffleSettings {
   shuffleChoices: boolean;

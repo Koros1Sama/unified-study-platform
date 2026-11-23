@@ -7,8 +7,8 @@
 
 import React, { useState, useEffect, useMemo, useRef } from "react";
 import { Icons } from "../icons/SvgIcons";
+import { highlightSearchText, matchesNormalizedTerms } from "../../lib/textUtils";
 import type { SubjectBundle } from "../../lib/dataService";
-import type { ActiveView } from "../../types";
 
 export interface GlobalSearchModalProps {
   isOpen: boolean;
@@ -19,13 +19,25 @@ export interface GlobalSearchModalProps {
   onJumpToTable?: (tableId: string) => void;
   onJumpToSummaryPart?: (partId: string) => void;
   onJumpToDefinition?: (defId: string) => void;
+  onJumpToEmergency?: () => void;
+  onJumpToGlossary?: () => void;
+  onJumpToPattern?: () => void;
 }
 
-type SearchCategory = "all" | "questions" | "slides" | "tables" | "summary" | "definitions";
+type SearchCategory =
+  | "all"
+  | "questions"
+  | "slides"
+  | "tables"
+  | "summary"
+  | "definitions"
+  | "emergency"
+  | "glossary"
+  | "patterns";
 
 interface SearchResultItem {
   id: string;
-  category: "questions" | "slides" | "tables" | "summary" | "definitions";
+  category: Exclude<SearchCategory, "all">;
   categoryLabel: string;
   title: string;
   subtitle: string;
@@ -34,23 +46,7 @@ interface SearchResultItem {
   onSelect: () => void;
 }
 
-export function highlightText(text: string, query: string): React.ReactNode {
-  if (!query.trim() || !text) return text;
-  const terms = query.trim().split(/\s+/).filter(Boolean);
-  const regex = new RegExp(`(${terms.map((t) => t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|")})`, "gi");
-  const parts = text.split(regex);
-  const termSet = new Set(terms.map((t) => t.toLowerCase()));
-
-  return parts.map((part, i) =>
-    termSet.has(part.toLowerCase()) ? (
-      <mark key={i} className="hl-search" style={{ background: "color-mix(in srgb, var(--acc) 32%, transparent)", color: "var(--ink)", padding: "1px 3px", borderRadius: "3px" }}>
-        {part}
-      </mark>
-    ) : (
-      part
-    )
-  );
-}
+export const highlightText = highlightSearchText;
 
 export const GlobalSearchModal: React.FC<GlobalSearchModalProps> = ({
   isOpen,
@@ -60,7 +56,10 @@ export const GlobalSearchModal: React.FC<GlobalSearchModalProps> = ({
   onJumpToQuestion,
   onJumpToTable,
   onJumpToSummaryPart,
-  onJumpToDefinition
+  onJumpToDefinition,
+  onJumpToEmergency,
+  onJumpToGlossary,
+  onJumpToPattern
 }) => {
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState<SearchCategory>("all");
@@ -79,14 +78,9 @@ export const GlobalSearchModal: React.FC<GlobalSearchModalProps> = ({
   }, [isOpen]);
 
   const results = useMemo<SearchResultItem[]>(() => {
-    const q = query.trim().toLowerCase();
-    if (!q || !bundle) return [];
+    if (!query.trim() || !bundle) return [];
 
-    const terms = q.split(/\s+/).filter(Boolean);
-    const matchesAllTerms = (target: string) => {
-      const lower = target.toLowerCase();
-      return terms.every((t) => lower.includes(t));
-    };
+    const matchesAllTerms = (target: string) => matchesNormalizedTerms(target, query);
 
     const items: SearchResultItem[] = [];
 
@@ -121,8 +115,9 @@ export const GlobalSearchModal: React.FC<GlobalSearchModalProps> = ({
       });
     }
 
-    // 2. بحث في السلايدات
+    // 2. بحث في السلايدات / صفحات الكتاب
     if (category === "all" || category === "slides") {
+      const isBook = bundle.meta.page_layout === "book";
       (bundle.slides || []).forEach((slide) => {
         const fullText = [
           slide.ref,
@@ -136,8 +131,8 @@ export const GlobalSearchModal: React.FC<GlobalSearchModalProps> = ({
           items.push({
             id: `slide-${slide.ref}`,
             category: "slides",
-            categoryLabel: "السلايدات",
-            title: slide.title || slide.content_en || `شريحة ${slide.slide_num}`,
+            categoryLabel: isBook ? "الكتاب" : "السلايدات",
+            title: slide.title || slide.content_en || `${isBook ? "صفحة" : "شريحة"} ${slide.slide_num}`,
             subtitle: slide.content_ar ? slide.content_ar.substring(0, 100) + "..." : slide.content_en || "",
             snippet: slide.notes_ar ? `شرح: ${slide.notes_ar.substring(0, 120)}...` : undefined,
             badge: slide.ref,
@@ -199,7 +194,7 @@ export const GlobalSearchModal: React.FC<GlobalSearchModalProps> = ({
       });
     }
 
-    // 5. بحث في بنك التعاريف والمعجم
+    // 5. بحث في بنك التعاريف
     if (category === "all" || category === "definitions") {
       (bundle.definitions?.items || []).forEach((def) => {
         const triggersText = (def.triggers || []).map((t) => `${t.en} ${t.ar}`).join(" ");
@@ -223,8 +218,128 @@ export const GlobalSearchModal: React.FC<GlobalSearchModalProps> = ({
       });
     }
 
+    // 6. بحث في ملخص الملخص (الطوارئ)
+    if (category === "all" || category === "emergency") {
+      (bundle.emergency?.sections || []).forEach((sec) => {
+        const parts: string[] = [sec.title, sec.nav_title, sec.desc || "", sec.badge || ""];
+        if (sec.type === "capsules") {
+          sec.capsules.forEach((cap) => {
+            parts.push(cap.title, cap.lec);
+            cap.groups.forEach((g) => {
+              parts.push(g.subtitle);
+              g.items.forEach((it) => parts.push(it.head, it.math || "", it.body));
+            });
+          });
+        } else if (sec.type === "cards") {
+          sec.cards.forEach((c) => parts.push(c.title, c.body, c.math || ""));
+        } else if (sec.type === "traps_grid") {
+          sec.traps.forEach((t) => parts.push(t.title, t.math || "", ...t.points));
+        } else if (sec.type === "shortcuts") {
+          sec.shortcuts.forEach((s) => parts.push(s.problem, s.rule, ...s.steps));
+        } else if (sec.type === "tf_list") {
+          sec.items.forEach((it) => parts.push(it.statement, it.trap, it.rule));
+        } else if (sec.type === "table") {
+          parts.push(...sec.head, ...sec.rows.flat());
+        } else if (sec.type === "timeline") {
+          sec.steps.forEach((st) => parts.push(st.time, st.target, st.detail));
+        }
+        const fullText = parts.join(" ");
+        if (matchesAllTerms(fullText)) {
+          items.push({
+            id: `em-${sec.id}`,
+            category: "emergency",
+            categoryLabel: "ملخص الملخص",
+            title: sec.title,
+            subtitle: sec.nav_title || "",
+            snippet: sec.desc || parts.slice(4).join(" ").substring(0, 120),
+            badge: sec.badge || "80/20",
+            onSelect: () => {
+              if (onJumpToEmergency) onJumpToEmergency();
+              onClose();
+            }
+          });
+        }
+      });
+    }
+
+    // 7. بحث في المعجم
+    if (category === "all" || category === "glossary") {
+      const glossary = bundle.glossary;
+      if (glossary) {
+        const structured = glossary.curated_items || glossary.items || [];
+        structured.forEach((term, idx) => {
+          const fullText = [term.term_en, term.term_ar, term.context || "", term.category || ""].join(" ");
+          if (matchesAllTerms(fullText)) {
+            items.push({
+              id: `gl-cur-${idx}-${term.term_en}`,
+              category: "glossary",
+              categoryLabel: "المعجم",
+              title: `${term.term_ar} (${term.term_en})`,
+              subtitle: term.term_en,
+              snippet: term.context,
+              badge: term.category || "مصطلح",
+              onSelect: () => {
+                if (onJumpToGlossary) onJumpToGlossary();
+                onClose();
+              }
+            });
+          }
+        });
+        const dictBuckets = [
+          ...Object.entries(glossary.words || {}),
+          ...Object.entries(glossary.phrases || {})
+        ];
+        for (let i = 0; i < dictBuckets.length && items.length < 70; i++) {
+          const [en, val] = dictBuckets[i];
+          const ar = typeof val === "string" ? val : val.arabic;
+          const ctx = typeof val === "string" ? undefined : val.context;
+          const cat = typeof val === "string" ? undefined : val.category;
+          if (matchesAllTerms(`${en} ${ar} ${ctx || ""} ${cat || ""}`)) {
+            items.push({
+              id: `gl-dict-${i}-${en}`,
+              category: "glossary",
+              categoryLabel: "المعجم",
+              title: `${ar} (${en})`,
+              subtitle: en,
+              snippet: ctx,
+              badge: cat || "مصطلح",
+              onSelect: () => {
+                if (onJumpToGlossary) onJumpToGlossary();
+                onClose();
+              }
+            });
+          }
+        }
+      }
+    }
+
+    // 8. بحث في أنماط الأسئلة
+    if (category === "all" || category === "patterns") {
+      (bundle.patterns?.rules || []).forEach((rule) => {
+        const casesText = (rule.cases || [])
+          .map((c) => [c.q, c.q_ar || "", c.ans, c.note || "", c.trigger_word || ""].join(" "))
+          .join(" ");
+        const fullText = [rule.title, rule.subtitle || "", rule.rule, rule.trigger || "", casesText].join(" ");
+        if (matchesAllTerms(fullText)) {
+          items.push({
+            id: `pat-${rule.id}`,
+            category: "patterns",
+            categoryLabel: "أنماط الأسئلة",
+            title: rule.title,
+            subtitle: rule.subtitle || rule.trigger || "",
+            snippet: rule.rule,
+            badge: rule.accuracy || rule.id.toUpperCase(),
+            onSelect: () => {
+              if (onJumpToPattern) onJumpToPattern();
+              onClose();
+            }
+          });
+        }
+      });
+    }
+
     return items.slice(0, 60); // أول 60 نتيجة لتجنب الثقل
-  }, [query, category, bundle, onJumpToSlide, onJumpToQuestion, onJumpToTable, onJumpToSummaryPart, onJumpToDefinition, onClose]);
+  }, [query, category, bundle, onJumpToSlide, onJumpToQuestion, onJumpToTable, onJumpToSummaryPart, onJumpToDefinition, onJumpToEmergency, onJumpToGlossary, onJumpToPattern, onClose]);
 
   // التنقل بلوحة المفاتيح
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -387,11 +502,14 @@ export const GlobalSearchModal: React.FC<GlobalSearchModalProps> = ({
         >
           {[
             { id: "all", label: "الكل" },
-            { id: "questions", label: "الأسئلة والنماذج" },
-            { id: "slides", label: "السلايدات" },
+            { id: "questions", label: "الأسئلة" },
+            { id: "slides", label: bundle?.meta.page_layout === "book" ? "الكتاب" : "السلايدات" },
             { id: "tables", label: "الجداول" },
             { id: "summary", label: "الملخص" },
-            { id: "definitions", label: "التعاريف" }
+            { id: "emergency", label: "ملخص الملخص" },
+            { id: "definitions", label: "التعاريف" },
+            { id: "glossary", label: "المعجم" },
+            { id: "patterns", label: "الأنماط" }
           ].map((cat) => (
             <button
               key={cat.id}

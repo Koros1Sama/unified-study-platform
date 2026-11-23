@@ -8,6 +8,7 @@ import React, { useMemo, useRef, useState } from "react";
 import { Icons } from "../icons/SvgIcons";
 import { CramInteractiveWidget } from "./CramInteractiveWidget";
 import { useFitTables } from "../../lib/useFitTables";
+import { matchesNormalizedTerms, sanitizeStudyHtml } from "../../lib/textUtils";
 import type {
   SummaryOfSummaryData,
   SummaryOfSummarySection,
@@ -72,11 +73,10 @@ export const SummaryOfSummaryView: React.FC<SummaryOfSummaryViewProps> = ({
   const sections = data?.sections || [];
 
   const filteredSections = useMemo(() => {
-    const q = query.trim().toLowerCase();
     return sections.filter((section) => {
       if (selectedSectionFilter !== "all" && section.id !== selectedSectionFilter) return false;
-      if (!q) return true;
-      return sectionSearchBlob(section).includes(q);
+      if (!query.trim()) return true;
+      return matchesNormalizedTerms(sectionSearchBlob(section), query);
     });
   }, [sections, selectedSectionFilter, query]);
 
@@ -263,7 +263,7 @@ export const SummaryOfSummaryView: React.FC<SummaryOfSummaryViewProps> = ({
                                   {item.body && (
                                     <div
                                       className="em-sub-body"
-                                      dangerouslySetInnerHTML={{ __html: item.body }}
+                                      dangerouslySetInnerHTML={{ __html: sanitizeStudyHtml(item.body) }}
                                     />
                                   )}
                                 </div>
@@ -333,7 +333,7 @@ export const SummaryOfSummaryView: React.FC<SummaryOfSummaryViewProps> = ({
                       {trp.math && <div className="em-trap-math" dir="ltr">{trp.math}</div>}
                       <ul className="em-trap-list">
                         {(trp.points || []).map((pt, pIdx) => (
-                          <li key={pIdx} dangerouslySetInnerHTML={{ __html: pt }} />
+                          <li key={pIdx} dangerouslySetInnerHTML={{ __html: sanitizeStudyHtml(pt) }} />
                         ))}
                       </ul>
                     </div>
@@ -358,7 +358,7 @@ export const SummaryOfSummaryView: React.FC<SummaryOfSummaryViewProps> = ({
                       )}
                       <ol className="em-sc-steps">
                         {(sc.steps || []).map((st, stepIdx) => (
-                          <li key={stepIdx} dangerouslySetInnerHTML={{ __html: st }} />
+                          <li key={stepIdx} dangerouslySetInnerHTML={{ __html: sanitizeStudyHtml(st) }} />
                         ))}
                       </ol>
                     </div>

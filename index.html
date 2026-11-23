@@ -5,17 +5,17 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=5.0" />
     <meta name="theme-color" content="#0b0e17" />
     <title>Study Viewer · المنصة الجامعية الموحدة</title>
-    <meta name="description" content="المنصة الأكاديمية الشاملة والموحدة لجميع المقررات الدراسية — ملخصات، سلايدات، جداول مقارنة، وبنوك أسئلة متطورة" />
-    <link rel="manifest" href="/manifest.json" />
+    <meta name="description" content="المنصة الأكاديمية الشاملة والموحدة لجميع المقررات الدراسية — ملخصات، سلايدات، كتب مرجعية، جداول مقارنة، وبنوك أسئلة متطورة" />
+    <link rel="manifest" href="./manifest.json" />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="apple-mobile-web-app-title" content="منصة المقررات" />
-    <link rel="icon" type="image/svg+xml" href="/icons/icon.svg" />
-    <link rel="icon" type="image/png" sizes="32x32" href="/icons/icon-32.png" />
-    <link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png" />
-    <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
-    <link rel="shortcut icon" href="/favicon.ico" />
+    <link rel="icon" type="image/svg+xml" href="./icons/icon.svg" />
+    <link rel="icon" type="image/png" sizes="32x32" href="./icons/icon-32.png" />
+    <link rel="icon" type="image/png" sizes="192x192" href="./icons/icon-192.png" />
+    <link rel="apple-touch-icon" href="./icons/apple-touch-icon.png" />
+    <link rel="shortcut icon" href="./favicon.ico" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
@@ -29,19 +29,22 @@
     <script>
       if ('serviceWorker' in navigator) {
         window.addEventListener('load', () => {
+          const hadController = Boolean(navigator.serviceWorker.controller);
+          let updateNotified = false;
           navigator.serviceWorker.register('./sw.js', { updateViaCache: 'none' })
             .then((reg) => {
               reg.update();
-              let reloadPending = false;
               navigator.serviceWorker.addEventListener('controllerchange', () => {
+                // منع إعادة التحميل في أول زيارة تماماً، وإظهار إشعار لطيف عند التحديث
+                if (!hadController || updateNotified) return;
+                updateNotified = true;
                 if (window.__OFFLINE_DOWNLOADING__) {
-                  reloadPending = true;
+                  window.addEventListener('offline-download-complete', () => {
+                    window.dispatchEvent(new CustomEvent('usp-sw-update-ready'));
+                  }, { once: true });
                   return;
                 }
-                window.location.reload();
-              });
-              window.addEventListener('offline-download-complete', () => {
-                if (reloadPending) window.location.reload();
+                window.dispatchEvent(new CustomEvent('usp-sw-update-ready'));
               });
             })
             .catch((err) => console.warn('Service worker registration failed:', err));

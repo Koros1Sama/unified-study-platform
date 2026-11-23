@@ -7,7 +7,7 @@
 
 import React, { useState, useEffect, useRef } from "react";
 import { Icons } from "../icons/SvgIcons";
-import { cleanArabicOnly } from "../common/SmartTranslateTooltip";
+import { cleanArabicOnly } from "../../lib/textUtils";
 import { resolveAssetUrl } from "../../lib/dataService";
 import type { UnifiedQuestion, DistractorDetail, ExplanationMode, BookmarkColor, BookmarkLabels } from "../../types";
 
@@ -21,6 +21,7 @@ interface QuestionCardProps {
   onScheduleHideTranslate?: () => void;
   languageMode?: "smart" | "en" | "ar" | "both";
   readOnly?: boolean;
+  examBlindMode?: boolean;
   showBookmarks?: boolean;
   bookmarks?: string[];
   bmLabels?: BookmarkLabels;
@@ -72,6 +73,7 @@ const QuestionCardComponent: React.FC<QuestionCardProps> = ({
   onScheduleHideTranslate,
   languageMode = "smart",
   readOnly = false,
+  examBlindMode = false,
   showBookmarks = true,
   bookmarks = [],
   bmLabels,
@@ -86,24 +88,25 @@ const QuestionCardComponent: React.FC<QuestionCardProps> = ({
   onOpenExpSettings
 }) => {
   const isEssay = question.type === "essay";
+  const isEssayReviewed = isEssay && (userAnswer?.selected_answer ?? -1) >= 0;
   const isAnswered = Boolean(userAnswer) && !isEssay && (userAnswer?.selected_answer ?? -1) >= 0;
+  const showFeedback = isAnswered && !examBlindMode;
   const selectedIdx = userAnswer?.selected_answer;
   const isCorrect = isAnswered && selectedIdx === question.correct_answer;
 
   const [showExplanation, setShowExplanation] = useState<boolean>(() => {
-    if (!isAnswered) return false;
+    if (!showFeedback) return false;
     if (expMode === "always") return true;
     if (expMode === "wrong_only") return !isCorrect;
     return false;
   });
   const [showEssay, setShowEssay] = useState<boolean>(false);
-  const [showAllAnalysis, setShowAllAnalysis] = useState<boolean>(true);
   const [isBmDropdownOpen, setIsBmDropdownOpen] = useState<boolean>(false);
   const bmWrapRef = useRef<HTMLDivElement>(null);
 
   // تحديث حالة الشرح عند تغيير نمط العرض أو تصفير الإجابة
   useEffect(() => {
-    if (!isAnswered) {
+    if (!showFeedback) {
       setShowExplanation(false);
     } else if (expMode === "always") {
       setShowExplanation(true);
@@ -112,7 +115,7 @@ const QuestionCardComponent: React.FC<QuestionCardProps> = ({
     } else {
       setShowExplanation(false);
     }
-  }, [expMode, isAnswered, isCorrect]);
+  }, [expMode, showFeedback, isCorrect]);
 
   // إغلاق قائمة العلامات عند النقر خارجها
   useEffect(() => {
@@ -126,26 +129,27 @@ const QuestionCardComponent: React.FC<QuestionCardProps> = ({
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [isBmDropdownOpen]);
 
-  const cardStatusClass = isAnswered
+  const cardStatusClass = showFeedback
     ? isCorrect
       ? "answered-right"
       : "answered-wrong"
     : "";
 
   const handleSelectOption = (idx: number) => {
-    // قفل الخيارات: إذا كان السؤال قد أُجيب عليه بالفعل، يُمنع التبديل العرضي المباشر، ويجب النقر على زر "إعادة" لإلغاء الاختيار أولاً
-    if (isAnswered) return;
+    // في وضع المحاكاة العمياء يسمح للطالب بتبديل اختياره بحرية قبل التسليم
+    if (isAnswered && !examBlindMode) return;
     const ok = idx === question.correct_answer;
     onAnswer(question.id, idx, ok, question.twin_group_id);
 
-    if (expMode === "always") {
-      setShowExplanation(true);
-    } else if (expMode === "wrong_only") {
-      setShowExplanation(!ok);
-    } else {
-      setShowExplanation(false);
+    if (!examBlindMode) {
+      if (expMode === "always") {
+        setShowExplanation(true);
+      } else if (expMode === "wrong_only") {
+        setShowExplanation(!ok);
+      } else {
+        setShowExplanation(false);
+      }
     }
-    setShowAllAnalysis(true);
   };
 
   const handleTranslateClick = (e: React.MouseEvent, text: string) => {
@@ -156,12 +160,15 @@ const QuestionCardComponent: React.FC<QuestionCardProps> = ({
     }
   };
 
+  const optionsEn = Array.isArray(question?.options_en) ? question.options_en : [];
+  const optionsAr = Array.isArray(question?.options_ar) ? question.options_ar : [];
+
   const correctOptionText =
-    question.options_en[question.correct_answer] ||
-    question.options_ar[question.correct_answer] ||
+    optionsEn[question.correct_answer] ||
+    optionsAr[question.correct_answer] ||
     "";
 
-  const wrongOptions = question.options_en
+  const wrongOptions = optionsEn
     .map((_, idx) => idx)
     .filter((idx) => idx !== question.correct_answer);
 
@@ -279,7 +286,7 @@ const QuestionCardComponent: React.FC<QuestionCardProps> = ({
         )}
 
 
-        {isAnswered && !readOnly && (
+        {showFeedback && !readOnly && (
           <button
             type="button"
             className="q-undo-btn q-head-undo"
@@ -350,17 +357,32 @@ const QuestionCardComponent: React.FC<QuestionCardProps> = ({
         )}
       </div>
 
-      {/* الأسئلة المقالية: إجابة نموذجية قابلة للكشف */}
+      {/* الأسئلة المقالية: إجابة نموذجية قابلة للكشف + تتبع المراجعة */}
       {isEssay ? (
         <div className="essay-box">
-          <button
-            type="button"
-            className="btn btn-sm essay-reveal"
-            onClick={() => setShowEssay(!showEssay)}
-          >
-            <Icons.Eye size={14} />
-            <span>{showEssay ? "إخفاء الإجابة النموذجية" : "اكشف الإجابة النموذجية"}</span>
-          </button>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+            <button
+              type="button"
+              className="btn btn-sm essay-reveal"
+              onClick={() => setShowEssay(!showEssay)}
+            >
+              <Icons.Eye size={14} />
+              <span>{showEssay ? "إخفاء الإجابة النموذجية" : "اكشف الإجابة النموذجية"}</span>
+            </button>
+            {!readOnly && (
+              <button
+                type="button"
+                className={`fchip ${isEssayReviewed ? "on" : ""}`}
+                onClick={() =>
+                  onAnswer(question.id, isEssayReviewed ? -1 : 0, !isEssayReviewed, question.twin_group_id)
+                }
+                title="تعليم هذا السؤال المقالي كمُراجَع لاحتسابه في التقدم"
+              >
+                <Icons.Check size={13} />
+                <span>{isEssayReviewed ? "تمت مراجعته" : "علّم كمُراجَع"}</span>
+              </button>
+            )}
+          </div>
           {showEssay && (
             <div className="essay-ans show">
               {question.essay_answer_ar && (
@@ -384,14 +406,14 @@ const QuestionCardComponent: React.FC<QuestionCardProps> = ({
       ) : (
         <>
           <div className="opts">
-            {question.options_en.map((optEn, idx) => {
-              const optAr = question.options_ar ? question.options_ar[idx] : undefined;
+            {optionsEn.map((optEn, idx) => {
+              const optAr = optionsAr[idx];
               const isSelected = selectedIdx === idx;
               const isRightOpt = idx === question.correct_answer;
               const isRtlOpt = languageMode === "ar" || (!optEn && !!optAr);
 
               let btnClass = "opt-btn " + (isRtlOpt ? "is-rtl" : "is-ltr");
-              if (isAnswered) {
+              if (showFeedback) {
                 if (isRightOpt) btnClass += " correct";
                 else if (isSelected) btnClass += " wrong selected";
                 else btnClass += " dimmed";
@@ -420,7 +442,7 @@ const QuestionCardComponent: React.FC<QuestionCardProps> = ({
                   <button
                     type="button"
                     className={btnClass}
-                    data-correct={isAnswered && isRightOpt ? "true" : undefined}
+                    data-correct={showFeedback && isRightOpt ? "true" : undefined}
                     onClick={() => handleSelectOption(idx)}
                     onPointerEnter={(e) => {
                       if (
@@ -466,7 +488,7 @@ const QuestionCardComponent: React.FC<QuestionCardProps> = ({
             })}
           </div>
 
-          {isAnswered && (
+          {showFeedback && (
             <div className="q-feedback show">
               <div className="q-verdict-row">
                 <span className={`q-verdict ${isCorrect ? "ok" : "err"}`}>
@@ -586,7 +608,7 @@ const QuestionCardComponent: React.FC<QuestionCardProps> = ({
                   {wrongOptions.map((optIdx) => {
                     const detail = parseDistractorItem(question.distractor_analysis?.[String(optIdx)]);
                     const isUserPick = selectedIdx === optIdx;
-                    const optText = question.options_en[optIdx] || question.options_ar[optIdx];
+                    const optText = optionsEn[optIdx] || optionsAr[optIdx];
                     return (
                       <div key={optIdx} className={`why-item wrong ${isUserPick ? "user-picked" : ""}`}>
                         <div className="w-head">
@@ -643,19 +665,32 @@ const QuestionCardComponent: React.FC<QuestionCardProps> = ({
   );
 };
 
+function sameStringList(a?: string[], b?: string[]): boolean {
+  if (a === b) return true;
+  if (!a || !b || a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) {
+    if (a[i] !== b[i]) return false;
+  }
+  return true;
+}
+
 export const QuestionCard = React.memo(QuestionCardComponent, (prev, next) => {
   return (
-    prev.question.id === next.question.id &&
+    prev.question === next.question &&
     prev.displayNumber === next.displayNumber &&
     prev.readOnly === next.readOnly &&
+    prev.examBlindMode === next.examBlindMode &&
     prev.showBookmarks === next.showBookmarks &&
     prev.languageMode === next.languageMode &&
     prev.expMode === next.expMode &&
+    prev.expPromptSeen === next.expPromptSeen &&
+    prev.isRetestQuestion === next.isRetestQuestion &&
+    prev.twinNumber === next.twinNumber &&
     prev.userAnswer?.selected_answer === next.userAnswer?.selected_answer &&
     prev.userAnswer?.is_correct === next.userAnswer?.is_correct &&
-    prev.bookmarks?.length === next.bookmarks?.length &&
+    sameStringList(prev.bookmarks, next.bookmarks) &&
     prev.bmLabels === next.bmLabels &&
-    prev.question === next.question
+    prev.onAnswer === next.onAnswer
   );
 });
 

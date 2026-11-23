@@ -6,16 +6,9 @@
 
 import React, { useEffect, useRef } from "react";
 import { Icons } from "../icons/SvgIcons";
+import { cleanArabicOnly } from "../../lib/textUtils";
 
-export function cleanArabicOnly(text: string): string {
-  if (!text || typeof text !== "string") return "";
-  if (!/[\u0600-\u06FF]/.test(text)) return text;
-  let clean = text;
-  clean = clean.replace(/\s*\([A-Za-z][A-Za-z0-9\s,\-–—\.:\?/'"&%#+_=]*\)\s*/g, " ");
-  clean = clean.replace(/\s*\[[A-Za-z][A-Za-z0-9\s,\-–—\.:\?/'"&%#+_=]*\]\s*/g, " ");
-  clean = clean.replace(/\s{2,}/g, " ").replace(/\s+([،؛:\.؟?!])/g, "$1").trim();
-  return clean;
-}
+export { cleanArabicOnly };
 
 interface SmartTranslateTooltipProps {
   visible: boolean;

@@ -6,7 +6,7 @@
 
 import React, { useEffect } from "react";
 import { Icons } from "../icons/SvgIcons";
-import { cleanArabicOnly } from "../common/SmartTranslateTooltip";
+import { cleanArabicOnly } from "../../lib/textUtils";
 import type { UnifiedQuestion } from "../../types";
 
 interface TwinQuestionModalProps {

@@ -4,10 +4,11 @@
 // weak-area review. Zero Emojis.
 // ==============================================================================
 
-import React, { useState, useEffect, useMemo, useRef } from "react";
+import React, { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { Icons } from "../icons/SvgIcons";
 import { QuestionCard } from "./QuestionCard";
 import { SmartTranslateTooltip } from "../common/SmartTranslateTooltip";
+import { fisherYatesShuffle } from "../../lib/textUtils";
 import type { ExplanationMode, UnifiedQuestion, UserStudyProgress } from "../../types";
 
 interface ExamSimulatorProps {
@@ -53,6 +54,7 @@ export const ExamSimulator: React.FC<ExamSimulatorProps> = ({
   const [questionCount, setQuestionCount] = useState<number>(20);
   const [timerMode, setTimerMode] = useState<"countdown" | "stopwatch">("countdown");
   const [timeLimitMinutes, setTimeLimitMinutes] = useState<number>(20);
+  const [examGradingMode, setExamGradingMode] = useState<"blind" | "instant">("blind");
   const [examQuestions, setExamQuestions] = useState<UnifiedQuestion[]>([]);
   const [currentIdx, setCurrentIdx] = useState<number>(0);
   const [userAnswers, setUserAnswers] = useState<
@@ -62,7 +64,7 @@ export const ExamSimulator: React.FC<ExamSimulatorProps> = ({
   const [secondsRemaining, setSecondsRemaining] = useState<number>(0);
   const [timeSpent, setTimeSpent] = useState<number>(0);
   const [reviewFilter, setReviewFilter] = useState<ReviewFilter>("all");
-  const finishRef = useRef<() => void>(() => undefined);
+  const submittedRef = useRef<boolean>(false);
   const [tooltipState, setTooltipState] = useState<{
     visible: boolean;
     text: string;
@@ -76,39 +78,50 @@ export const ExamSimulator: React.FC<ExamSimulatorProps> = ({
     };
   }, []);
 
-  const handleShowTranslate = (text: string, pos: { x: number; y: number }) => {
+  const handleCloseTooltip = useCallback(() => {
+    setTooltipState((s) => (s.visible ? { ...s, visible: false } : s));
+  }, []);
+
+  const handleShowTranslate = useCallback((text: string, pos: { x: number; y: number }) => {
     if (hoverHideTimerRef.current) {
       clearTimeout(hoverHideTimerRef.current);
       hoverHideTimerRef.current = null;
     }
     setTooltipState({ visible: true, text, pos });
-  };
+  }, []);
 
-  const handleScheduleHideTranslate = () => {
+  const handleScheduleHideTranslate = useCallback(() => {
     if (hoverHideTimerRef.current) clearTimeout(hoverHideTimerRef.current);
     hoverHideTimerRef.current = setTimeout(() => {
       setTooltipState((s) => ({ ...s, visible: false }));
     }, 180);
-  };
+  }, []);
 
-  const handleCancelHideTranslate = () => {
+  const handleCancelHideTranslate = useCallback(() => {
     if (hoverHideTimerRef.current) {
       clearTimeout(hoverHideTimerRef.current);
       hoverHideTimerRef.current = null;
     }
-  };
+  }, []);
+
+  const examEligibleQuestions = useMemo(
+    () => questions.filter((q) => q.type !== "essay" && q.options_en.length > 0),
+    [questions]
+  );
 
   const pool = useMemo(
-    () => (scope === "all" ? questions : questions.filter((q) => q.model_id === scope)),
-    [questions, scope]
+    () => (scope === "all" ? examEligibleQuestions : examEligibleQuestions.filter((q) => q.model_id === scope)),
+    [examEligibleQuestions, scope]
   );
 
   const startExam = (customPool?: UnifiedQuestion[]) => {
     const source = customPool && customPool.length > 0 ? customPool : pool;
-    const shuffled = [...source].sort(() => Math.random() - 0.5);
+    if (source.length === 0) return;
+    const shuffled = fisherYatesShuffle(source);
     const selected = customPool && customPool.length > 0
       ? shuffled
       : shuffled.slice(0, Math.min(questionCount, source.length));
+    submittedRef.current = false;
     setExamQuestions(selected);
     setCurrentIdx(0);
     setUserAnswers({});
@@ -121,7 +134,19 @@ export const ExamSimulator: React.FC<ExamSimulatorProps> = ({
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
-  const finishExam = () => {
+  const finishExam = useCallback((isAuto = false) => {
+    if (submittedRef.current) return;
+    if (!isAuto) {
+      const answeredCount = Object.values(userAnswers).filter((a) => a.selected_answer >= 0).length;
+      const unanswered = examQuestions.length - answeredCount;
+      if (
+        unanswered > 0 &&
+        !window.confirm(`لا تزال هناك ${unanswered} أسئلة لم تُجب عنها بعد. هل تريد إنهاء الاختبار وتسليمه الآن؟`)
+      ) {
+        return;
+      }
+    }
+    submittedRef.current = true;
     let score = 0;
     examQuestions.forEach((q) => {
       if (userAnswers[q.id]?.is_correct) score++;
@@ -129,31 +154,28 @@ export const ExamSimulator: React.FC<ExamSimulatorProps> = ({
     onRecordResult({
       total: examQuestions.length,
       score,
-      timeSpentSec: timerMode === "countdown" ? timeLimitMinutes * 60 - secondsRemaining : timeSpent,
-      mode: `${examQuestions.length}Q-${scope === "all" ? "all" : scope}-${timerMode === "countdown" ? `${timeLimitMinutes}m` : "open"}`
+      timeSpentSec: timeSpent,
+      mode: `${examQuestions.length}Q-${scope === "all" ? "all" : scope}-${timerMode === "countdown" ? `${timeLimitMinutes}m` : "open"}-${examGradingMode}`
     });
     setExamState("results");
-  };
-
-  finishRef.current = finishExam;
+  }, [examQuestions, userAnswers, onRecordResult, timeSpent, scope, timerMode, timeLimitMinutes, examGradingMode]);
 
   useEffect(() => {
     if (examState !== "running") return;
     const timer = setInterval(() => {
       setTimeSpent((s) => s + 1);
       if (timerMode === "countdown") {
-        setSecondsRemaining((sec) => {
-          if (sec <= 1) {
-            clearInterval(timer);
-            finishRef.current();
-            return 0;
-          }
-          return sec - 1;
-        });
+        setSecondsRemaining((sec) => Math.max(0, sec - 1));
       }
     }, 1000);
     return () => clearInterval(timer);
   }, [examState, timerMode]);
+
+  useEffect(() => {
+    if (examState === "running" && timerMode === "countdown" && secondsRemaining === 0 && !submittedRef.current) {
+      finishExam(true);
+    }
+  }, [examState, timerMode, secondsRemaining, finishExam]);
 
   const handleAnswerQuestion = (qId: string, ansIdx: number, isOk: boolean) => {
     setUserAnswers((prev) => ({
@@ -177,10 +199,10 @@ export const ExamSimulator: React.FC<ExamSimulatorProps> = ({
     return `${m.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}`;
   };
 
-  if (questions.length === 0) {
+  if (examEligibleQuestions.length === 0) {
     return (
       <div className="card" style={{ textAlign: "center", padding: "40px", color: "var(--ink-m)" }}>
-        <p>لا توجد أسئلة متوفرة حالياً لإنشاء امتحان تجريبي.</p>
+        <p>لا توجد أسئلة اختيار من متعدد متوفرة حالياً لإنشاء امتحان تجريبي.</p>
       </div>
     );
   }
@@ -205,7 +227,7 @@ export const ExamSimulator: React.FC<ExamSimulatorProps> = ({
             <div className="exam-setup-icon"><Icons.Exam size={22} /></div>
             <div>
               <h2>تخصيص جلسة الاختبار</h2>
-              <p>اختر النطاق وعدد الأسئلة ونمط المؤقت للبدء فوراً.</p>
+              <p>اختر النطاق وعدد الأسئلة ونمط المؤقت وطريقة التصحيح للبدء فوراً.</p>
             </div>
           </div>
 
@@ -213,9 +235,10 @@ export const ExamSimulator: React.FC<ExamSimulatorProps> = ({
             <div className="exam-field">
               <label>نطاق الأسئلة (البنك)</label>
               <select value={scope} onChange={(e) => setScope(e.target.value)}>
-                <option value="all">البنك الشامل ({questions.length})</option>
+                <option value="all">البنك الشامل ({examEligibleQuestions.length})</option>
                 {models.map((m) => {
-                  const count = questions.filter((q) => q.model_id === m.id).length;
+                  const count = examEligibleQuestions.filter((q) => q.model_id === m.id).length;
+                  if (count === 0) return null;
                   return <option key={m.id} value={m.id}>{m.short_label || m.id.toUpperCase()} · {m.title_ar} ({count})</option>;
                 })}
               </select>
@@ -230,12 +253,34 @@ export const ExamSimulator: React.FC<ExamSimulatorProps> = ({
                     <button
                       key={n}
                       type="button"
-                      className={`fchip ${questionCount === n ? "on" : ""}`}
+                      className={`fchip ${questionCount === Math.min(n, pool.length) ? "on" : ""}`}
                       onClick={() => setQuestionCount(Math.min(n, pool.length))}
                     >
                       {Math.min(n, pool.length)} سؤالاً
                     </button>
                   ))}
+              </div>
+            </div>
+
+            <div className="exam-field">
+              <label>نمط التصحيح</label>
+              <div className="exam-pills">
+                <button
+                  type="button"
+                  className={`fchip ${examGradingMode === "blind" ? "on" : ""}`}
+                  onClick={() => setExamGradingMode("blind")}
+                >
+                  <Icons.Exam size={13} />
+                  امتحان حقيقي (تصحيح بعد التسليم)
+                </button>
+                <button
+                  type="button"
+                  className={`fchip ${examGradingMode === "instant" ? "on" : ""}`}
+                  onClick={() => setExamGradingMode("instant")}
+                >
+                  <Icons.Check size={13} />
+                  تدريب فوري (إظهار النتيجة مباشرة)
+                </button>
               </div>
             </div>
 
@@ -280,7 +325,7 @@ export const ExamSimulator: React.FC<ExamSimulatorProps> = ({
             )}
           </div>
 
-          <button type="button" className="btn btn-primary exam-start-btn" onClick={() => startExam()}>
+          <button type="button" className="btn btn-primary exam-start-btn" disabled={pool.length === 0} onClick={() => startExam()}>
             بدء جلسة الامتحان الآن ({Math.min(questionCount, pool.length)} سؤالاً)
           </button>
 
@@ -333,7 +378,7 @@ export const ExamSimulator: React.FC<ExamSimulatorProps> = ({
               <Icons.Clock size={18} />
               <span>{formatTime(timeValue)}</span>
             </div>
-            <button type="button" className="btn btn-sm exam-finish-btn" onClick={finishExam}>
+            <button type="button" className="btn btn-sm exam-finish-btn" onClick={() => finishExam(false)}>
               إنهاء وتسليم
             </button>
           </div>
@@ -357,6 +402,7 @@ export const ExamSimulator: React.FC<ExamSimulatorProps> = ({
             expPromptSeen={expPromptSeen}
             onDismissExpPrompt={onDismissExpPrompt}
             onOpenExpSettings={onOpenExpSettings}
+            examBlindMode={examGradingMode === "blind"}
           />
         )}
 
@@ -409,7 +455,7 @@ export const ExamSimulator: React.FC<ExamSimulatorProps> = ({
               <Icons.ChevronLeft size={16} />
             </button>
           ) : (
-            <button type="button" className="btn btn-sm btn-primary" onClick={finishExam}>
+            <button type="button" className="btn btn-sm btn-primary" onClick={() => finishExam(false)}>
               <span>تسليم نهائي</span>
               <Icons.Check size={16} />
             </button>
@@ -420,7 +466,7 @@ export const ExamSimulator: React.FC<ExamSimulatorProps> = ({
           visible={tooltipState.visible}
           textAr={tooltipState.text}
           position={tooltipState.pos}
-          onClose={() => setTooltipState((s) => ({ ...s, visible: false }))}
+          onClose={handleCloseTooltip}
           onMouseEnterTooltip={handleCancelHideTranslate}
           onMouseLeaveTooltip={handleScheduleHideTranslate}
         />
@@ -431,7 +477,7 @@ export const ExamSimulator: React.FC<ExamSimulatorProps> = ({
   const totalScore = examQuestions.filter((q) => userAnswers[q.id]?.is_correct).length;
   const percent = examQuestions.length > 0 ? Math.round((totalScore / examQuestions.length) * 100) : 0;
   const grade = gradeFor(percent);
-  const elapsed = timerMode === "countdown" ? timeLimitMinutes * 60 - secondsRemaining : timeSpent;
+  const elapsed = timeSpent;
 
   const wrongOrUnansweredQuestions = examQuestions.filter((q) => {
     const ans = userAnswers[q.id];
@@ -607,7 +653,7 @@ export const ExamSimulator: React.FC<ExamSimulatorProps> = ({
         visible={tooltipState.visible}
         textAr={tooltipState.text}
         position={tooltipState.pos}
-        onClose={() => setTooltipState((s) => ({ ...s, visible: false }))}
+        onClose={handleCloseTooltip}
         onMouseEnterTooltip={handleCancelHideTranslate}
         onMouseLeaveTooltip={handleScheduleHideTranslate}
       />

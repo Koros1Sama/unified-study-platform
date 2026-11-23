@@ -21,7 +21,6 @@ export interface PwaInstallState {
 
 export function usePwaInstall(): PwaInstallState {
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
-  const [canInstall, setCanInstall] = useState(false);
   const [isInstalled, setIsInstalled] = useState(false);
   const [showFirstOpenBanner, setShowFirstOpenBanner] = useState(false);
   const [showGuideModal, setShowGuideModal] = useState(false);
@@ -35,7 +34,6 @@ export function usePwaInstall(): PwaInstallState {
     !/iphone|ipad|ipod|android/i.test(window.navigator.userAgent);
 
   useEffect(() => {
-    // 1. التحقق من كون التطبيق مفتوحاً كـ Standalone PWA بالفعل
     const isStandalone =
       window.matchMedia("(display-mode: standalone)").matches ||
       (window.navigator as any).standalone === true ||
@@ -43,14 +41,11 @@ export function usePwaInstall(): PwaInstallState {
 
     if (isStandalone) {
       setIsInstalled(true);
-      setCanInstall(false);
       return;
     }
 
-    // 2. التحقق من إشعار أول فتح للموقع (مرة واحدة أو حتى يتم الإغلاق)
     const dismissed = localStorage.getItem("unified_pwa_banner_dismissed");
     if (!dismissed) {
-      // إظهار البانر بعد 1.5 ثانية لمنح الصفحة وقتاً للتحميل السلس
       const timer = setTimeout(() => {
         setShowFirstOpenBanner(true);
       }, 1500);
@@ -62,12 +57,10 @@ export function usePwaInstall(): PwaInstallState {
     const handleBeforeInstall = (e: Event) => {
       e.preventDefault();
       setDeferredPrompt(e);
-      setCanInstall(true);
     };
 
     const handleAppInstalled = () => {
       setIsInstalled(true);
-      setCanInstall(false);
       setDeferredPrompt(null);
       setShowFirstOpenBanner(false);
       setShowGuideModal(false);
@@ -98,7 +91,6 @@ export function usePwaInstall(): PwaInstallState {
         const choice = await deferredPrompt.userChoice;
         if (choice.outcome === "accepted") {
           setIsInstalled(true);
-          setCanInstall(false);
           setDeferredPrompt(null);
           setShowFirstOpenBanner(false);
           setShowGuideModal(false);
@@ -109,7 +101,6 @@ export function usePwaInstall(): PwaInstallState {
         console.warn("PWA install error:", err);
       }
     }
-    // في حال عدم توفر نافذة المتصفح المباشرة (مثل المتصفحات المكتبية أو بعد إعادة التحميل)، نظهر دليل التثبيت الشامل
     setShowGuideModal(true);
     return false;
   }, [deferredPrompt]);

@@ -24,18 +24,25 @@ jobs:
       - name: Build data bundles
         run: npm run build:data
 
-      - name: Build platform
+      - name: Verify data and assets integrity
+        run: npm run check:data
+
+      - name: Typecheck & build platform
         env:
           VITE_BASE_PATH: "/"
           VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
           VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
         run: npm run build
 
-      - name: Deploy to Vercel
+      - name: Deploy prebuilt dist to Vercel
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VITE_BASE_PATH: "/"
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
         run: |
+          set -euo pipefail
           echo "Connecting to Vercel API..."
           PROJ_RES=$(curl -s -X POST "https://api.vercel.com/v9/projects?teamId=${VERCEL_ORG_ID}" \
             -H "Authorization: Bearer ${VERCEL_TOKEN}" \
@@ -45,10 +52,16 @@ jobs:
           if [ -z "$PROJ_ID" ]; then
             PROJ_RES=$(curl -s "https://api.vercel.com/v9/projects/unified-study-platform?teamId=${VERCEL_ORG_ID}" \
               -H "Authorization: Bearer ${VERCEL_TOKEN}")
-            PROJ_ID=$(echo "$PROJ_RES" | jq -r '.id')
+            PROJ_ID=$(echo "$PROJ_RES" | jq -r '.id // empty')
+          fi
+          if [ -z "$PROJ_ID" ] || [ "$PROJ_ID" = "null" ]; then
+            echo "Failed to resolve Vercel project ID: $PROJ_RES"
+            exit 1
           fi
           echo "Vercel Project ID: $PROJ_ID"
           export VERCEL_PROJECT_ID="$PROJ_ID"
           mkdir -p .vercel
           echo "{\"orgId\":\"${VERCEL_ORG_ID}\",\"projectId\":\"${PROJ_ID}\"}" > .vercel/project.json
-          npx --yes vercel deploy --prod --token="${VERCEL_TOKEN}" --yes
+          npx --yes vercel pull --yes --environment=production --token="${VERCEL_TOKEN}"
+          npx --yes vercel build --prod --token="${VERCEL_TOKEN}"
+          npx --yes vercel deploy --prebuilt --prod --token="${VERCEL_TOKEN}" --yes

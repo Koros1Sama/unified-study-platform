@@ -4,7 +4,7 @@
 // Zero Emojis Standard · 100% SVG Vector Line-Art
 // ==============================================================================
 
-import React, { useState } from "react";
+import React from "react";
 import { Icons } from "../icons/SvgIcons";
 
 interface PwaInstallBannerProps {
@@ -25,6 +25,14 @@ export const PwaInstallBanner: React.FC<PwaInstallBannerProps> = ({
   isDesktop = false
 }) => {
   if (!isOpen) return null;
+
+  const handlePrimaryAction = () => {
+    if (isIos && onOpenGuide) {
+      onOpenGuide();
+      return;
+    }
+    void onInstall();
+  };
 
   return (
     <aside
@@ -78,9 +86,7 @@ export const PwaInstallBanner: React.FC<PwaInstallBannerProps> = ({
         <button
           type="button"
           className="btn btn-sm btn-primary"
-          onClick={() => {
-            onInstall();
-          }}
+          onClick={handlePrimaryAction}
           style={{
             padding: "6px 14px",
             fontSize: "0.78rem",
@@ -88,7 +94,7 @@ export const PwaInstallBanner: React.FC<PwaInstallBannerProps> = ({
             borderRadius: "var(--r-pill)"
           }}
         >
-          <span>تثبيت</span>
+          <span>{isIos ? "طريقة التثبيت" : "تثبيت"}</span>
         </button>
 
         <button

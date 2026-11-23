@@ -187,9 +187,9 @@ export function parseLocationHash(): ParsedLocationState {
   const hash = window.location.hash.replace(/^#/, "").trim();
   if (!hash) return {};
 
-  // حالة سؤال مباشر في بنك الأسئلة مثل #q-123 أو #question-123
-  if (/^(?:q|question)-([a-zA-Z0-9_\u0600-\u06FF-]+)$/i.test(hash)) {
-    const qMatch = hash.match(/^(?:q|question)-([a-zA-Z0-9_\u0600-\u06FF-]+)$/i);
+  // حالة سؤال مباشر في بنك الأسئلة مثل #q-toc:m1:1 أو #question-123
+  if (/^(?:q|question)-([a-zA-Z0-9_:.\u0600-\u06FF-]+)$/i.test(hash)) {
+    const qMatch = hash.match(/^(?:q|question)-([a-zA-Z0-9_:.\u0600-\u06FF-]+)$/i);
     return {
       view: "questions",
       qId: qMatch ? qMatch[1] : undefined

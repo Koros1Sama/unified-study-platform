@@ -4,8 +4,9 @@
 // Zero Emojis Standard · High-Performance React 19 + TypeScript
 // ==============================================================================
 
-import React, { useState, useEffect, useCallback, useRef, useMemo } from "react";
+import React, { useState, useEffect, useCallback, useRef, useMemo, Suspense, lazy } from "react";
 import { DataService, type SubjectBundle } from "./lib/dataService";
+import { safeJsonParse } from "./lib/textUtils";
 import {
   restoreScrollPosition,
   restoreScrollToElement,
@@ -14,6 +15,8 @@ import {
   resolveSlideReference,
   jumpDirectlyToSlide
 } from "./lib/scrollRestoration";
+import { Icons } from "./components/icons/SvgIcons";
+import { ErrorBoundary } from "./components/common/ErrorBoundary";
 import { UnifiedAppHeader } from "./components/common/UnifiedAppHeader";
 import { CompanionNavigation } from "./components/common/CompanionNavigation";
 import { PortalModal } from "./components/common/PortalModal";
@@ -30,13 +33,7 @@ import { SummaryOfSummaryView } from "./components/emergency/SummaryOfSummaryVie
 import { ExplanatoryTablesView } from "./components/tables/ExplanatoryTablesView";
 import { UnifiedQuestionBankView } from "./components/questions/UnifiedQuestionBankView";
 import { QuestionBankExplorer } from "./components/questions/QuestionBankExplorer";
-import { ExamSimulator } from "./components/questions/ExamSimulator";
-import { InteractiveStudioHost } from "./components/interactive/InteractiveStudioHost";
-import { ConceptStudios } from "./components/interactive/ConceptStudios";
 import { DefinitionsView } from "./components/definitions/DefinitionsView";
-import { GlossaryView } from "./components/glossary/GlossaryView";
-import { PatternsLabView } from "./components/patterns/PatternsLabView";
-import { LabAppendixView } from "./components/lab/LabAppendixView";
 import type {
   SubjectMeta,
   ActiveView,
@@ -45,6 +42,25 @@ import type {
   ExplanationMode,
   BookmarkLabels
 } from "./types";
+
+const ExamSimulator = lazy(() =>
+  import("./components/questions/ExamSimulator").then((m) => ({ default: m.ExamSimulator }))
+);
+const InteractiveStudioHost = lazy(() =>
+  import("./components/interactive/InteractiveStudioHost").then((m) => ({ default: m.InteractiveStudioHost }))
+);
+const ConceptStudios = lazy(() =>
+  import("./components/interactive/ConceptStudios").then((m) => ({ default: m.ConceptStudios }))
+);
+const GlossaryView = lazy(() =>
+  import("./components/glossary/GlossaryView").then((m) => ({ default: m.GlossaryView }))
+);
+const PatternsLabView = lazy(() =>
+  import("./components/patterns/PatternsLabView").then((m) => ({ default: m.PatternsLabView }))
+);
+const LabAppendixView = lazy(() =>
+  import("./components/lab/LabAppendixView").then((m) => ({ default: m.LabAppendixView }))
+);
 
 export const App: React.FC = () => {
   const [subjects, setSubjects] = useState<SubjectMeta[]>([]);
@@ -75,6 +91,7 @@ export const App: React.FC = () => {
     return "all";
   });
   const [tablesLectureFilter, setTablesLectureFilter] = useState<string>("all");
+  const [activeLabSession, setActiveLabSession] = useState<string>("all");
   const [selectedModelId, setSelectedModelId] = useState<string>(() => {
     if (initialHash.model) return initialHash.model;
     if (initialStored?.model) return initialStored.model;
@@ -92,6 +109,48 @@ export const App: React.FC = () => {
   const [zenLevel, setZenLevel] = useState<ZenZoomLevel>(0);
   const [isPortalOpen, setIsPortalOpen] = useState<boolean>(false);
   const [loading, setLoading] = useState<boolean>(true);
+
+  // الثيم والنمط (مسائي/نهاري) على مستوى التطبيق لضمان تزامن اختصار M مع الهيدر
+  const [theme, setTheme] = useState<string>(() => localStorage.getItem("unified_theme") || "amber");
+  const [mode, setMode] = useState<"dark" | "light">(() =>
+    localStorage.getItem("unified_mode") === "light" ? "light" : "dark"
+  );
+
+  useEffect(() => {
+    document.documentElement.setAttribute("data-theme", theme);
+    document.documentElement.setAttribute("data-mode", mode);
+    localStorage.setItem("unified_theme", theme);
+    localStorage.setItem("unified_mode", mode);
+  }, [theme, mode]);
+
+  // حالة الاتصال بالإنترنت وإشعار تحديث Service Worker والتنبيهات المؤقتة
+  const [isOnline, setIsOnline] = useState<boolean>(() =>
+    typeof navigator !== "undefined" ? navigator.onLine : true
+  );
+  const [swUpdateReady, setSwUpdateReady] = useState<boolean>(false);
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const toastTimerRef = useRef<number | null>(null);
+
+  const showToast = useCallback((msg: string) => {
+    setToastMessage(msg);
+    if (toastTimerRef.current) window.clearTimeout(toastTimerRef.current);
+    toastTimerRef.current = window.setTimeout(() => setToastMessage(null), 4200);
+  }, []);
+
+  useEffect(() => {
+    const onOnline = () => setIsOnline(true);
+    const onOffline = () => setIsOnline(false);
+    const onSwUpdate = () => setSwUpdateReady(true);
+    window.addEventListener("online", onOnline);
+    window.addEventListener("offline", onOffline);
+    window.addEventListener("usp-sw-update-ready", onSwUpdate);
+    return () => {
+      window.removeEventListener("online", onOnline);
+      window.removeEventListener("offline", onOffline);
+      window.removeEventListener("usp-sw-update-ready", onSwUpdate);
+      if (toastTimerRef.current) window.clearTimeout(toastTimerRef.current);
+    };
+  }, []);
 
   // النوافذ المساعدة المتقدمة
   const [isGlobalSearchOpen, setIsGlobalSearchOpen] = useState<boolean>(false);
@@ -141,7 +200,6 @@ export const App: React.FC = () => {
 
   // إدارة وتثبيت تطبيق الويب التقدمي (PWA)
   const {
-    canInstall: canInstallPwa,
     isInstalled: isPwaInstalled,
     isIos,
     isDesktop,
@@ -211,12 +269,12 @@ export const App: React.FC = () => {
   // مراجعة السلايدات المحفوظة
   const [seenSlides, setSeenSlides] = useState<Set<string>>(() => {
     const saved = localStorage.getItem(`unified_seen_${currentSubjectCode}`);
-    return saved ? new Set(JSON.parse(saved)) : new Set();
+    return new Set(safeJsonParse<string[]>(saved, []));
   });
 
   useEffect(() => {
     const saved = localStorage.getItem(`unified_seen_${currentSubjectCode}`);
-    setSeenSlides(saved ? new Set(JSON.parse(saved)) : new Set());
+    setSeenSlides(new Set(safeJsonParse<string[]>(saved, [])));
   }, [currentSubjectCode]);
 
   const handleToggleSeenSlide = (slideRef: string) => {
@@ -351,14 +409,28 @@ export const App: React.FC = () => {
     let isCancelled = false;
     setLoading(true);
     setTablesLectureFilter("all");
+    setActiveLabSession("all");
 
     Promise.all([
-      DataService.loadSubjectBundle(currentSubjectCode),
+      DataService.loadSubjectBundle(currentSubjectCode, (updatedCount) => {
+        if (!isCancelled && updatedCount > 0) {
+          DataService.loadSubjectBundle(currentSubjectCode).then((fresh) => {
+            if (!isCancelled) {
+              setBundle(fresh);
+              showToast(`تمت مزامنة ${updatedCount} تحديثات جديدة للمقرر.`);
+            }
+          });
+        }
+      }),
       DataService.getUserProgress(currentSubjectCode)
     ]).then(([bundleRes, progressRes]) => {
       if (!isCancelled) {
         setBundle(bundleRes);
         setUserProgress(progressRes);
+
+        if (bundleRes?.lab?.sessions?.[0]?.id) {
+          setActiveLabSession(bundleRes.lab.sessions[0].id);
+        }
 
         // التحقق من صحة المحاضرة والنموذج المستعادين
         if (activeLectureId !== "all" && bundleRes?.lectures && !bundleRes.lectures.some((l) => l.id === activeLectureId)) {
@@ -556,13 +628,15 @@ export const App: React.FC = () => {
     } catch (_) {}
   }, [activeView, activeLectureId]);
 
-  // قفزات البحث السريع إلى الجداول والملخص والتعاريف
+  // قفزات البحث السريع إلى الجداول والملخص والتعاريف وملخص الملخص والمعجم والأنماط
   const handleJumpToTable = useCallback((tableId: string) => {
+    setTablesLectureFilter("all");
     setActiveView("tables");
     restoreScrollToElement(`#tbl-${tableId}`, 100);
   }, []);
 
   const handleJumpToSummaryPart = useCallback((partId: string) => {
+    setActiveLectureId("all");
     setActiveView("summary");
     restoreScrollToElement(`#part-${partId}`, 100);
   }, []);
@@ -572,18 +646,61 @@ export const App: React.FC = () => {
     restoreScrollToElement(`#def-${defId}`, 100);
   }, []);
 
-  // تصدير نسخة احتياطية من التقدم
-  const handleExportProgress = useCallback(() => {
-    if (!userProgress) return;
-    const jsonStr = JSON.stringify(userProgress, null, 2);
-    const blob = new Blob([jsonStr], { type: "application/json" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `study_progress_${currentSubjectCode}_${new Date().toISOString().split("T")[0]}.json`;
-    a.click();
-    URL.revokeObjectURL(url);
-  }, [userProgress, currentSubjectCode]);
+  const handleJumpToEmergency = useCallback(() => {
+    setActiveView("emergency");
+    restoreScrollPosition(0);
+  }, []);
+
+  const handleJumpToGlossary = useCallback(() => {
+    setActiveView("glossary");
+    restoreScrollPosition(0);
+  }, []);
+
+  const handleJumpToPattern = useCallback(() => {
+    setActiveView("patterns");
+    restoreScrollPosition(0);
+  }, []);
+
+  // تصدير نسخة احتياطية شاملة من التقدم لجميع المواد
+  const handleExportProgress = useCallback(async () => {
+    try {
+      const payload = await DataService.exportAllProgress();
+      const jsonStr = JSON.stringify(payload, null, 2);
+      const blob = new Blob([jsonStr], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `study_platform_backup_${new Date().toISOString().split("T")[0]}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+      showToast("تم تصدير النسخة الاحتياطية لجميع مقرراتك بنجاح.");
+    } catch {
+      showToast("تعذر تصدير النسخة الاحتياطية.");
+    }
+  }, [showToast]);
+
+  // استيراد نسخة احتياطية من ملف JSON
+  const handleImportProgress = useCallback(
+    async (file: File) => {
+      try {
+        const text = await file.text();
+        const parsed = safeJsonParse<unknown>(text, null);
+        if (!parsed) {
+          showToast("ملف النسخة الاحتياطية غير صالح أو تالف.");
+          return;
+        }
+        const { importedSubjects, activeProgress } = await DataService.importProgressBackup(
+          parsed,
+          currentSubjectCode
+        );
+        setUserProgress({ ...activeProgress });
+        showToast(`تم استيراد التقدم بنجاح لـ ${importedSubjects.length} مقرر.`);
+      } catch {
+        showToast("فشل استيراد النسخة الاحتياطية.");
+      }
+    },
+    [currentSubjectCode, showToast]
+  );
 
   // محرك اختصارات لوحة المفاتيح العام المطابق للعارضات الكانونية (Authentic Keyboard Shortcuts Engine)
   useEffect(() => {
@@ -630,11 +747,7 @@ export const App: React.FC = () => {
       // M لتبديل نمط الإضاءة (ليلي / نهاري)
       if (e.key.toLowerCase() === "m" && !isInput && !e.ctrlKey && !e.metaKey && !e.altKey) {
         e.preventDefault();
-        const curMode = document.documentElement.getAttribute("data-mode") || "dark";
-        const nextMode = curMode === "dark" ? "light" : "dark";
-        document.documentElement.setAttribute("data-mode", nextMode);
-        localStorage.setItem("unified_mode", nextMode);
-        window.dispatchEvent(new Event("storage"));
+        setMode((prev) => (prev === "dark" ? "light" : "dark"));
         return;
       }
 
@@ -664,7 +777,7 @@ export const App: React.FC = () => {
       if ((e.key === "ArrowDown" || e.key === "ArrowUp") && !isInput && !e.ctrlKey && !e.metaKey && !e.altKey) {
         // حماية: عدم التمرير إذا كان اللايت بوكس أو أي نافذة منبثقة مفتوحة
         const hasOpenModal = isGlobalSearchOpen || isShortcutsOpen || isOfflineModalOpen || isPortalOpen || isBmModalOpen;
-        const hasOpenLb = !!document.getElementById("lb")?.classList.contains("open") || !!document.querySelector(".lb-wrap");
+        const hasOpenLb = !!document.getElementById("lightboxModal") || !!document.getElementById("lb")?.classList.contains("open");
         if (!hasOpenModal && !hasOpenLb && window.matchMedia("(hover: hover)").matches) {
           e.preventDefault();
           window.scrollBy({
@@ -801,15 +914,6 @@ export const App: React.FC = () => {
     [currentSubjectCode]
   );
 
-  // تعليم سؤال للمراجعة السريعة
-  const handleToggleFlag = useCallback(
-    async (questionId: string) => {
-      const updated = await DataService.toggleFlaggedQuestion(currentSubjectCode, questionId);
-      setUserProgress({ ...updated });
-    },
-    [currentSubjectCode]
-  );
-
   // إتقان تعريف مصطلح
   const handleToggleMasteredDefinition = useCallback(
     async (definitionId: string) => {
@@ -846,11 +950,13 @@ export const App: React.FC = () => {
     [currentSubjectCode]
   );
 
-  // إضافة مادة جديدة
-  const handleAddSubject = useCallback((subject: SubjectMeta) => {
-    setSubjects((prev) => [subject, ...prev]);
+  // إضافة مادة جديدة وحفظها محلياً في IndexedDB
+  const handleAddSubject = useCallback(async (subject: SubjectMeta) => {
+    await DataService.saveCustomSubject(subject);
+    setSubjects((prev) => [subject, ...prev.filter((s) => s.code !== subject.code)]);
     setCurrentSubjectCode(subject.code);
-  }, []);
+    showToast(`تمت إضافة وحفظ مقرر «${subject.name_ar}».`);
+  }, [showToast]);
 
   const currentSubjectMeta =
     bundle?.meta ||
@@ -908,6 +1014,7 @@ export const App: React.FC = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [bundle, currentSubjectCode]);
 
+  const hasAnyAvailableView = Object.values(availableViews).some(Boolean);
   const totalQuestionsCount = bundle?.questions?.length || 0;
   const answeredQuestionsCount = Object.values(userProgress?.answered_questions || {}).filter(
     (a) => a.selected_answer >= 0
@@ -937,7 +1044,10 @@ export const App: React.FC = () => {
         onToggleShuffleQuestions={handleToggleShuffleQuestions}
         syncTwins={syncTwins}
         onToggleSyncTwins={handleToggleSyncTwins}
-        canInstallPwa={canInstallPwa}
+        mode={mode}
+        onChangeMode={setMode}
+        theme={theme}
+        onChangeTheme={setTheme}
         isPwaInstalled={isPwaInstalled}
         onPromptPwaInstall={promptPwaInstall}
         isIos={isIos}
@@ -955,6 +1065,7 @@ export const App: React.FC = () => {
         fontScale={fontScale}
         onChangeFontScale={handleChangeFontScale}
         onExportProgress={handleExportProgress}
+        onImportProgress={handleImportProgress}
         openSettingsRequest={openSettingsRequest}
       />
 
@@ -975,6 +1086,9 @@ export const App: React.FC = () => {
           emergencySections={bundle?.emergency?.sections || []}
           patternRules={bundle?.patterns?.rules || []}
           labSessions={bundle?.lab?.sessions || []}
+          activeLabSession={activeLabSession}
+          onSelectLabSession={setActiveLabSession}
+          pageLayout={currentSubjectMeta.page_layout}
           tables={bundle?.tables || []}
           reviewedParts={userProgress?.reviewed_parts || []}
           reviewedSections={userProgress?.reviewed_sections || []}
@@ -989,6 +1103,13 @@ export const App: React.FC = () => {
 
         {/* المتن الرئيسي (.main) */}
         <main className="main" id="mainContent">
+          {!isOnline && (
+            <div className="usp-offline-pill" role="status" aria-live="polite">
+              <Icons.WifiOff size={15} />
+              <span>أنت تتصفح حالياً دون اتصال بالإنترنت — يتم التحميل من الكاش المحلي السريع.</span>
+            </div>
+          )}
+
           {loading ? (
             <div className="pending-box" style={{ margin: "40px auto", maxWidth: 600 }}>
               <div className="pb-ic">
@@ -999,158 +1120,200 @@ export const App: React.FC = () => {
               <div className="pb-t">جارٍ تجهيز بيانات وتحديثات المقرر...</div>
               <div className="pb-s">المزامنة التلقائية مع السحابة والكاش المحلي السريع</div>
             </div>
+          ) : !hasAnyAvailableView ? (
+            <div className="pending-box" style={{ margin: "40px auto", maxWidth: 600 }}>
+              <div className="pb-ic"><Icons.BookOpen size={34} /></div>
+              <div className="pb-t">مقرر «{currentSubjectMeta.name_ar}» جاهز لإضافة المحتوى</div>
+              <div className="pb-s">
+                لم يتم ربط حزمة بيانات (bundle.json) لهذا المقرر بعد. يمكنك اختيار مقرر آخر من بوابة المقررات أو إضافة ملفات المادة لاحقاً.
+              </div>
+              <button type="button" className="btn btn-primary btn-sm" style={{ marginTop: 12 }} onClick={() => setIsPortalOpen(true)}>
+                فتح بوابة المقررات
+              </button>
+            </div>
           ) : (
-            <>
-              {activeView === "slides" && (
-                <SlidesViewer
-                  lectures={bundle?.lectures || []}
-                  slides={bundle?.slides || []}
-                  targetSlideRef={targetSlideRef}
-                  activeLectureId={activeLectureId}
-                  onSelectLecture={handleSelectLecture}
-                  autoTranslate={!isArabicOnly && autoTranslateSlides}
-                  autoExplain={autoExplainSlides}
-                  onToggleAutoTranslate={handleToggleAutoTranslate}
-                  onToggleAutoExplain={handleToggleAutoExplain}
-                  seenSlides={seenSlides}
-                  onToggleSeenSlide={handleToggleSeenSlide}
-                  arabicOnly={isArabicOnly}
-                />
-              )}
-
-              {activeView === "summary" && (
-                <TheoreticalSummaryView
-                  data={bundle?.summary}
-                  reviewedParts={userProgress?.reviewed_parts || []}
-                  onToggleReviewed={handleToggleReviewedPart}
-                  activeLectureId={activeLectureId}
-                  onSelectLecture={handleSelectLecture}
-                  onJumpToInteractive={handleJumpToInteractive}
-                  onJumpToSlide={handleJumpToSlide}
-                />
-              )}
-
-              {activeView === "emergency" && (
-                <SummaryOfSummaryView
-                  data={bundle?.emergency}
-                  reviewedSections={userProgress?.reviewed_sections || []}
-                  onToggleReviewed={handleToggleReviewedSection}
-                  onJumpToSlide={handleJumpToSlide}
-                />
-              )}
-
-              {activeView === "tables" && (
-                <ExplanatoryTablesView
-                  tables={bundle?.tables || []}
-                  memorizedTableIds={userProgress?.memorized_tables || []}
-                  onToggleMemorize={handleToggleMemorizeTable}
-                  onJumpToSlide={handleJumpToSlide}
-                  activeLectureId={tablesLectureFilter}
-                  onSelectLecture={setTablesLectureFilter}
-                />
-              )}
-
-              {activeView === "questions" && (
-                <UnifiedQuestionBankView
-                  subjectCode={currentSubjectCode}
-                  questions={bundle?.questions || []}
-                  models={bundle?.question_models || []}
-                  lectures={bundle?.lectures || []}
-                  selectedModelId={selectedModelId}
-                  onSelectModel={handleSelectModel}
-                  userProgress={userProgress || { subject_code: currentSubjectCode, memorized_tables: [], answered_questions: {}, bookmarks: {}, exam_history: [], updated_at: "" }}
-                  onAnswerQuestion={handleAnswerQuestion}
-                  onJumpToSlide={handleJumpToSlide}
-                  onJumpToQuestion={handleJumpToQuestion}
-                  focusQuestionId={focusQuestionId}
-                  languageMode={effectiveLanguageMode}
-                  onLanguageChange={handleLanguageChange}
-                  arabicOnly={isArabicOnly}
-                  showBookmarks={showBookmarks}
-                  bmLabels={bmLabels}
-                  onToggleBookmark={handleToggleBookmark}
-                  onOpenBmLabelModal={() => setIsBmModalOpen(true)}
-                  expMode={expMode}
-                  onChangeExpMode={handleChangeExpMode}
-                  expPromptSeen={expPromptSeen}
-                  onDismissExpPrompt={handleDismissExpPrompt}
-                  onOpenExpSettings={handleOpenExpSettings}
-                  shuffleChoices={shuffleChoices}
-                  shuffleQuestions={shuffleQuestions}
-                  choicesSeed={choicesSeed}
-                  questionsSeed={questionsSeed}
-                  syncTwins={syncTwins}
-                  onResetModelAnswers={handleResetModelAnswers}
-                />
-              )}
-
-              {activeView === "explorer" && (
-                <QuestionBankExplorer
-                  questions={bundle?.questions || []}
-                  onJumpToQuestion={handleJumpToQuestion}
-                  arabicOnly={isArabicOnly}
-                />
-              )}
-
-              {activeView === "exam" && (
-                <ExamSimulator
-                  questions={bundle?.questions || []}
-                  models={bundle?.question_models || []}
-                  lectures={bundle?.lectures || []}
-                  examHistory={userProgress?.exam_history || []}
-                  onRecordResult={handleRecordExamResult}
-                  onJumpToSlide={handleJumpToSlide}
-                  languageMode={effectiveLanguageMode}
-                  expMode={expMode}
-                  expPromptSeen={expPromptSeen}
-                  onDismissExpPrompt={handleDismissExpPrompt}
-                  onOpenExpSettings={handleOpenExpSettings}
-                />
-              )}
-
-              {activeView === "definitions" && (
-                <DefinitionsView
-                  data={bundle?.definitions}
-                  masteredIds={userProgress?.mastered_definitions || []}
-                  onToggleMastered={handleToggleMasteredDefinition}
-                  onJumpToSlide={handleJumpToSlide}
-                  arabicOnly={isArabicOnly}
-                />
-              )}
-
-              {activeView === "glossary" && (
-                <GlossaryView data={bundle?.glossary} subjectName={currentSubjectMeta.name_ar} />
-              )}
-
-              {activeView === "patterns" && (
-                <PatternsLabView
-                  data={bundle?.patterns}
-                  subjectCode={currentSubjectCode}
-                  onJumpToQuestion={handleJumpToQuestion}
-                />
-              )}
-
-              {activeView === "lab" && (
-                <LabAppendixView data={bundle?.lab} subjectName={currentSubjectMeta.name_ar} />
-              )}
-
-              {activeView === "interactive" &&
-                (["sec", "se", "pm", "phy"].includes(currentSubjectCode) ? (
-                  <ConceptStudios
+            <ErrorBoundary resetKey={`${currentSubjectCode}-${activeView}`}>
+              <Suspense
+                fallback={
+                  <div className="pending-box" style={{ margin: "40px auto", maxWidth: 520 }}>
+                    <div className="pb-t">جارٍ تحميل القسم...</div>
+                  </div>
+                }
+              >
+                {activeView === "slides" && (
+                  <SlidesViewer
+                    key={currentSubjectCode}
                     subjectCode={currentSubjectCode}
-                    initialStudioId={targetStudioId}
-                    initialTabId={targetTabId}
-                    onReturnToSummary={lastViewBeforeJump ? handleReturnFromInteractive : undefined}
+                    pageLayout={currentSubjectMeta.page_layout}
+                    lectures={bundle?.lectures || []}
+                    slides={bundle?.slides || []}
+                    targetSlideRef={targetSlideRef}
+                    activeLectureId={activeLectureId}
+                    onSelectLecture={handleSelectLecture}
+                    autoTranslate={!isArabicOnly && autoTranslateSlides}
+                    autoExplain={autoExplainSlides}
+                    onToggleAutoTranslate={handleToggleAutoTranslate}
+                    onToggleAutoExplain={handleToggleAutoExplain}
+                    seenSlides={seenSlides}
+                    onToggleSeenSlide={handleToggleSeenSlide}
+                    arabicOnly={isArabicOnly}
                   />
-                ) : (
-                  <InteractiveStudioHost
+                )}
+
+                {activeView === "summary" && (
+                  <TheoreticalSummaryView
+                    key={currentSubjectCode}
+                    data={bundle?.summary}
+                    reviewedParts={userProgress?.reviewed_parts || []}
+                    onToggleReviewed={handleToggleReviewedPart}
+                    activeLectureId={activeLectureId}
+                    onSelectLecture={handleSelectLecture}
+                    onJumpToInteractive={handleJumpToInteractive}
+                    onJumpToSlide={handleJumpToSlide}
+                  />
+                )}
+
+                {activeView === "emergency" && (
+                  <SummaryOfSummaryView
+                    key={currentSubjectCode}
+                    data={bundle?.emergency}
+                    reviewedSections={userProgress?.reviewed_sections || []}
+                    onToggleReviewed={handleToggleReviewedSection}
+                    onJumpToSlide={handleJumpToSlide}
+                  />
+                )}
+
+                {activeView === "tables" && (
+                  <ExplanatoryTablesView
+                    key={currentSubjectCode}
+                    tables={bundle?.tables || []}
+                    memorizedTableIds={userProgress?.memorized_tables || []}
+                    onToggleMemorize={handleToggleMemorizeTable}
+                    onJumpToSlide={handleJumpToSlide}
+                    activeLectureId={tablesLectureFilter}
+                    onSelectLecture={setTablesLectureFilter}
+                  />
+                )}
+
+                {activeView === "questions" && (
+                  <UnifiedQuestionBankView
+                    key={currentSubjectCode}
                     subjectCode={currentSubjectCode}
-                    initialStudioId={targetStudioId}
-                    initialTabId={targetTabId}
-                    onReturnToSummary={lastViewBeforeJump ? handleReturnFromInteractive : undefined}
+                    questions={bundle?.questions || []}
+                    models={bundle?.question_models || []}
+                    lectures={bundle?.lectures || []}
+                    selectedModelId={selectedModelId}
+                    onSelectModel={handleSelectModel}
+                    userProgress={userProgress || { subject_code: currentSubjectCode, memorized_tables: [], answered_questions: {}, bookmarks: {}, exam_history: [], updated_at: "" }}
+                    onAnswerQuestion={handleAnswerQuestion}
+                    onJumpToSlide={handleJumpToSlide}
+                    onJumpToQuestion={handleJumpToQuestion}
+                    focusQuestionId={focusQuestionId}
+                    languageMode={effectiveLanguageMode}
+                    onLanguageChange={handleLanguageChange}
+                    arabicOnly={isArabicOnly}
+                    showBookmarks={showBookmarks}
+                    bmLabels={bmLabels}
+                    onToggleBookmark={handleToggleBookmark}
+                    onOpenBmLabelModal={() => setIsBmModalOpen(true)}
+                    expMode={expMode}
+                    onChangeExpMode={handleChangeExpMode}
+                    expPromptSeen={expPromptSeen}
+                    onDismissExpPrompt={handleDismissExpPrompt}
+                    onOpenExpSettings={handleOpenExpSettings}
+                    shuffleChoices={shuffleChoices}
+                    shuffleQuestions={shuffleQuestions}
+                    choicesSeed={choicesSeed}
+                    questionsSeed={questionsSeed}
+                    syncTwins={syncTwins}
+                    onResetModelAnswers={handleResetModelAnswers}
                   />
-                ))}
-            </>
+                )}
+
+                {activeView === "explorer" && (
+                  <QuestionBankExplorer
+                    key={currentSubjectCode}
+                    questions={bundle?.questions || []}
+                    onJumpToQuestion={handleJumpToQuestion}
+                    arabicOnly={isArabicOnly}
+                  />
+                )}
+
+                {activeView === "exam" && (
+                  <ExamSimulator
+                    key={currentSubjectCode}
+                    questions={bundle?.questions || []}
+                    models={bundle?.question_models || []}
+                    lectures={bundle?.lectures || []}
+                    examHistory={userProgress?.exam_history || []}
+                    onRecordResult={handleRecordExamResult}
+                    onJumpToSlide={handleJumpToSlide}
+                    languageMode={effectiveLanguageMode}
+                    expMode={expMode}
+                    expPromptSeen={expPromptSeen}
+                    onDismissExpPrompt={handleDismissExpPrompt}
+                    onOpenExpSettings={handleOpenExpSettings}
+                  />
+                )}
+
+                {activeView === "definitions" && (
+                  <DefinitionsView
+                    key={currentSubjectCode}
+                    data={bundle?.definitions}
+                    masteredIds={userProgress?.mastered_definitions || []}
+                    onToggleMastered={handleToggleMasteredDefinition}
+                    onJumpToSlide={handleJumpToSlide}
+                    arabicOnly={isArabicOnly}
+                  />
+                )}
+
+                {activeView === "glossary" && (
+                  <GlossaryView
+                    key={currentSubjectCode}
+                    data={bundle?.glossary}
+                    subjectName={currentSubjectMeta.name_ar}
+                  />
+                )}
+
+                {activeView === "patterns" && (
+                  <PatternsLabView
+                    key={currentSubjectCode}
+                    data={bundle?.patterns}
+                    subjectCode={currentSubjectCode}
+                    onJumpToQuestion={handleJumpToQuestion}
+                  />
+                )}
+
+                {activeView === "lab" && (
+                  <LabAppendixView
+                    key={currentSubjectCode}
+                    data={bundle?.lab}
+                    subjectName={currentSubjectMeta.name_ar}
+                    activeSession={activeLabSession}
+                    onSelectSession={setActiveLabSession}
+                  />
+                )}
+
+                {activeView === "interactive" &&
+                  (["sec", "se", "pm", "phy"].includes(currentSubjectCode) ? (
+                    <ConceptStudios
+                      key={currentSubjectCode}
+                      subjectCode={currentSubjectCode}
+                      initialStudioId={targetStudioId}
+                      initialTabId={targetTabId}
+                      onReturnToSummary={lastViewBeforeJump ? handleReturnFromInteractive : undefined}
+                    />
+                  ) : (
+                    <InteractiveStudioHost
+                      key={currentSubjectCode}
+                      subjectCode={currentSubjectCode}
+                      initialStudioId={targetStudioId}
+                      initialTabId={targetTabId}
+                      onReturnToSummary={lastViewBeforeJump ? handleReturnFromInteractive : undefined}
+                    />
+                  ))}
+              </Suspense>
+            </ErrorBoundary>
           )}
 
           {/* التذييل المعتمد (.footer) */}
@@ -1164,9 +1327,41 @@ export const App: React.FC = () => {
         </main>
       </div>
 
+      {/* إشعارات التحديث والتنبيهات المؤقتة */}
+      {(swUpdateReady || toastMessage) && (
+        <div className="usp-toast-stack" role="status" aria-live="polite">
+          {swUpdateReady && (
+            <div className="usp-toast is-update">
+              <span>يتوفر تحديث جديد للمنصة ببيانات وتحسينات أحدث.</span>
+              <button
+                type="button"
+                className="btn btn-sm btn-primary"
+                onClick={() => window.location.reload()}
+              >
+                تحديث الآن
+              </button>
+              <button
+                type="button"
+                className="btn btn-icon btn-sm"
+                onClick={() => setSwUpdateReady(false)}
+                aria-label="إغلاق الإشعار"
+              >
+                <Icons.Cross size={14} />
+              </button>
+            </div>
+          )}
+          {toastMessage && (
+            <div className="usp-toast">
+              <span>{toastMessage}</span>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* زر الرجوع العائم الأصيل (#jumpReturnBar) */}
       {jumpReturn && (
-        <div
+        <button
+          type="button"
           id="jumpReturnBar"
           onClick={() => {
             const { fromView, scrollY, lectureId } = jumpReturn;
@@ -1175,8 +1370,6 @@ export const App: React.FC = () => {
             setActiveView(fromView);
             restoreScrollPosition(scrollY);
           }}
-          role="button"
-          tabIndex={0}
           title="الرجوع إلى الموضع السابق قبل الانتقال"
         >
           <svg className="svg-ic" style={{ width: 16, height: 16 }} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
@@ -1184,7 +1377,7 @@ export const App: React.FC = () => {
             <polyline points="12 19 5 12 12 5"/>
           </svg>
           <span>{jumpReturn.label}</span>
-        </div>
+        </button>
       )}
 
       {/* نافذة تخصيص تسميات ألوان العلامات */}
@@ -1205,6 +1398,9 @@ export const App: React.FC = () => {
         onJumpToTable={handleJumpToTable}
         onJumpToSummaryPart={handleJumpToSummaryPart}
         onJumpToDefinition={handleJumpToDefinition}
+        onJumpToEmergency={handleJumpToEmergency}
+        onJumpToGlossary={handleJumpToGlossary}
+        onJumpToPattern={handleJumpToPattern}
       />
 
       {/* نافذة دليل اختصارات لوحة المفاتيح والتحكم السريع */}

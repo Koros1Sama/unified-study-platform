@@ -7,6 +7,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Icons } from "../icons/SvgIcons";
 import { useFitTables } from "../../lib/useFitTables";
+import { matchesNormalizedTerms, sanitizeStudyHtml } from "../../lib/textUtils";
 import type { InteractiveLink, SummaryBlock, TheoreticalSummaryData } from "../../types";
 
 interface TheoreticalSummaryViewProps {
@@ -84,17 +85,17 @@ export const TheoreticalSummaryView: React.FC<TheoreticalSummaryViewProps> = ({
   const parts = data?.parts || [];
 
   const filteredParts = useMemo(() => {
-    const q = query.trim().toLowerCase();
+    const hasQuery = Boolean(query.trim());
     return parts
       .filter((part) => activePart === "all" || part.lec === activePart)
       .map((part) => {
-        if (!q) return part;
+        if (!hasQuery) return part;
         const blocks = part.blocks.filter((block) =>
-          [part.title, part.lec, blockText(block)].join(" ").toLowerCase().includes(q)
+          matchesNormalizedTerms([part.title, part.lec, blockText(block)].join(" "), query)
         );
         return { ...part, blocks };
       })
-      .filter((part) => !q || part.blocks.length > 0);
+      .filter((part) => !hasQuery || part.blocks.length > 0);
   }, [parts, query, activePart]);
 
   useFitTables(containerRef, [filteredParts]);
@@ -162,7 +163,7 @@ export const TheoreticalSummaryView: React.FC<TheoreticalSummaryViewProps> = ({
           blk.body && (
             <div
               className="blk-text"
-              dangerouslySetInnerHTML={{ __html: String(blk.body).replace(/\n/g, "<br/>") }}
+              dangerouslySetInnerHTML={{ __html: sanitizeStudyHtml(String(blk.body).replace(/\n/g, "<br/>")) }}
             />
           )
         )}

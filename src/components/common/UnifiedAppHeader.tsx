@@ -54,7 +54,11 @@ interface UnifiedAppHeaderProps {
   fontScale?: number;
   onChangeFontScale?: (scale: number) => void;
   onExportProgress?: () => void;
-  canInstallPwa?: boolean;
+  onImportProgress?: (file: File) => void;
+  mode: "dark" | "light";
+  onChangeMode: (next: "dark" | "light") => void;
+  theme: string;
+  onChangeTheme: (next: string) => void;
   isPwaInstalled?: boolean;
   onPromptPwaInstall?: () => void;
   isIos?: boolean;
@@ -95,7 +99,11 @@ export const UnifiedAppHeader: React.FC<UnifiedAppHeaderProps> = ({
   fontScale = 100,
   onChangeFontScale,
   onExportProgress,
-  canInstallPwa = false,
+  onImportProgress,
+  mode,
+  onChangeMode,
+  theme,
+  onChangeTheme,
   isPwaInstalled = false,
   onPromptPwaInstall,
   isIos = false,
@@ -105,8 +113,8 @@ export const UnifiedAppHeader: React.FC<UnifiedAppHeaderProps> = ({
   const [isHidden, setIsHidden] = useState(false);
   const [isSetOpen, setIsSetOpen] = useState(false);
   const [openSettingGroup, setOpenSettingGroup] = useState<string | null>(null);
-  const [theme, setTheme] = useState<string>(() => localStorage.getItem("unified_theme") || "amber");
-  const [mode, setMode] = useState<"dark" | "light">(() => (localStorage.getItem("unified_mode") as "dark" | "light") || "dark");
+  const importInputRef = useRef<HTMLInputElement>(null);
+  const isBookLayout = currentSubject.page_layout === "book";
   const lastScrollY = useRef(0);
   const anchorScrollY = useRef(0);
   const scrollDirRef = useRef<"up" | "down" | null>(null);
@@ -189,14 +197,6 @@ export const UnifiedAppHeader: React.FC<UnifiedAppHeaderProps> = ({
   const toggleSettingGroup = (group: string) => {
     setOpenSettingGroup((curr) => (curr === group ? null : group));
   };
-
-  // تحديث الثيم والنمط على مستوى مستند الـ HTML
-  useEffect(() => {
-    document.documentElement.setAttribute("data-theme", theme);
-    document.documentElement.setAttribute("data-mode", mode);
-    localStorage.setItem("unified_theme", theme);
-    localStorage.setItem("unified_mode", mode);
-  }, [theme, mode]);
 
   // إغلاق لوحة الإعدادات عند النقر بالخارج أو الضغط على زر ESC
   useEffect(() => {
@@ -327,7 +327,7 @@ export const UnifiedAppHeader: React.FC<UnifiedAppHeaderProps> = ({
   }, [isSetOpen]);
 
   const toggleMode = () => {
-    setMode((prev) => (prev === "dark" ? "light" : "dark"));
+    onChangeMode(mode === "dark" ? "light" : "dark");
   };
 
   const currentThemeObj = THEME_LIST.find((t) => t.id === theme);
@@ -384,10 +384,10 @@ export const UnifiedAppHeader: React.FC<UnifiedAppHeaderProps> = ({
               className={`seg-pill ${activeView === "slides" ? "active" : ""}`}
               style={{ display: can("slides") ? undefined : "none" }}
               onClick={() => onSelectView("slides")}
-              title="عرض سلايدات المحاضرات والشروح"
+              title={isBookLayout ? "عرض صفحات الكتاب المرجعي والشروح" : "عرض سلايدات المحاضرات والشروح"}
             >
-              <Icons.Slides size={16} />
-              <span>السلايدات</span>
+              {isBookLayout ? <Icons.BookOpen size={16} /> : <Icons.Slides size={16} />}
+              <span>{isBookLayout ? "الكتاب" : "السلايدات"}</span>
             </button>
 
             <button
@@ -743,7 +743,7 @@ export const UnifiedAppHeader: React.FC<UnifiedAppHeaderProps> = ({
                       <button
                         type="button"
                         className={`set-opt ${mode === "dark" ? "on" : ""}`}
-                        onClick={() => setMode("dark")}
+                        onClick={() => onChangeMode("dark")}
                       >
                         <svg className="svg-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                           <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
@@ -753,7 +753,7 @@ export const UnifiedAppHeader: React.FC<UnifiedAppHeaderProps> = ({
                       <button
                         type="button"
                         className={`set-opt ${mode === "light" ? "on" : ""}`}
-                        onClick={() => setMode("light")}
+                        onClick={() => onChangeMode("light")}
                       >
                         <svg className="svg-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                           <circle cx="12" cy="12" r="5"/>
@@ -781,7 +781,7 @@ export const UnifiedAppHeader: React.FC<UnifiedAppHeaderProps> = ({
                           type="button"
                           className={`set-opt ${theme === t.id ? "on" : ""}`}
                           data-t={t.id}
-                          onClick={() => setTheme(t.id)}
+                          onClick={() => onChangeTheme(t.id)}
                         >
                           <span className="tdot" data-t={t.id}></span>
                           <span>{t.name}</span>
@@ -1149,8 +1149,32 @@ export const UnifiedAppHeader: React.FC<UnifiedAppHeaderProps> = ({
                           style={{ fontSize: "0.8rem", padding: "6px 12px" }}
                         >
                           <Icons.Share size={14} style={{ marginInlineEnd: 4 }} />
-                          <span>تصدير نسخة احتياطية من التقدم (JSON)</span>
+                          <span>تصدير نسخة احتياطية (JSON)</span>
                         </button>
+                      )}
+                      {onImportProgress && (
+                        <>
+                          <input
+                            ref={importInputRef}
+                            type="file"
+                            accept="application/json,.json"
+                            style={{ display: "none" }}
+                            onChange={(e) => {
+                              const file = e.target.files?.[0];
+                              if (file) onImportProgress(file);
+                              e.target.value = "";
+                            }}
+                          />
+                          <button
+                            type="button"
+                            className="fchip"
+                            onClick={() => importInputRef.current?.click()}
+                            style={{ fontSize: "0.8rem", padding: "6px 12px" }}
+                          >
+                            <Icons.Upload size={14} style={{ marginInlineEnd: 4 }} />
+                            <span>استيراد نسخة احتياطية (JSON)</span>
+                          </button>
+                        </>
                       )}
                     </div>
                   </div>

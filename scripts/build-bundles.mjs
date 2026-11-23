@@ -14,7 +14,21 @@ const __dirname = path.dirname(__filename);
 const ROOT = path.resolve(__dirname, "../..");
 const PLATFORM_DIR = path.resolve(__dirname, "..");
 const PUBLIC_DIR = path.join(PLATFORM_DIR, "public");
-const BUNDLE_VERSION = 7;
+const BUNDLE_VERSION = 8;
+
+function resolveSlideAssetUrl(code, lectureId, slideNum, lab = false) {
+  const segs = lab ? ["slides", code, "lab", lectureId] : ["slides", code, lectureId];
+  const baseDir = path.join(PUBLIC_DIR, ...segs);
+  const webpFile = `slide_${slideNum}.webp`;
+  if (fs.existsSync(path.join(baseDir, webpFile))) {
+    return `/${segs.join("/")}/${webpFile}`;
+  }
+  const pngFile = `slide_${slideNum}.png`;
+  if (fs.existsSync(path.join(baseDir, pngFile))) {
+    return `/${segs.join("/")}/${pngFile}`;
+  }
+  return "";
+}
 
 const SUBJECTS = {
   toc: {
@@ -78,7 +92,8 @@ const SUBJECTS = {
     professor_name: "د. محمد شكري",
     accent_color: "#22d3ee",
     icon_name: "cpu",
-    term: 2
+    term: 2,
+    page_layout: "book"
   }
 };
 
@@ -616,7 +631,7 @@ function buildSlides(def, data) {
         slide_num: slideNum,
         ref,
         title: slide.t || ref,
-        image_url: `/slides/${def.code}/${lectureId}/slide_${slideNum}.png`,
+        image_url: resolveSlideAssetUrl(def.code, lectureId, slideNum, false),
         content_ar: contentAr,
         content_en: slide.t || "",
         notes_ar: notesAr
@@ -1753,7 +1768,7 @@ function buildLab(def) {
         slide_num: slideNum,
         ref,
         title: slide.t || ref,
-        image_url: `/slides/sec/lab/${lecture.id}/slide_${slideNum}.png`,
+        image_url: resolveSlideAssetUrl("sec", lecture.id, slideNum, true),
         content_ar: contentAr,
         content_en: slide.t || "",
         notes_ar: (ex[lecture.id] || {})[ref] || arEntry?.explain || ""
@@ -1830,6 +1845,7 @@ function buildSubject(def) {
       icon_name: def.icon_name,
       is_active: true,
       arabic_only: isArabicOnly,
+      page_layout: def.page_layout || "slides",
       lectures_count: lectures.length,
       questions_count: questions.length,
       tables_count: tables.length,

@@ -5,7 +5,7 @@
 // Zero Emojis · 100% SVG/CSS line-art.
 // ==============================================================================
 
-import React, { useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Icons } from "../icons/SvgIcons";
 import { useFitTables } from "../../lib/useFitTables";
 
@@ -212,9 +212,16 @@ export const ConceptStudios: React.FC<ConceptStudiosProps> = ({
   const [activeStudio, setActiveStudio] = useState(initial?.id || "");
   const [activeTab, setActiveTab] = useState(initialTab);
 
+  useEffect(() => {
+    const nextStudio = studios.find((s) => s.id === normalizedId) || studios[0];
+    setActiveStudio(nextStudio?.id || "");
+    setActiveTab(normalizeTabForStudio(initialTabId, nextStudio?.tabs || []));
+  }, [subjectCode, normalizedId, initialTabId]);
+
   useFitTables(containerRef, [activeStudio, activeTab]);
 
   const current = studios.find((studio) => studio.id === activeStudio) || studios[0];
+  const currentTab = current && current.tabs.includes(activeTab) ? activeTab : current?.tabs[0] || "";
 
   if (!current) {
     return (
@@ -279,7 +286,7 @@ export const ConceptStudios: React.FC<ConceptStudiosProps> = ({
             <button
               key={tab}
               type="button"
-              className={`int-tab-btn ${activeTab === tab ? "active" : ""}`}
+              className={`int-tab-btn ${currentTab === tab ? "active" : ""}`}
               onClick={() => setActiveTab(tab)}
             >
               {studioTabLabel(tab)}
@@ -287,21 +294,24 @@ export const ConceptStudios: React.FC<ConceptStudiosProps> = ({
           ))}
         </div>
 
-        {activeStudio === "crypto_studio" && activeTab === "caesar" && <CaesarStudio />}
-        {activeStudio === "crypto_studio" && activeTab === "dh" && <DiffieHellmanStudio />}
-        {activeStudio === "crypto_studio" && activeTab === "signature" && <SignatureStudio />}
-        {activeStudio === "access_studio" && <AccessStudio mode={activeTab as "blp" | "biba"} />}
-        {activeStudio === "malware_studio" && activeTab === "matrix" && <MalwareMatrix />}
-        {activeStudio === "malware_studio" && activeTab === "stack" && <StackStudio />}
-        {activeStudio === "se_process" && <ProcessStudio />}
-        {activeStudio === "se_mccabe" && <McCabeStudio />}
-        {activeStudio === "se_verify" && <VerifyStudio />}
-        {activeStudio === "se_risk" && <RiskStudio />}
-        {activeStudio === "pm_approach" && <PmApproachStudio />}
-        {activeStudio === "pm_principles" && activeTab === "principles" && <PmPrinciplesStudio />}
-        {activeStudio === "pm_principles" && activeTab === "value_chain" && <PmValueChainStudio />}
-        {activeStudio === "qc_gates" && <QcGatesStudio />}
-        {activeStudio === "qc_entanglement" && <QcEntanglementStudio />}
+        {current.id === "crypto_studio" && currentTab === "caesar" && <CaesarStudio />}
+        {current.id === "crypto_studio" && currentTab === "dh" && <DiffieHellmanStudio />}
+        {current.id === "crypto_studio" && currentTab === "signature" && <SignatureStudio />}
+        {current.id === "access_studio" && currentTab === "acm" && <AcmStudio />}
+        {current.id === "access_studio" && currentTab !== "acm" && (
+          <AccessStudio mode={currentTab === "biba" ? "biba" : "blp"} />
+        )}
+        {current.id === "malware_studio" && currentTab === "matrix" && <MalwareMatrix />}
+        {current.id === "malware_studio" && currentTab === "stack" && <StackStudio />}
+        {current.id === "se_process" && <ProcessStudio />}
+        {current.id === "se_mccabe" && <McCabeStudio />}
+        {current.id === "se_verify" && <VerifyStudio />}
+        {current.id === "se_risk" && <RiskStudio />}
+        {current.id === "pm_approach" && <PmApproachStudio />}
+        {current.id === "pm_principles" && currentTab === "principles" && <PmPrinciplesStudio />}
+        {current.id === "pm_principles" && currentTab === "value_chain" && <PmValueChainStudio />}
+        {current.id === "qc_gates" && <QcGatesStudio />}
+        {current.id === "qc_entanglement" && <QcEntanglementStudio />}
       </div>
     </div>
   );
@@ -541,8 +551,7 @@ function SignatureStudio() {
   );
 }
 
-function AccessStudio({ mode }: { mode: "blp" | "biba" | "acm" }) {
-  if (mode === "acm") return <AcmStudio />;
+function AccessStudio({ mode }: { mode: "blp" | "biba" }) {
   const levels = ["عام", "سري", "سري للغاية"];
   const [subjectLevel, setSubjectLevel] = useState(2);
   const [objectLevel, setObjectLevel] = useState(1);

@@ -22,11 +22,14 @@ interface CompanionNavigationProps {
   emergencySections?: Array<{ id: string; nav_title?: string; title: string }>;
   patternRules?: Array<{ id: string; title: string }>;
   labSessions?: Array<{ id: string; title_ar: string }>;
+  activeLabSession?: string;
+  onSelectLabSession?: (id: string) => void;
+  pageLayout?: "slides" | "book";
   tables?: ExplanatoryTable[];
   reviewedParts?: string[];
   reviewedSections?: string[];
   answeredQuestions?: Record<string, { selected_answer: number; is_correct: boolean }>;
-  questions?: Array<{ model_id: string }>;
+  questions?: Array<{ id: string; model_id: string }>;
   counts?: {
     lectures?: number;
     tables?: number;
@@ -48,12 +51,16 @@ export const CompanionNavigation: React.FC<CompanionNavigationProps> = ({
   emergencySections = [],
   patternRules = [],
   labSessions = [],
+  activeLabSession = "all",
+  onSelectLabSession,
+  pageLayout = "slides",
   tables = [],
   reviewedParts = [],
   reviewedSections = [],
   answeredQuestions = {},
   questions = []
 }) => {
+  const isBookLayout = pageLayout === "book";
   const can = (view: ActiveView) => availableViews?.[view] !== false;
   const showsLectureList = ["slides", "summary", "tables"].includes(activeView);
   const bottomScrollRef = useRef<HTMLDivElement>(null);
@@ -218,16 +225,28 @@ export const CompanionNavigation: React.FC<CompanionNavigationProps> = ({
     }
 
     if (activeView === "lab" && labSessions.length > 0) {
-      return labSessions.map((s) => ({
-        id: s.id,
-        label: s.id,
-        title: s.title_ar,
-        active: false,
-        onClick: () => {
-          const el = document.getElementById(`lab-${s.id}`);
-          if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
-        }
-      }));
+      return [
+        {
+          id: "all",
+          label: "الكل",
+          title: "كل الجلسات العملية",
+          active: activeLabSession === "all",
+          onClick: () => {
+            onSelectLabSession?.("all");
+            window.scrollTo({ top: 0, behavior: "smooth" });
+          }
+        },
+        ...labSessions.map((s) => ({
+          id: s.id,
+          label: s.id,
+          title: s.title_ar,
+          active: activeLabSession === s.id,
+          onClick: () => {
+            onSelectLabSession?.(s.id);
+            window.scrollTo({ top: 0, behavior: "smooth" });
+          }
+        }))
+      ];
     }
 
     return [];
@@ -247,7 +266,9 @@ export const CompanionNavigation: React.FC<CompanionNavigationProps> = ({
     questions,
     answeredQuestions,
     patternRules,
-    labSessions
+    labSessions,
+    activeLabSession,
+    onSelectLabSession
   ]);
 
   useEffect(() => {
@@ -270,12 +291,16 @@ export const CompanionNavigation: React.FC<CompanionNavigationProps> = ({
             style={{ display: can("slides") ? undefined : "none" }}
             onClick={() => onSelectView("slides")}
           >
-            <svg className="svg-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-              <rect x="2" y="3" width="20" height="14" rx="2"/>
-              <path d="M8 21h8"/>
-              <path d="M12 17v4"/>
-            </svg>
-            <span>السلايدات</span>
+            {isBookLayout ? (
+              <Icons.BookOpen size={18} />
+            ) : (
+              <svg className="svg-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <rect x="2" y="3" width="20" height="14" rx="2"/>
+                <path d="M8 21h8"/>
+                <path d="M12 17v4"/>
+              </svg>
+            )}
+            <span>{isBookLayout ? "الكتاب" : "السلايدات"}</span>
           </button>
 
           <button
@@ -337,6 +362,7 @@ export const CompanionNavigation: React.FC<CompanionNavigationProps> = ({
           <button
             type="button"
             className={activeView === "explorer" ? "active" : ""}
+            style={{ display: can("explorer") ? undefined : "none" }}
             onClick={() => onSelectView("explorer")}
           >
             <svg className="svg-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -444,7 +470,7 @@ export const CompanionNavigation: React.FC<CompanionNavigationProps> = ({
         {/* 2. قائمة المحاضرات الدراسية الأصيلة (.lec-btn) للسلايدات والملخص والجداول (#slidesNav) */}
         {showsLectureList && (
           <div id="slidesNav">
-            <div className="side-title">المحاضرات الدراسية</div>
+            <div className="side-title">{isBookLayout ? "فصول الكتاب المرجعي" : "المحاضرات الدراسية"}</div>
             <div id="lecList">
               <button
                 type="button"
@@ -452,8 +478,8 @@ export const CompanionNavigation: React.FC<CompanionNavigationProps> = ({
                 onClick={() => onSelectLecture && onSelectLecture("all")}
               >
                 <span className="lt">
-                  <span>كل المحاضرات</span>
-                  <span className="cnt">{lectures.length} محاضرة</span>
+                  <span>{isBookLayout ? "كل الفصول" : "كل المحاضرات"}</span>
+                  <span className="cnt">{lectures.length} {isBookLayout ? "فصل" : "محاضرة"}</span>
                 </span>
               </button>
 
@@ -469,7 +495,7 @@ export const CompanionNavigation: React.FC<CompanionNavigationProps> = ({
                     <span className="lt">
                       <span>{lec.id}: {lec.title_ar}</span>
                       {lec.slides_count > 0 && (
-                        <span className="cnt">{lec.slides_count} شريحة</span>
+                        <span className="cnt">{lec.slides_count} {isBookLayout ? "صفحة" : "شريحة"}</span>
                       )}
                     </span>
                     {lec.title_en && <span className="le">{lec.title_en}</span>}

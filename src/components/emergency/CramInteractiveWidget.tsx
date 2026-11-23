@@ -6,6 +6,7 @@
 
 import React, { useState } from "react";
 import { Icons } from "../icons/SvgIcons";
+import { sanitizeStudyHtml } from "../../lib/textUtils";
 import type { CramModel, CramQuizQuestion } from "../../types";
 
 interface CramInteractiveWidgetProps {
@@ -138,7 +139,7 @@ export const CramInteractiveWidget: React.FC<CramInteractiveWidgetProps> = ({
               {activeModel.canonicalExample && (
                 <div style={{ marginTop: "14px", paddingTop: "10px", borderTop: "1px solid var(--ln-s)" }}>
                   <span style={{ fontSize: "0.78rem", color: "var(--ink-m)", display: "block" }}>المثال الكانوني الصريح:</span>
-                  <div style={{ fontWeight: 600, color: "var(--ink)", marginTop: "2px" }} dangerouslySetInnerHTML={{ __html: activeModel.canonicalExample }} />
+                  <div style={{ fontWeight: 600, color: "var(--ink)", marginTop: "2px" }} dangerouslySetInnerHTML={{ __html: sanitizeStudyHtml(activeModel.canonicalExample) }} />
                 </div>
               )}
 
@@ -162,7 +163,6 @@ export const CramInteractiveWidget: React.FC<CramInteractiveWidgetProps> = ({
             <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
               {questions.map((q, qIdx) => {
                 const userAns = quizAnswers[qIdx];
-                const isAnswered = userAns !== undefined;
                 return (
                   <div
                     key={qIdx}

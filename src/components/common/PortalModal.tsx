@@ -34,6 +34,7 @@ export const PortalModal: React.FC<PortalModalProps> = ({
   const [newProfessor, setNewProfessor] = useState("");
   const [newTerm, setNewTerm] = useState<number>(2);
   const [newColor, setNewColor] = useState("#f5b13d");
+  const [newLayout, setNewLayout] = useState<"slides" | "book">("slides");
 
   if (!isOpen) return null;
 
@@ -50,6 +51,7 @@ export const PortalModal: React.FC<PortalModalProps> = ({
       term: newTerm,
       professor_name: newProfessor.trim() || "غير محدد",
       accent_color: newColor,
+      page_layout: newLayout,
       is_active: true
     };
 
@@ -59,6 +61,8 @@ export const PortalModal: React.FC<PortalModalProps> = ({
     setNewNameAr("");
     setNewNameEn("");
     setNewProfessor("");
+    setNewColor("#f5b13d");
+    setNewLayout("slides");
   };
 
   return (
@@ -184,6 +188,18 @@ export const PortalModal: React.FC<PortalModalProps> = ({
               </div>
               <div>
                 <label style={{ display: "block", fontSize: "0.8rem", color: "var(--ink-m)", marginBottom: "4px" }}>
+                  اسم المادة بالإنجليزية
+                </label>
+                <input
+                  type="text"
+                  placeholder="e.g. Operating Systems"
+                  value={newNameEn}
+                  onChange={(e) => setNewNameEn(e.target.value)}
+                  style={{ width: "100%", padding: "8px", borderRadius: "var(--r-s)", border: "1px solid var(--ln)", background: "var(--sf)", color: "var(--ink)" }}
+                />
+              </div>
+              <div>
+                <label style={{ display: "block", fontSize: "0.8rem", color: "var(--ink-m)", marginBottom: "4px" }}>
                   اسم أستاذ المقرر
                 </label>
                 <input
@@ -206,6 +222,33 @@ export const PortalModal: React.FC<PortalModalProps> = ({
                   <option value={1}>الفصل الأول</option>
                   <option value={2}>الفصل الثاني</option>
                 </select>
+              </div>
+              <div>
+                <label style={{ display: "block", fontSize: "0.8rem", color: "var(--ink-m)", marginBottom: "4px" }}>
+                  نمط صفحات المرجع
+                </label>
+                <select
+                  value={newLayout}
+                  onChange={(e) => setNewLayout(e.target.value === "book" ? "book" : "slides")}
+                  style={{ width: "100%", padding: "8px", borderRadius: "var(--r-s)", border: "1px solid var(--ln)", background: "var(--sf)", color: "var(--ink)" }}
+                >
+                  <option value="slides">سلايدات أفقية (16:9)</option>
+                  <option value="book">كتاب مرجعي عمودي (A4 / صفحات طولية)</option>
+                </select>
+              </div>
+              <div>
+                <label style={{ display: "block", fontSize: "0.8rem", color: "var(--ink-m)", marginBottom: "4px" }}>
+                  اللون المميز للمادة
+                </label>
+                <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                  <input
+                    type="color"
+                    value={newColor}
+                    onChange={(e) => setNewColor(e.target.value)}
+                    style={{ width: "42px", height: "34px", padding: "2px", borderRadius: "var(--r-s)", border: "1px solid var(--ln)", background: "var(--sf)", cursor: "pointer" }}
+                  />
+                  <span style={{ fontSize: "0.78rem", fontFamily: "var(--fm)", color: "var(--ink-m)" }}>{newColor}</span>
+                </div>
               </div>
             </div>
             <button type="submit" className="btn btn-primary btn-sm">حفظ وإدراج المقرر</button>
@@ -232,10 +275,18 @@ export const PortalModal: React.FC<PortalModalProps> = ({
                   transition: "all 0.16s ease"
                 }}
               >
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
-                  <span style={{ fontSize: "0.78rem", fontWeight: 700, padding: "2px 8px", borderRadius: "var(--r-pill)", background: "var(--sf)", color: "var(--ink-m)", border: "1px solid var(--ln)" }}>
-                    ترم {s.term}
-                  </span>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px", gap: "6px" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: "6px", flexWrap: "wrap" }}>
+                    <span style={{ fontSize: "0.78rem", fontWeight: 700, padding: "2px 8px", borderRadius: "var(--r-pill)", background: "var(--sf)", color: "var(--ink-m)", border: "1px solid var(--ln)" }}>
+                      ترم {s.term}
+                    </span>
+                    {s.page_layout === "book" && (
+                      <span style={{ fontSize: "0.72rem", fontWeight: 700, padding: "2px 7px", borderRadius: "var(--r-pill)", background: "color-mix(in srgb, var(--acc) 14%, var(--sf))", color: "var(--acc)", border: "1px solid color-mix(in srgb, var(--acc) 35%, transparent)", display: "inline-flex", alignItems: "center", gap: "4px" }}>
+                        <Icons.BookOpen size={11} />
+                        <span>كتاب مرجعي</span>
+                      </span>
+                    )}
+                  </div>
                   <span style={{ fontSize: "0.82rem", fontWeight: 800, color: s.accent_color || "var(--acc)", textTransform: "uppercase" }}>
                     {s.code}
                   </span>

@@ -26,13 +26,17 @@ export const BookmarkLabelModal: React.FC<BookmarkLabelModalProps> = ({
   const [blue, setBlue] = useState(labels.blue || "أزرق");
 
   useEffect(() => {
-    if (isOpen) {
-      setRed(labels.red || "أحمر");
-      setYellow(labels.yellow || "أصفر");
-      setGreen(labels.green || "أخضر");
-      setBlue(labels.blue || "أزرق");
-    }
-  }, [isOpen, labels]);
+    if (!isOpen) return;
+    setRed(labels.red || "أحمر");
+    setYellow(labels.yellow || "أصفر");
+    setGreen(labels.green || "أخضر");
+    setBlue(labels.blue || "أزرق");
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [isOpen, labels, onClose]);
 
   if (!isOpen) return null;
 
@@ -48,7 +52,7 @@ export const BookmarkLabelModal: React.FC<BookmarkLabelModalProps> = ({
   };
 
   return (
-    <div className="ref-modal" role="dialog" aria-modal="true" aria-label="تسمية العلامات">
+    <div className="ref-modal" role="dialog" aria-modal="true" aria-label="تسمية العلامات" onClick={onClose}>
       <div className="ref-modal-card" style={{ maxWidth: 440 }} onClick={(e) => e.stopPropagation()}>
         <button
           type="button"

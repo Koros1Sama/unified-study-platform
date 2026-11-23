@@ -6,6 +6,7 @@
 
 import React, { useEffect, useMemo, useState } from "react";
 import { Icons } from "../icons/SvgIcons";
+import { matchesNormalizedTerms } from "../../lib/textUtils";
 import type { GlossaryData, ImportanceTier } from "../../types";
 
 interface GlossaryViewProps {
@@ -246,16 +247,14 @@ export const GlossaryView: React.FC<GlossaryViewProps> = ({ data, subjectName })
   }, [allEntries]);
 
   const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase();
     return allEntries.filter((entry) => {
       if (kind !== "all" && entry.kind !== kind) return false;
       if (tierFilter !== "all" && entry.importance !== tierFilter) return false;
       if (letter !== "all" && entry.letter !== letter) return false;
-      if (!q) return true;
-      return (
-        entry.key.toLowerCase().includes(q) ||
-        entry.arabic.includes(query.trim()) ||
-        (entry.category && entry.category.toLowerCase().includes(q))
+      if (!query.trim()) return true;
+      return matchesNormalizedTerms(
+        `${entry.key} ${entry.arabic} ${entry.category || ""} ${entry.context || ""}`,
+        query
       );
     });
   }, [allEntries, query, kind, tierFilter, letter]);
