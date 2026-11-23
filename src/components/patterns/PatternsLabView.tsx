@@ -4,7 +4,7 @@
 // and out-of-pattern exceptions. Zero Emojis.
 // ==============================================================================
 
-import React, { useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Icons } from "../icons/SvgIcons";
 import { useFitTables } from "../../lib/useFitTables";
 import { matchesNormalizedTerms } from "../../lib/textUtils";
@@ -14,6 +14,8 @@ interface PatternsLabViewProps {
   data?: QuestionPatternsData;
   subjectCode: string;
   onJumpToQuestion?: (id: string) => void;
+  targetRuleId?: string | null;
+  onTargetRuleHandled?: () => void;
 }
 
 function parseAccuracy(value?: string): number | null {
@@ -25,15 +27,53 @@ function parseAccuracy(value?: string): number | null {
 export const PatternsLabView: React.FC<PatternsLabViewProps> = ({
   data,
   subjectCode,
-  onJumpToQuestion
+  onJumpToQuestion,
+  targetRuleId,
+  onTargetRuleHandled
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const [query, setQuery] = useState("");
-  const [openRule, setOpenRule] = useState<string | null>(data?.rules?.[0]?.id || null);
+  const [openRule, setOpenRule] = useState<string | null>(targetRuleId || data?.rules?.[0]?.id || null);
   const [showExceptions, setShowExceptions] = useState<Record<string, boolean>>({});
+  const onTargetRuleHandledRef = useRef(onTargetRuleHandled);
+  onTargetRuleHandledRef.current = onTargetRuleHandled;
+  const handledRuleRef = useRef<string | null>(null);
   useFitTables(containerRef, [openRule, showExceptions, query]);
 
   const rules = data?.rules || [];
+
+  // التوسيع والتمرير التلقائي نحو القاعدة المستهدفة عند القفز من البحث الشامل
+  useEffect(() => {
+    if (!targetRuleId) {
+      handledRuleRef.current = null;
+      return;
+    }
+    if (handledRuleRef.current === targetRuleId) return;
+    if (rules.length === 0) return;
+
+    const exists = rules.some((r) => r.id === targetRuleId);
+    if (!exists) {
+      handledRuleRef.current = targetRuleId;
+      onTargetRuleHandledRef.current?.();
+      return;
+    }
+
+    setQuery("");
+    setOpenRule(targetRuleId);
+
+    const timer = setTimeout(() => {
+      const el = document.getElementById(`pat-${targetRuleId}`);
+      if (el) {
+        handledRuleRef.current = targetRuleId;
+        el.scrollIntoView({ behavior: "smooth", block: "start" });
+        el.classList.add("focus-glow");
+        setTimeout(() => el.classList.remove("focus-glow"), 2500);
+        onTargetRuleHandledRef.current?.();
+      }
+    }, 140);
+
+    return () => clearTimeout(timer);
+  }, [targetRuleId, rules]);
   const totalCases = useMemo(
     () => rules.reduce((sum, rule) => sum + (rule.cases?.length || 0), 0),
     [rules]
@@ -115,7 +155,12 @@ export const PatternsLabView: React.FC<PatternsLabViewProps> = ({
           const isExceptionOpen = Boolean(showExceptions[rule.id]);
 
           return (
-            <section key={rule.id} id={`pat-${rule.id}`} className={`pat-rule ${isOpen ? "is-open" : ""}`}>
+            <section
+              key={rule.id}
+              id={`pat-${rule.id}`}
+              className={`pat-rule ${isOpen ? "is-open" : ""}`}
+              style={{ scrollMarginTop: "80px" }}
+            >
               <button
                 type="button"
                 className="pat-rule-head"

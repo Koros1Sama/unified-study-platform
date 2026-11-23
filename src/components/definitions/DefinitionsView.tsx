@@ -221,7 +221,7 @@ export const DefinitionsView: React.FC<DefinitionsViewProps> = ({
           </div>
         )}
 
-        <div className="def-card-actions">
+        <div className="def-footer">
           {item.ref && (
             <button
               type="button"

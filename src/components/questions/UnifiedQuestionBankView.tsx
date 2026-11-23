@@ -19,7 +19,6 @@ import {
   applyOptionPermutation,
   buildShuffledOptionPermutation,
   createDeterministicRng,
-  fisherYatesShuffle,
   matchesNormalizedTerms
 } from "../../lib/textUtils";
 import type {
@@ -46,6 +45,7 @@ interface UnifiedQuestionBankViewProps {
   selectedModelId?: string;
   onSelectModel?: (id: string) => void;
   focusQuestionId?: string | null;
+  onFocusQuestionHandled?: () => void;
   showBookmarks?: boolean;
   bmLabels?: BookmarkLabels;
   onToggleBookmark?: (questionId: string, color: string, twinGroupId?: string) => void;
@@ -133,6 +133,7 @@ export const UnifiedQuestionBankView: React.FC<UnifiedQuestionBankViewProps> = (
   selectedModelId: propSelectedModelId,
   onSelectModel,
   focusQuestionId,
+  onFocusQuestionHandled,
   showBookmarks = true,
   bmLabels,
   onToggleBookmark,
@@ -402,6 +403,17 @@ export const UnifiedQuestionBankView: React.FC<UnifiedQuestionBankViewProps> = (
     searchQuery
   ]);
 
+  // ترتيب عشوائي حتمي وثابت لكل سؤال وفق البذرة دون تقسيم حيّ عند الإجابة
+  const shuffledOrderRank = useMemo(() => {
+    const map = new Map<string, number>();
+    if (!shuffleQuestions) return map;
+    for (const q of questions) {
+      const rng = createDeterministicRng(`${subjectCode}#${q.id}#qord#${questionsSeed}`);
+      map.set(q.id, rng());
+    }
+    return map;
+  }, [questions, shuffleQuestions, subjectCode, questionsSeed]);
+
   const orderedQuestions = useMemo(() => {
     if (sortMode === "similarity") {
       return sortQuestionsBySimilarity(filteredQuestions);
@@ -411,36 +423,20 @@ export const UnifiedQuestionBankView: React.FC<UnifiedQuestionBankViewProps> = (
     }
     if (!shuffleQuestions) return filteredQuestions;
 
-    const answered: UnifiedQuestion[] = [];
-    const unanswered: UnifiedQuestion[] = [];
-
-    filteredQuestions.forEach((q) => {
-      const a = retest ? retestAnswers[q.id] : answeredMap[q.id];
-      if (a && a.selected_answer >= 0) answered.push(q);
-      else unanswered.push(q);
+    return [...filteredQuestions].sort((a, b) => {
+      const ra = shuffledOrderRank.get(a.id) ?? 0;
+      const rb = shuffledOrderRank.get(b.id) ?? 0;
+      if (ra !== rb) return ra - rb;
+      return a.id.localeCompare(b.id);
     });
+  }, [filteredQuestions, sortMode, shuffleQuestions, shuffledOrderRank]);
 
-    const seedStr = `${subjectCode}#${selectedModelId}#unans#${questionsSeed}`;
-    const shuffledUnanswered = fisherYatesShuffle(unanswered, createDeterministicRng(seedStr));
-    return [...answered, ...shuffledUnanswered];
-  }, [
-    filteredQuestions,
-    sortMode,
-    shuffleQuestions,
-    subjectCode,
-    selectedModelId,
-    questionsSeed,
-    answeredMap,
-    retest,
-    retestAnswers
-  ]);
-
-  // حساب خلط الخيارات الذكي بشكل محفوظ (Memoized) يحمي الخيارات الموضعية ويحافظ على كفاءة React.memo
+  // حساب خلط الخيارات الذكي بشكل محفوظ (Memoized) يحمي الخيارات الموضعية ويستثني المقالي وصح/خطأ
   const shuffledChoiceCache = useMemo(() => {
     const map = new Map<string, { perm: number[]; question: UnifiedQuestion }>();
     if (!shuffleChoices) return map;
     for (const q of questions) {
-      if (q.type === "essay" || !q.options_en || q.options_en.length < 2) continue;
+      if (q.type === "essay" || q.type === "tf" || !q.options_en || q.options_en.length < 2) continue;
       const seedStr = `${subjectCode}#${q.id}#opts#${choicesSeed}`;
       const perm = buildShuffledOptionPermutation(q.options_en, q.options_ar, seedStr);
       map.set(q.id, { perm, question: applyOptionPermutation(q, perm) });
@@ -611,6 +607,7 @@ export const UnifiedQuestionBankView: React.FC<UnifiedQuestionBankViewProps> = (
     setRetestAnswers({});
     setRetestAnswered(new Set());
     setRetestOrigAns({});
+    setVisibleLimit(40);
   };
 
   const handleAnswerWithRetest = useCallback(
@@ -688,9 +685,39 @@ export const UnifiedQuestionBankView: React.FC<UnifiedQuestionBankViewProps> = (
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
+  const onFocusQuestionHandledRef = useRef(onFocusQuestionHandled);
+  onFocusQuestionHandledRef.current = onFocusQuestionHandled;
+  const handledFocusIdRef = useRef<string | null>(null);
+  const prevFilterKeyRef = useRef<string>("");
+
+  // إعادة ضبط حد العرض عند تغيير النموذج أو الفلاتر لمنع تكدس مئات البطاقات في الـ DOM
+  useEffect(() => {
+    const key = `${subjectCode}|${selectedModelId}|${filterState}|${filterBm}|${lectureFilter}|${manualFilter}|${searchQuery}|${sortMode}`;
+    if (prevFilterKeyRef.current && prevFilterKeyRef.current !== key) {
+      if (!focusQuestionId && !retest) {
+        setVisibleLimit(40);
+      }
+    }
+    prevFilterKeyRef.current = key;
+  }, [
+    subjectCode,
+    selectedModelId,
+    filterState,
+    filterBm,
+    lectureFilter,
+    manualFilter,
+    searchQuery,
+    sortMode,
+    focusQuestionId,
+    retest
+  ]);
+
   // القفز المضمون للسؤال المستهدف: إزالة الفلاتر الحاجبة، ضبط النموذج، وتوسيع حد العرض
   useEffect(() => {
-    if (!focusQuestionId) return;
+    if (!focusQuestionId) {
+      handledFocusIdRef.current = null;
+      return;
+    }
     const targetQ = questions.find((q) => q.id === focusQuestionId);
     if (targetQ) {
       if (selectedModelId !== "all" && targetQ.model_id !== selectedModelId) {
@@ -710,36 +737,56 @@ export const UnifiedQuestionBankView: React.FC<UnifiedQuestionBankViewProps> = (
   }, [focusQuestionId, questions]);
 
   useEffect(() => {
-    if (!focusQuestionId) return;
+    if (!focusQuestionId || handledFocusIdRef.current === focusQuestionId) return;
     const idx = orderedQuestions.findIndex((q) => q.id === focusQuestionId);
-    if (idx >= 0 && idx >= visibleLimit) {
+    if (idx < 0) {
+      if (questions.length > 0 && !questions.some((q) => q.id === focusQuestionId)) {
+        handledFocusIdRef.current = focusQuestionId;
+        onFocusQuestionHandledRef.current?.();
+      }
+      return;
+    }
+    if (idx >= visibleLimit) {
       setVisibleLimit(idx + 12);
       return;
     }
     const timer = setTimeout(() => {
       const el = document.getElementById(`q-${focusQuestionId}`);
       if (el) {
+        handledFocusIdRef.current = focusQuestionId;
         el.scrollIntoView({ behavior: "smooth", block: "center" });
         el.classList.add("focus-glow");
         setTimeout(() => el.classList.remove("focus-glow"), 2500);
+        onFocusQuestionHandledRef.current?.();
       }
     }, 180);
     return () => clearTimeout(timer);
-  }, [focusQuestionId, orderedQuestions, visibleLimit]);
+  }, [focusQuestionId, orderedQuestions, visibleLimit, questions]);
 
   const handleCloseTooltip = useCallback(() => {
     setTooltipState((s) => ({ ...s, visible: false }));
   }, []);
 
-  const getModelScore = (mId: string) => {
-    const qs = mId === "all" ? questions : questions.filter((x) => x.model_id === mId);
-    let right = 0;
-    qs.forEach((q) => {
-      const a = answeredMap[q.id];
-      if (a && a.is_correct) right++;
-    });
-    return { right, total: qs.length };
-  };
+  // حساب نتائج كافة النماذج في تمريرة واحدة O(N) محفوظة
+  const modelScoresMap = useMemo(() => {
+    const map = new Map<string, { right: number; total: number }>();
+    let allRight = 0;
+    for (const q of questions) {
+      const isRight = Boolean(answeredMap[q.id]?.is_correct);
+      if (isRight) allRight++;
+      const entry = map.get(q.model_id);
+      if (entry) {
+        entry.total++;
+        if (isRight) entry.right++;
+      } else {
+        map.set(q.model_id, { right: isRight ? 1 : 0, total: 1 });
+      }
+    }
+    map.set("all", { right: allRight, total: questions.length });
+    return map;
+  }, [questions, answeredMap]);
+
+  const getModelScore = (mId: string) => modelScoresMap.get(mId) || { right: 0, total: 0 };
 
   const handleShowTranslate = (text: string, pos: { x: number; y: number }) => {
     if (hoverHideTimerRef.current) {

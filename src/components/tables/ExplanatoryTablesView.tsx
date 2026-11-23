@@ -82,7 +82,8 @@ export const ExplanatoryTablesView: React.FC<ExplanatoryTablesViewProps> = ({
     const rowsText = table.rows
       .map((r) => `| ${r.map((cell) => cleanCell(cell)).join(" | ")} |`)
       .join("\n");
-    const md = `### ${table.title_ar}${table.title ? ` (${table.title})` : ""}\n\n| ${headers} |\n| ${separator} |\n${rowsText}\n`;
+    const hasDistinctTitle = Boolean(table.title && table.title.trim() !== (table.title_ar || "").trim());
+    const md = `### ${table.title_ar}${hasDistinctTitle ? ` (${table.title})` : ""}\n\n| ${headers} |\n| ${separator} |\n${rowsText}\n`;
 
     const fallbackCopy = (text: string) => {
       try {
@@ -330,7 +331,9 @@ export const ExplanatoryTablesView: React.FC<ExplanatoryTablesViewProps> = ({
               <div className="tbl-card-head">
                 <div className="tbl-card-title-wrap">
                   <h3 className="tbl-card-title">{table.title_ar}</h3>
-                  {table.title && <span className="tbl-card-en">{table.title}</span>}
+                  {table.title && table.title.trim() !== (table.title_ar || "").trim() && (
+                    <span className="tbl-card-en">{table.title}</span>
+                  )}
                   <span className="tbl-count">{rows.length} صفاً معروضاً</span>
                 </div>
 

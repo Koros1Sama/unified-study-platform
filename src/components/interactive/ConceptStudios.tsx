@@ -14,6 +14,7 @@ interface ConceptStudiosProps {
   initialStudioId?: string;
   initialTabId?: string;
   onReturnToSummary?: () => void;
+  onJumpToSlide?: (ref: string) => void;
 }
 
 type StudioMeta = { id: string; title: string; desc: string; ref: string; tabs: string[] };
@@ -193,7 +194,8 @@ export const ConceptStudios: React.FC<ConceptStudiosProps> = ({
   subjectCode,
   initialStudioId,
   initialTabId,
-  onReturnToSummary
+  onReturnToSummary,
+  onJumpToSlide
 }) => {
   const studios =
     subjectCode === "sec"
@@ -278,7 +280,21 @@ export const ConceptStudios: React.FC<ConceptStudiosProps> = ({
             <h2>{current.title}</h2>
             <p>{current.desc}</p>
           </div>
-          <span className="ref-chip">{current.ref}</span>
+          {current.ref && (
+            onJumpToSlide ? (
+              <button
+                type="button"
+                className="ref-chip"
+                onClick={() => onJumpToSlide(current.ref)}
+                title={`الانتقال إلى شريحة ${current.ref}`}
+              >
+                <Icons.Slides size={12} />
+                <span>{current.ref}</span>
+              </button>
+            ) : (
+              <span className="studio-card-ref">{current.ref}</span>
+            )
+          )}
         </div>
 
         <div className="int-tabs-bar studio-tabs">

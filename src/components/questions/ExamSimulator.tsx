@@ -63,6 +63,8 @@ export const ExamSimulator: React.FC<ExamSimulatorProps> = ({
   const [flagged, setFlagged] = useState<Set<string>>(new Set());
   const [secondsRemaining, setSecondsRemaining] = useState<number>(0);
   const [timeSpent, setTimeSpent] = useState<number>(0);
+  const timeSpentRef = useRef<number>(0);
+  timeSpentRef.current = timeSpent;
   const [reviewFilter, setReviewFilter] = useState<ReviewFilter>("all");
   const submittedRef = useRef<boolean>(false);
   const [tooltipState, setTooltipState] = useState<{
@@ -114,6 +116,29 @@ export const ExamSimulator: React.FC<ExamSimulatorProps> = ({
     [examEligibleQuestions, scope]
   );
 
+  const questionCountOptions = useMemo(() => {
+    if (pool.length === 0) return [];
+    const presets = [10, 20, 30, 50, 100].filter((n) => n < pool.length);
+    presets.push(pool.length <= 100 ? pool.length : 100);
+    return Array.from(new Set(presets));
+  }, [pool.length]);
+
+  // ضبط عدد الأسئلة المختار تلقائياً عند تضييق النطاق لضمان توافقه مع حجم المجموعة
+  useEffect(() => {
+    if (pool.length === 0) return;
+    setQuestionCount((prev) => {
+      const clamped = Math.min(prev, pool.length);
+      if (questionCountOptions.includes(clamped)) return clamped;
+      return (
+        questionCountOptions.find((n) => n >= clamped) ??
+        questionCountOptions[questionCountOptions.length - 1] ??
+        clamped
+      );
+    });
+  }, [pool.length, questionCountOptions]);
+
+  const effectiveQuestionCount = pool.length > 0 ? Math.min(questionCount, pool.length) : 0;
+
   const startExam = (customPool?: UnifiedQuestion[]) => {
     const source = customPool && customPool.length > 0 ? customPool : pool;
     if (source.length === 0) return;
@@ -129,6 +154,7 @@ export const ExamSimulator: React.FC<ExamSimulatorProps> = ({
     setReviewFilter("all");
     const totalSecs = timeLimitMinutes * 60;
     setSecondsRemaining(totalSecs);
+    timeSpentRef.current = 0;
     setTimeSpent(0);
     setExamState("running");
     window.scrollTo({ top: 0, behavior: "smooth" });
@@ -154,16 +180,20 @@ export const ExamSimulator: React.FC<ExamSimulatorProps> = ({
     onRecordResult({
       total: examQuestions.length,
       score,
-      timeSpentSec: timeSpent,
+      timeSpentSec: timeSpentRef.current,
       mode: `${examQuestions.length}Q-${scope === "all" ? "all" : scope}-${timerMode === "countdown" ? `${timeLimitMinutes}m` : "open"}-${examGradingMode}`
     });
     setExamState("results");
-  }, [examQuestions, userAnswers, onRecordResult, timeSpent, scope, timerMode, timeLimitMinutes, examGradingMode]);
+  }, [examQuestions, userAnswers, onRecordResult, scope, timerMode, timeLimitMinutes, examGradingMode]);
 
   useEffect(() => {
     if (examState !== "running") return;
     const timer = setInterval(() => {
-      setTimeSpent((s) => s + 1);
+      setTimeSpent((s) => {
+        const next = s + 1;
+        timeSpentRef.current = next;
+        return next;
+      });
       if (timerMode === "countdown") {
         setSecondsRemaining((sec) => Math.max(0, sec - 1));
       }
@@ -177,12 +207,14 @@ export const ExamSimulator: React.FC<ExamSimulatorProps> = ({
     }
   }, [examState, timerMode, secondsRemaining, finishExam]);
 
-  const handleAnswerQuestion = (qId: string, ansIdx: number, isOk: boolean) => {
+  const handleAnswerQuestion = useCallback((qId: string, ansIdx: number, isOk: boolean) => {
     setUserAnswers((prev) => ({
       ...prev,
       [qId]: { selected_answer: ansIdx, is_correct: isOk }
     }));
-  };
+  }, []);
+
+  const noopAnswer = useCallback(() => undefined, []);
 
   const toggleFlag = (qId: string) => {
     setFlagged((prev) => {
@@ -247,18 +279,16 @@ export const ExamSimulator: React.FC<ExamSimulatorProps> = ({
             <div className="exam-field">
               <label>عدد الأسئلة</label>
               <div className="exam-pills">
-                {[10, 20, 30, 50, 100]
-                  .filter((n) => n <= pool.length || n === 10)
-                  .map((n) => (
-                    <button
-                      key={n}
-                      type="button"
-                      className={`fchip ${questionCount === Math.min(n, pool.length) ? "on" : ""}`}
-                      onClick={() => setQuestionCount(Math.min(n, pool.length))}
-                    >
-                      {Math.min(n, pool.length)} سؤالاً
-                    </button>
-                  ))}
+                {questionCountOptions.map((n) => (
+                  <button
+                    key={n}
+                    type="button"
+                    className={`fchip ${effectiveQuestionCount === n ? "on" : ""}`}
+                    onClick={() => setQuestionCount(n)}
+                  >
+                    {n} سؤالاً
+                  </button>
+                ))}
               </div>
             </div>
 
@@ -326,7 +356,7 @@ export const ExamSimulator: React.FC<ExamSimulatorProps> = ({
           </div>
 
           <button type="button" className="btn btn-primary exam-start-btn" disabled={pool.length === 0} onClick={() => startExam()}>
-            بدء جلسة الامتحان الآن ({Math.min(questionCount, pool.length)} سؤالاً)
+            بدء جلسة الامتحان الآن ({effectiveQuestionCount} سؤالاً)
           </button>
 
           {examHistory.length > 0 && (
@@ -394,7 +424,6 @@ export const ExamSimulator: React.FC<ExamSimulatorProps> = ({
             displayNumber={currentIdx + 1}
             userAnswer={userAnswers[currentQ.id]}
             onAnswer={handleAnswerQuestion}
-            onJumpToSlide={onJumpToSlide}
             onShowTranslate={handleShowTranslate}
             onScheduleHideTranslate={handleScheduleHideTranslate}
             languageMode={languageMode}
@@ -557,7 +586,7 @@ export const ExamSimulator: React.FC<ExamSimulatorProps> = ({
                 <button
                   type="button"
                   className="btn"
-                  style={{ background: "var(--warn)", borderColor: "var(--warn)", color: "#000" }}
+                  style={{ background: "var(--warn)", borderColor: "var(--warn)", color: "var(--bg)" }}
                   onClick={() => startExam(flaggedQuestionsList)}
                 >
                   <Icons.Flag size={15} />
@@ -635,7 +664,7 @@ export const ExamSimulator: React.FC<ExamSimulatorProps> = ({
             question={q}
             displayNumber={q.orig_q_num}
             userAnswer={userAnswers[q.id]}
-            onAnswer={() => undefined}
+            onAnswer={noopAnswer}
             onJumpToSlide={onJumpToSlide}
             onShowTranslate={handleShowTranslate}
             onScheduleHideTranslate={handleScheduleHideTranslate}

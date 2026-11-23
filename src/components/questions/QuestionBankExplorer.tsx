@@ -265,7 +265,7 @@ export const QuestionBankExplorer: React.FC<QuestionBankExplorerProps> = ({
                 >
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                     <div style={{ display: "flex", gap: "6px", alignItems: "center" }}>
-                      <span style={{ fontSize: "0.82rem", fontWeight: 800, padding: "2px 8px", borderRadius: "var(--r-pill)", background: "var(--acc)", color: "#000" }}>
+                      <span style={{ fontSize: "0.82rem", fontWeight: 800, padding: "2px 8px", borderRadius: "var(--r-pill)", background: "var(--acc)", color: "var(--bg)" }}>
                         #{q.orig_q_num}
                       </span>
                       <span style={{ fontSize: "0.78rem", padding: "2px 8px", borderRadius: "var(--r-pill)", background: "var(--sf2)", color: "var(--ink-m)", border: "1px solid var(--ln)" }}>
@@ -322,7 +322,7 @@ export const QuestionBankExplorer: React.FC<QuestionBankExplorerProps> = ({
                 >
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "4px" }}>
                     <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
-                      <span style={{ fontSize: "0.84rem", fontWeight: 800, padding: "2px 8px", borderRadius: "var(--r-pill)", background: "var(--acc)", color: "#000" }}>
+                      <span style={{ fontSize: "0.84rem", fontWeight: 800, padding: "2px 8px", borderRadius: "var(--r-pill)", background: "var(--acc)", color: "var(--bg)" }}>
                         #{q.orig_q_num}
                       </span>
                       <span style={{ fontSize: "0.78rem", padding: "2px 8px", borderRadius: "var(--r-pill)", background: "var(--sf2)", color: "var(--ink-m)", border: "1px solid var(--ln)" }}>
