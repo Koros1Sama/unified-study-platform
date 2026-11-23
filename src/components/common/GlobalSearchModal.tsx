@@ -643,8 +643,9 @@ export const GlobalSearchModal: React.FC<GlobalSearchModalProps> = ({
           )}
         </div>
 
-        {/* الشريط السفلي */}
+        {/* الشريط السفلي — لسطح المكتب فقط */}
         <div
+          className="desktop-only"
           style={{
             padding: "8px 16px",
             borderTop: "1px solid var(--ln)",

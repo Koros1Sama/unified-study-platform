@@ -445,7 +445,7 @@ export const SlidesViewer: React.FC<SlidesViewerProps> = ({
           <div className="ar-panel show">
             <div className="ex-head" style={{ color: "var(--acc)", display: "flex", alignItems: "center", gap: "6px" }}>
               <Icons.Translate size={14} />
-              <span>الترجمة العربية</span>
+              <span>الترجمة</span>
             </div>
             {slide.content_ar ? (
               <div className="ar-body" style={{ marginTop: "8px", fontSize: "0.88rem", lineHeight: 1.8, color: "var(--ink)" }}>
@@ -465,7 +465,7 @@ export const SlidesViewer: React.FC<SlidesViewerProps> = ({
           <div className="ex-panel show">
             <div className="ex-head" style={{ display: "flex", alignItems: "center", gap: "6px" }}>
               <Icons.Tip size={14} />
-              <span>الشرح التعليمي والوقفة الامتحانية</span>
+              <span>الشرح</span>
             </div>
             {slide.notes_ar ? (
               <div className="ex-body" style={{ marginTop: "8px", fontSize: "0.88rem", lineHeight: 1.85, color: "var(--ink)" }}>

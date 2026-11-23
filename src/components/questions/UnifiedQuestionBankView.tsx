@@ -146,7 +146,7 @@ export const UnifiedQuestionBankView: React.FC<UnifiedQuestionBankViewProps> = (
   shuffleQuestions = false,
   choicesSeed = 1,
   questionsSeed = 1,
-  syncTwins = false,
+  syncTwins: _syncTwins = false,
   onResetModelAnswers
 }) => {
   const [internalModelId, setInternalModelId] = useState<string>("all");
@@ -988,19 +988,9 @@ export const UnifiedQuestionBankView: React.FC<UnifiedQuestionBankViewProps> = (
         </div>
       )}
 
-      {!retest && (
+      {!retest && smartInsights.totalAns >= 1 && (
         <div className="model-insights">
-          {smartInsights.totalAns < 1 ? (
-            <div className="ins-empty">
-              <Icons.Award size={16} />
-              <span>
-                {smartInsights.hasLecData
-                  ? "أجب على أسئلتك الأولى ليبدأ التحليل الذكي ويوصيك بالمحاضرات التي تحتاج مراجعة."
-                  : "أجب على أسئلتك الأولى ليبدأ التحليل الذكي ويوصيك بالنماذج التي تحتاج مراجعة."}
-              </span>
-            </div>
-          ) : (
-            <div className="insights-card">
+          <div className="insights-card">
               <div className="ins-head">
                 <div className="ins-ic">
                   <Icons.Award size={20} />
@@ -1073,7 +1063,6 @@ export const UnifiedQuestionBankView: React.FC<UnifiedQuestionBankViewProps> = (
                 </div>
               )}
             </div>
-          )}
         </div>
       )}
 
@@ -1188,7 +1177,7 @@ export const UnifiedQuestionBankView: React.FC<UnifiedQuestionBankViewProps> = (
 
         <button
           type="button"
-          className="fchip print-hide"
+          className="fchip print-hide desktop-only"
           onClick={() => window.print()}
           title="طباعة نموذج الأسئلة المعروضة كأوراق تدريب ورقية أو ملف PDF"
         >
@@ -1329,44 +1318,45 @@ export const UnifiedQuestionBankView: React.FC<UnifiedQuestionBankViewProps> = (
         </span>
       </div>
 
-      <div className="model-origin" id="modelOrigin">
-        <div className="model-origin-desc">
-          <span className="model-origin-tag">
-            <Icons.Definitions size={14} />
-            {selectedModelId === "all"
-              ? "البنك المجمع الموحد"
-              : activeModelMeta?.origin_tag || activeModelMeta?.title_ar || "نموذج اختبار"}
-          </span>
-          <span>
-            {selectedModelId === "all"
-              ? `قسم شامل يضم كافة الأسئلة من جميع النماذج، مع دعم الترتيب حسب التشابه أو حسب تسلسل الدروس والشرائح${syncTwins ? " ومزامنة المتطابقات تلقائياً" : ""}.`
-              : activeModelMeta?.origin_ar || "أسئلة النموذج المعتمد مع الشرح المفصل وتفنيد الخيارات الخاطئة."}
-          </span>
-        </div>
-        {(activeModelMeta?.origin_url ||
+      {selectedModelId !== "all" &&
+        (activeModelMeta?.origin_ar ||
+          activeModelMeta?.origin_url ||
           (activeModelMeta?.origin_sources && activeModelMeta.origin_sources.length > 0)) && (
-          <div className="model-origin-links">
-            {activeModelMeta.origin_url && (
-              <a href={activeModelMeta.origin_url} target="_blank" rel="noopener noreferrer" className="model-origin-link">
-                <Icons.Jump size={12} />
-                المصدر المعتمد
-              </a>
-            )}
-            {activeModelMeta.origin_sources?.map((s, idx) =>
-              s.url ? (
-                <a key={idx} href={s.url} target="_blank" rel="noopener noreferrer" className="model-origin-link">
+        <div className="model-origin" id="modelOrigin">
+          {activeModelMeta.origin_ar && (
+            <div className="model-origin-desc">
+              <span className="model-origin-tag">
+                <Icons.Definitions size={14} />
+                {activeModelMeta.origin_tag || activeModelMeta.title_ar || "نموذج اختبار"}
+              </span>
+              <span>{activeModelMeta.origin_ar}</span>
+            </div>
+          )}
+          {(activeModelMeta.origin_url ||
+            (activeModelMeta.origin_sources && activeModelMeta.origin_sources.length > 0)) && (
+            <div className="model-origin-links">
+              {activeModelMeta.origin_url && (
+                <a href={activeModelMeta.origin_url} target="_blank" rel="noopener noreferrer" className="model-origin-link">
                   <Icons.Jump size={12} />
-                  {s.label}
+                  المصدر
                 </a>
-              ) : (
-                <span key={idx} className="model-origin-tag" style={{ background: "var(--sf)", color: "var(--ink-m)" }}>
-                  {s.label}
-                </span>
-              )
-            )}
-          </div>
-        )}
-      </div>
+              )}
+              {activeModelMeta.origin_sources?.map((s, idx) =>
+                s.url ? (
+                  <a key={idx} href={s.url} target="_blank" rel="noopener noreferrer" className="model-origin-link">
+                    <Icons.Jump size={12} />
+                    {s.label}
+                  </a>
+                ) : (
+                  <span key={idx} className="model-origin-tag" style={{ background: "var(--sf)", color: "var(--ink-m)" }}>
+                    {s.label}
+                  </span>
+                )
+              )}
+            </div>
+          )}
+        </div>
+      )}
 
       {orderedQuestions.length === 0 ? (
         <div className="pending-box">

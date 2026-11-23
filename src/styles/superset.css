@@ -3201,10 +3201,38 @@ body.header-hidden .book-card.book-layout-split .book-page-wrap {
   }
 }
 
+/* تلميح الترجمة المضغوط والنظيف بدون ترويسة زائدة */
+.wtip {
+  padding: 9px 13px !important;
+  font-size: 0.9rem !important;
+  line-height: 1.55 !important;
+}
+
+.wtip-body {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.wtip-text {
+  flex: 1 1 auto;
+  min-width: 0;
+  color: var(--ink);
+}
+
+.wtip-close {
+  flex: 0 0 auto;
+  margin-top: 2px;
+  opacity: 0.72;
+}
+
 @media (max-width: 680px) {
   .headline {
-    margin-bottom: 12px !important;
-    padding-bottom: 10px !important;
+    margin-bottom: 10px !important;
+    padding-bottom: 8px !important;
+  }
+  .headline .kicker {
+    display: none !important;
   }
   .headline h1 {
     font-size: 1.1rem !important;

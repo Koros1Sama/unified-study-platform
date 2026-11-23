@@ -524,7 +524,7 @@ export const LightboxModal: React.FC<LightboxModalProps> = ({
       {showDrawer && hasTextNotes && (
         <div className="lb-drawer">
           <div className="lb-drawer-bar">
-            <span className="lb-drawer-title">الترجمة والشرح ({currentSlide.ref})</span>
+            <span className="lb-drawer-title">الترجمة والشرح</span>
             <button
               type="button"
               className="lb-drawer-close"

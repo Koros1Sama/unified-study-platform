@@ -27,7 +27,7 @@ export const SmartTranslateTooltip: React.FC<SmartTranslateTooltipProps> = ({
   onClose,
   onMouseEnterTooltip,
   onMouseLeaveTooltip,
-  title = "الترجمة الفورية المعتمدة"
+  title
 }) => {
   const tooltipRef = useRef<HTMLDivElement>(null);
   const openTimeRef = useRef<number>(0);
@@ -146,22 +146,23 @@ export const SmartTranslateTooltip: React.FC<SmartTranslateTooltipProps> = ({
         onMouseEnter={handleMouseEnter}
         onMouseLeave={handleMouseLeave}
       >
-        <div className="wtip-header">
-          <span style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-            <Icons.Translate size={15} />
+        {title && (
+          <div className="wtip-header">
             <span>{title}</span>
-          </span>
-          <button
-            type="button"
-            className="wtip-close"
-            onClick={onClose}
-            aria-label="إغلاق التلميح"
-          >
-            <Icons.Cross size={14} />
-          </button>
-        </div>
-        <div style={{ fontSize: "0.93rem", color: "var(--ink)" }}>
-          {cleanArabicOnly(textAr)}
+          </div>
+        )}
+        <div className="wtip-body">
+          <span className="wtip-text">{cleanArabicOnly(textAr)}</span>
+          {isTouchDevice && (
+            <button
+              type="button"
+              className="wtip-close"
+              onClick={onClose}
+              aria-label="إغلاق"
+            >
+              <Icons.Cross size={13} />
+            </button>
+          )}
         </div>
       </div>
     </>

@@ -299,21 +299,6 @@ const QuestionCardComponent: React.FC<QuestionCardProps> = ({
         )}
 
 
-        {showFeedback && !readOnly && (
-          <button
-            type="button"
-            className="q-undo-btn q-head-undo"
-            onClick={() => {
-              setShowExplanation(false);
-              onAnswer(question.id, -1, false, question.twin_group_id);
-            }}
-            title="إلغاء اختيار هذا السؤال لإعادة المحاولة"
-          >
-            <Icons.Reset size={12} />
-            <span>إعادة</span>
-          </button>
-        )}
-
         {question.slide_ref && onJumpToSlide && (
           <button
             type="button"
@@ -542,10 +527,10 @@ const QuestionCardComponent: React.FC<QuestionCardProps> = ({
                         setShowExplanation(false);
                         onAnswer(question.id, -1, false, question.twin_group_id);
                       }}
-                      title="إلغاء اختيار هذا السؤال لإعادة المحاولة من جديد"
+                      title="إلغاء اختيار هذا السؤال لإعادة المحاولة"
                     >
                       <Icons.Reset size={12} />
-                      <span>إلغاء الاختيار</span>
+                      <span>إعادة</span>
                     </button>
                   )}
                 </div>
@@ -553,7 +538,7 @@ const QuestionCardComponent: React.FC<QuestionCardProps> = ({
 
               {question.exam_tip && (
                 <div className="q-tip" style={{ marginBottom: "12px" }}>
-                  <div className="t-head"><Icons.Tip size={14} /> تكتيك الحل السريع في 5 ثوانٍ</div>
+                  <div className="t-head"><Icons.Tip size={14} /> مفتاح الحل</div>
                   <div>{question.exam_tip}</div>
                 </div>
               )}
@@ -564,7 +549,7 @@ const QuestionCardComponent: React.FC<QuestionCardProps> = ({
                     <div className="q-exp-prompt-banner">
                       <div className="q-exp-prompt-content">
                         <Icons.Eye size={16} />
-                        <span>ألا يعجبك ظهور الشرح تلقائياً؟ ادخل الإعدادات لتغيير ذلك وضبطه</span>
+                        <span>يمكنك تغيير ظهور الشرح التلقائي من الإعدادات</span>
                       </div>
                       <div className="q-exp-prompt-actions">
                         <button
@@ -576,7 +561,7 @@ const QuestionCardComponent: React.FC<QuestionCardProps> = ({
                             onOpenExpSettings?.();
                           }}
                         >
-                          ضبط الإعدادات
+                          الإعدادات
                         </button>
                         <button
                           type="button"
@@ -592,19 +577,19 @@ const QuestionCardComponent: React.FC<QuestionCardProps> = ({
                       </div>
                     </div>
                   )}
-                  {/* الخيار الصائب المعتمد */}
+                  {/* الخيار الصائب */}
                   <div className={`why-item correct ${selectedIdx === question.correct_answer ? "user-picked" : ""}`}>
                     <div className="w-head">
                       <span className="why-opt-letter">{String.fromCharCode(65 + question.correct_answer)}</span>
                       <span className="why-opt-title" dir={isRtl(correctOptionText) ? "rtl" : "ltr"}>
                         {correctOptionText}
                       </span>
-                      <span className="why-kind-badge why-badge-picked-correct">الخيار الصائب المعتمد</span>
+                      <span className="why-kind-badge why-badge-picked-correct">الصحيح</span>
                     </div>
                     <div className="why-section why-correct-section">
                       <div className="why-sec-title">
                         <Icons.Check size={14} />
-                        <span>التعليل العلمي للصواب (حسب البنك المعتمد):</span>
+                        <span>التعليل:</span>
                       </div>
                       <div className="why-sec-text">
                         {cleanArabicOnly(
@@ -630,7 +615,7 @@ const QuestionCardComponent: React.FC<QuestionCardProps> = ({
                             {optText}
                           </span>
                           {isUserPick && (
-                            <span className="why-kind-badge why-badge-picked-wrong">اختيارك (إجابة خاطئة)</span>
+                            <span className="why-kind-badge why-badge-picked-wrong">اختيارك</span>
                           )}
                         </div>
 
@@ -638,7 +623,7 @@ const QuestionCardComponent: React.FC<QuestionCardProps> = ({
                           <div className="why-section why-wrong-section">
                             <div className="why-sec-title">
                               <Icons.Cross size={14} />
-                              <span>لماذا هذا الخيار خطأ هنا؟ (علة الاستبعاد):</span>
+                              <span>سبب الاستبعاد:</span>
                             </div>
                             <div className="why-sec-text">{cleanArabicOnly(detail.why_wrong)}</div>
                           </div>
@@ -648,7 +633,7 @@ const QuestionCardComponent: React.FC<QuestionCardProps> = ({
                           <div className="why-section why-when-section">
                             <div className="why-sec-title">
                               <Icons.Target size={14} />
-                              <span>متى يكون هذا الخيار بالذات هو الصحيح؟ (السيناريو الامتحاني البديل):</span>
+                              <span>متى يكون صحيحاً؟</span>
                             </div>
                             <div className="why-sec-text">{cleanArabicOnly(detail.when_correct)}</div>
                           </div>
