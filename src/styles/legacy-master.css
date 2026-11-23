@@ -23,8 +23,12 @@
           0 1px 2px rgba(0, 0, 0, 0.3), 0 12px 32px -12px rgba(0, 0, 0, 0.5);
         --ok: #22c55e;
         --ok-g: color-mix(in srgb, var(--ok) 18%, transparent);
+        --warn: #f59e0b;
+        --warn-g: color-mix(in srgb, var(--warn) 16%, transparent);
         --err: #d98a8a;
         --err-g: color-mix(in srgb, var(--err) 14%, transparent);
+        --sf1: var(--sf);
+        --sf3: color-mix(in srgb, var(--sf2) 70%, var(--ln));
       }
       [data-theme="amber"] {
         --bg: #0c0d10;
@@ -159,8 +163,12 @@
         --sh: 0 1px 3px rgba(0, 0, 0, 0.06), 0 10px 25px -8px rgba(0, 0, 0, 0.10);
         --ok: #15803d;
         --ok-g: color-mix(in srgb, var(--ok) 14%, transparent);
+        --warn: #d97706;
+        --warn-g: color-mix(in srgb, var(--warn) 13%, transparent);
         --err: #dc2626;
         --err-g: color-mix(in srgb, var(--err) 12%, transparent);
+        --sf1: var(--sf);
+        --sf3: color-mix(in srgb, var(--sf2) 70%, var(--ln));
       }
       html[data-mode="light"] .setwrap {
         box-shadow: 0 16px 45px rgba(0, 0, 0, 0.14);
@@ -389,11 +397,10 @@
         display: flex;
         align-items: center;
         gap: 8px;
-        font-family: var(--fm);
+        font-family: var(--fa);
         font-size: 0.82rem;
         font-weight: 700;
-        letter-spacing: 0.04em;
-        text-transform: uppercase;
+        letter-spacing: 0;
         color: var(--acc);
         white-space: nowrap;
         flex: 0 0 auto;
@@ -1174,11 +1181,11 @@
         height: 14px;
       }
       .side-title {
-        font-family: var(--fm);
-        font-size: 0.62rem;
-        letter-spacing: 0.16em;
+        font-family: var(--fa);
+        font-size: 0.68rem;
+        font-weight: 700;
+        letter-spacing: 0;
         color: var(--ink-f);
-        text-transform: uppercase;
         margin: 8px 6px 10px;
       }
       .lec-btn {
@@ -1935,7 +1942,7 @@
         font-size: 0.7rem;
         font-weight: 700;
         color: var(--ok);
-        letter-spacing: 0.06em;
+        letter-spacing: 0;
         margin-bottom: 8px;
       }
       .ex-panel p {
@@ -2815,7 +2822,7 @@
       }
       .q-exp-prompt-btn {
         background: var(--acc);
-        color: var(--bg-1, #0b0e17);
+        color: var(--bg);
         border: 1px solid var(--acc);
         border-radius: 999px;
         padding: 4px 12px;
@@ -6954,12 +6961,12 @@
 mark.hl-search {
   background: #ffe600 !important;
   color: #000000 !important;
-  border: 1px solid #cca300 !important;
-  font-weight: 900 !important;
-  border-radius: 4px !important;
-  padding: 1px 5px !important;
-  margin: 0 1px !important;
-  box-shadow: 0 0 0 1px #cca300, 0 0 10px rgba(255, 230, 0, 0.75) !important;
+  border: none !important;
+  font-weight: 800 !important;
+  border-radius: 3px !important;
+  padding: 0 2px !important;
+  margin: 0 !important;
+  box-shadow: 0 0 0 1px rgba(204, 163, 0, 0.6) !important;
   text-decoration: underline !important;
   text-decoration-color: #000 !important;
   line-height: inherit !important;
@@ -7042,14 +7049,14 @@ mark.hl-search {
 
 .btn-primary {
   background: var(--acc);
-  color: #000 !important;
+  color: var(--bg);
   border-color: var(--acc);
 }
 
 .btn-primary:hover {
   background: var(--acc-b);
   border-color: var(--acc-b);
-  color: #000 !important;
+  color: var(--bg);
 }
 
 .btn-sm {
@@ -7066,10 +7073,11 @@ mark.hl-search {
 
 #jumpReturnBar {
   position: fixed;
-  bottom: 24px;
+  bottom: calc(var(--usp-bottom-base, 16px) + env(safe-area-inset-bottom));
   left: 50%;
   transform: translateX(-50%);
   z-index: 10000;
+  max-width: calc(100vw - 24px);
   background: var(--sf);
   border: 1.5px solid var(--acc);
   color: var(--ink);
@@ -7227,6 +7235,7 @@ button.ref-chip {
   .modal-overlay,
   .more-menu,
   #jumpReturnBar,
+  #pwaInstallBanner,
   .usp-toast-stack,
   .usp-offline-pill,
   .footer,
