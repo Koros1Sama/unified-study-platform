@@ -322,6 +322,9 @@
   display: flex;
   flex-direction: column;
   gap: 10px;
+  min-width: 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
   padding: 16px 18px;
   background: var(--bg-s);
   border: 1px solid var(--ln);
@@ -1536,7 +1539,7 @@
   .def-search { min-width: 0; }
   .def-tool-actions { justify-content: flex-start; }
   .def-result-count { margin-inline-start: 0; }
-  .def-grid, .gloss-grid, .lab-grid, .studio-grid { grid-template-columns: 1fr; }
+  .def-grid, .gloss-grid, .lab-grid, .studio-grid { grid-template-columns: minmax(0, 1fr); }
   .em-toolbar { gap: 8px; }
   .exam-hud {
     flex-direction: column;
@@ -3100,6 +3103,8 @@ body.header-hidden .book-card.book-layout-split .book-page-wrap {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  line-height: 1.5;
+  padding-block: 1px;
 }
 
 .brand-chevron {
@@ -3220,6 +3225,7 @@ body.header-hidden .book-card.book-layout-split .book-page-wrap {
     margin-bottom: 10px !important;
   }
   .def-search {
+    flex: 0 0 auto !important;
     padding: 0 12px;
     gap: 8px;
   }

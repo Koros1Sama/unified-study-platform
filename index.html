@@ -28,6 +28,7 @@
     <script type="module" src="/src/main.tsx"></script>
     <script>
       if ('serviceWorker' in navigator) {
+        const pageBootAt = Date.now();
         window.addEventListener('load', () => {
           const hadController = Boolean(navigator.serviceWorker.controller);
           let updateNotified = false;
@@ -35,8 +36,9 @@
             .then((reg) => {
               reg.update();
               navigator.serviceWorker.addEventListener('controllerchange', () => {
-                // منع إعادة التحميل في أول زيارة تماماً، وإظهار إشعار لطيف عند التحديث
+                // منع الإشعار في أول زيارة أو فور إعادة تحميل الصفحة (لأن التنقل Network-First وجلب النسخة الأحدث بالفعل)
                 if (!hadController || updateNotified) return;
+                if (Date.now() - pageBootAt < 15000) return;
                 updateNotified = true;
                 if (window.__OFFLINE_DOWNLOADING__) {
                   window.addEventListener('offline-download-complete', () => {
