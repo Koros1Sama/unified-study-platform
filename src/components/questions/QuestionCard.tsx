@@ -102,6 +102,7 @@ const QuestionCardComponent: React.FC<QuestionCardProps> = ({
   });
   const [showEssay, setShowEssay] = useState<boolean>(false);
   const [isBmDropdownOpen, setIsBmDropdownOpen] = useState<boolean>(false);
+  const [bmAlign, setBmAlign] = useState<"left" | "right">("right");
   const bmWrapRef = useRef<HTMLDivElement>(null);
 
   // تحديث حالة الشرح عند تغيير نمط العرض أو تصفير الإجابة
@@ -117,17 +118,29 @@ const QuestionCardComponent: React.FC<QuestionCardProps> = ({
     }
   }, [expMode, showFeedback, isCorrect]);
 
-  // إغلاق قائمة العلامات عند النقر خارجها
+  // إغلاق قائمة العلامات عند النقر أو اللمس خارجها
   useEffect(() => {
     if (!isBmDropdownOpen) return;
-    const handleClickOutside = (e: MouseEvent) => {
+    const handleClickOutside = (e: PointerEvent) => {
       if (bmWrapRef.current && !bmWrapRef.current.contains(e.target as Node)) {
         setIsBmDropdownOpen(false);
       }
     };
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
+    document.addEventListener("pointerdown", handleClickOutside);
+    return () => document.removeEventListener("pointerdown", handleClickOutside);
   }, [isBmDropdownOpen]);
+
+  const handleToggleBmMenu = () => {
+    setIsBmDropdownOpen((prev) => {
+      const next = !prev;
+      if (next && bmWrapRef.current && typeof window !== "undefined") {
+        const rect = bmWrapRef.current.getBoundingClientRect();
+        // إذا كان الزر في النصف الأيمن من الشاشة نثبت القائمة على يمينه كي تمتد يساراً داخل الشاشة، والعكس صحيح
+        setBmAlign(rect.left + rect.width / 2 >= window.innerWidth / 2 ? "right" : "left");
+      }
+      return next;
+    });
+  };
 
   const cardStatusClass = showFeedback
     ? isCorrect
@@ -222,7 +235,7 @@ const QuestionCardComponent: React.FC<QuestionCardProps> = ({
             <button
               type="button"
               className={`q-bm-btn ${bookmarks.length > 0 ? "has-bm" : ""}`}
-              onClick={() => setIsBmDropdownOpen(!isBmDropdownOpen)}
+              onClick={handleToggleBmMenu}
               title="علامات المراجعة الملونة"
             >
               <Icons.Bookmark size={12} />
@@ -244,7 +257,7 @@ const QuestionCardComponent: React.FC<QuestionCardProps> = ({
             </button>
 
             {isBmDropdownOpen && (
-              <div className="bm-menu show">
+              <div className={`bm-menu show align-${bmAlign}`}>
                 <div className="bm-menu-title">العلامات الملونة</div>
                 <div className="bm-palette">
                   {(["red", "yellow", "green", "blue"] as BookmarkColor[]).map((c) => {

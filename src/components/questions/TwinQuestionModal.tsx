@@ -184,7 +184,7 @@ export const TwinQuestionModal: React.FC<TwinQuestionModalProps> = ({
         )}
 
         {/* أزرار الإجراءات في أسفل النافذة */}
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: "10px", borderTop: "1px solid var(--ln)", paddingTop: "12px" }}>
+        <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "flex-end", gap: "10px", borderTop: "1px solid var(--ln)", paddingTop: "12px" }}>
           {twinQuestion && onJumpToQuestion && (
             <button
               type="button"

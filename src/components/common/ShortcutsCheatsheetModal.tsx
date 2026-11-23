@@ -79,14 +79,14 @@ export const ShortcutsCheatsheetModal: React.FC<ShortcutsCheatsheetModalProps> =
       onClick={onClose}
     >
       <div
-        className="card"
+        className="card usp-modal-card"
         style={{
           width: "100%",
           maxWidth: "680px",
-          maxHeight: "88vh",
+          maxHeight: "88dvh",
           overflowY: "auto",
           margin: 0,
-          padding: "24px",
+          padding: "22px",
           background: "var(--sf)",
           border: "1px solid var(--ln)",
           boxShadow: "0 24px 70px rgba(0, 0, 0, 0.55)",

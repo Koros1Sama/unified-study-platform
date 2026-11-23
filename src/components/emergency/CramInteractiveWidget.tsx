@@ -59,7 +59,7 @@ export const CramInteractiveWidget: React.FC<CramInteractiveWidgetProps> = ({
           </p>
         </div>
 
-        <div style={{ display: "inline-flex", background: "var(--sf2)", padding: "3px", borderRadius: "var(--r-pill)", border: "1px solid var(--ln)" }}>
+        <div style={{ display: "inline-flex", flexWrap: "wrap", maxWidth: "100%", gap: "4px", background: "var(--sf2)", padding: "3px", borderRadius: "var(--r-pill)", border: "1px solid var(--ln)" }}>
           <button
             type="button"
             className={`btn btn-sm ${mode === "inspector" ? "btn-primary" : ""}`}

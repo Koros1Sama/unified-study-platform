@@ -80,7 +80,7 @@ export const QuestionBankExplorer: React.FC<QuestionBankExplorerProps> = ({
       {/* لوحة التحكم والبحث والتصفية */}
       <div className="card explorer-toolbar-card">
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "10px", marginBottom: "12px" }}>
-          <div style={{ display: "inline-flex", background: "var(--sf2)", padding: "3px", borderRadius: "var(--r-pill)", border: "1px solid var(--ln)" }}>
+          <div style={{ display: "inline-flex", flexWrap: "wrap", maxWidth: "100%", gap: "4px", background: "var(--sf2)", padding: "3px", borderRadius: "var(--r-pill)", border: "1px solid var(--ln)" }}>
             <button
               type="button"
               className={`btn btn-sm ${activeTab === "explorer" ? "btn-primary" : ""}`}
@@ -104,7 +104,7 @@ export const QuestionBankExplorer: React.FC<QuestionBankExplorerProps> = ({
           <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
             {/* حقل البحث ونطاقاته */}
             <div style={{ display: "flex", gap: "10px", flexWrap: "wrap", alignItems: "center" }}>
-              <div style={{ flex: 1, position: "relative", minWidth: "240px" }}>
+              <div style={{ flex: 1, position: "relative", minWidth: "min(100%, 220px)" }}>
                 <input
                   type="text"
                   placeholder="ابحث بالإنجليزية أو العربية (كلمات مفتاحية، مفاهيم، خيارات)..."
@@ -147,7 +147,7 @@ export const QuestionBankExplorer: React.FC<QuestionBankExplorerProps> = ({
               </div>
 
               {/* نطاق البحث: الكل / السؤال / الخيارات */}
-              <div style={{ display: "inline-flex", background: "var(--sf2)", padding: "3px", borderRadius: "var(--r-pill)", border: "1px solid var(--ln)" }}>
+              <div style={{ display: "inline-flex", flexWrap: "wrap", maxWidth: "100%", gap: "4px", background: "var(--sf2)", padding: "3px", borderRadius: "var(--r-pill)", border: "1px solid var(--ln)" }}>
                 {[
                   { id: "all" as const, label: "الكل" },
                   { id: "q" as const, label: "نص السؤال" },
@@ -198,7 +198,7 @@ export const QuestionBankExplorer: React.FC<QuestionBankExplorerProps> = ({
               </div>
 
               {/* أزرار التبديل بين الوضع المدمج والكامل */}
-              <div style={{ display: "inline-flex", background: "var(--sf2)", padding: "3px", borderRadius: "var(--r-pill)", border: "1px solid var(--ln)" }}>
+              <div style={{ display: "inline-flex", flexWrap: "wrap", maxWidth: "100%", gap: "4px", background: "var(--sf2)", padding: "3px", borderRadius: "var(--r-pill)", border: "1px solid var(--ln)" }}>
                 <button
                   type="button"
                   className={`btn btn-sm ${viewMode === "compact" ? "btn-primary" : ""}`}

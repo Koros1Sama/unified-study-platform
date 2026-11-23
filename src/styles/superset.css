@@ -987,7 +987,7 @@
   border-radius: 16px;
   max-width: 680px;
   width: 100%;
-  max-height: 90vh;
+  max-height: 90dvh;
   overflow-y: auto;
   box-shadow: 0 16px 40px rgba(0, 0, 0, 0.35);
   padding: 20px;
@@ -1544,7 +1544,34 @@
     font-size: 0.96rem !important;
   }
   .exam-hud-right { justify-content: space-between; }
-  .exam-palette { max-width: 100%; }
+  .exam-nav {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+  }
+  .exam-nav-prev { order: 1; flex: 1 1 0; }
+  .exam-nav-flag { order: 2; flex: 1.25 1 0; }
+  .exam-nav-next { order: 3; flex: 1 1 0; }
+  .exam-nav-btn {
+    justify-content: center;
+    min-height: 38px;
+    padding: 7px 10px;
+    font-size: 0.8rem;
+  }
+  .exam-palette {
+    order: 4;
+    width: 100%;
+    max-width: 100%;
+    max-height: 112px;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    justify-content: center;
+    padding: 6px;
+    background: var(--sf);
+    border: 1px solid var(--ln-s);
+    border-radius: var(--r-m);
+  }
   .exam-pal-btn {
     width: 30px !important;
     height: 30px !important;
@@ -1693,13 +1720,18 @@ body.header-hidden .topbar:focus-within {
   z-index: 40;
 }
 
-@media (max-width: 768px) {
-  .bm-menu {
-    inset-inline-start: auto;
-    inset-inline-end: 0;
-    left: 0;
-    right: auto;
-  }
+.bm-menu.align-right {
+  inset-inline-start: auto;
+  inset-inline-end: auto;
+  right: 0;
+  left: auto;
+}
+
+.bm-menu.align-left {
+  inset-inline-start: auto;
+  inset-inline-end: auto;
+  left: 0;
+  right: auto;
 }
 
 .bm-menu.show {
@@ -2211,7 +2243,7 @@ body.header-hidden .topbar:focus-within {
   position: relative;
   width: 100%;
   max-width: 520px;
-  max-height: 88vh;
+  max-height: 88dvh;
   overflow-y: auto;
   background: var(--sf);
   border: 1px solid var(--ln);
@@ -2673,14 +2705,18 @@ body.header-hidden .book-card.book-layout-split .book-page-wrap {
 }
 
 @media (max-width: 980px) {
+  .book-reader-view .slide-card {
+    padding: 6px;
+  }
   .book-card.book-layout-split .book-split-grid {
     grid-template-columns: minmax(0, 1fr);
   }
-  .book-card.book-layout-split .book-page-wrap {
+  .book-card.book-layout-split .book-page-wrap,
+  .book-cards-continuous .book-page-wrap {
     position: static;
     border-inline-end: none;
     border-bottom: 1px solid var(--ln-s);
-    padding: 8px;
+    padding: 6px;
   }
   .book-card.book-layout-split .book-page-wrap img {
     max-height: none !important;
@@ -2724,6 +2760,64 @@ body.header-hidden .book-card.book-layout-split .book-page-wrap {
   border-bottom: 1px solid rgba(255, 255, 255, 0.12);
   background: rgba(12, 15, 22, 0.94);
   z-index: 10;
+}
+
+.lb-top-meta {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.lb-top-ref {
+  font-weight: 800;
+  color: var(--acc);
+  font-size: 0.96rem;
+  font-family: var(--fm);
+  white-space: nowrap;
+}
+
+.lb-top-count {
+  color: var(--ink-m);
+  font-size: 0.82rem;
+  white-space: nowrap;
+}
+
+.lb-top-controls {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.lb-ctrl-btn {
+  font-size: 0.75rem;
+  padding: 5px 10px;
+}
+
+.lb-zoom-pill {
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--r-pill);
+  color: var(--ink-m);
+  font-size: 0.78rem;
+  min-width: 44px;
+  padding: 4px 6px;
+  text-align: center;
+  font-family: var(--fm);
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.16s var(--ease);
+}
+
+.lb-zoom-pill.is-zoomed {
+  background: var(--acc-g);
+  border-color: color-mix(in srgb, var(--acc) 55%, transparent);
+  color: var(--acc);
+}
+
+.lb-close-btn {
+  margin-inline-start: 4px;
 }
 
 .lb-stage-shell {
@@ -2876,14 +2970,44 @@ body.header-hidden .book-card.book-layout-split .book-page-wrap {
 
 @media (max-width: 680px) {
   .lb-topbar {
-    padding: 8px 10px;
+    padding: calc(7px + env(safe-area-inset-top)) 10px 7px;
     gap: 6px;
   }
+  .lb-top-meta {
+    flex: 1 1 auto;
+    gap: 7px;
+  }
+  .lb-top-ref {
+    font-size: 0.86rem;
+  }
+  .lb-top-count {
+    font-size: 0.74rem;
+  }
+  .lb-top-controls {
+    width: 100%;
+    justify-content: flex-start;
+    gap: 5px;
+  }
+  .lb-ctrl-btn {
+    padding: 5px 9px;
+    font-size: 0.72rem;
+    gap: 4px;
+    min-height: 32px;
+  }
+  .lb-zoom-desktop,
+  .lb-zoom-pill:not(.is-zoomed) {
+    display: none !important;
+  }
+  .lb-close-btn {
+    margin-inline-start: auto;
+    min-width: 34px;
+    min-height: 32px;
+  }
   .lb-stage {
-    padding: 8px 10px;
+    padding: 6px 8px;
   }
   .lb-stage.is-fit-width {
-    padding: 10px 8px 24px;
+    padding: 8px 6px 24px;
   }
   .lb-nav-btn {
     width: 34px;
@@ -2901,6 +3025,180 @@ body.header-hidden .book-card.book-layout-split .book-page-wrap {
     max-height: 26dvh;
     font-size: 0.8rem;
     line-height: 1.6;
+  }
+}
+
+/* ==============================================================================
+   تحسينات تجربة الجوال الشاملة (ترويسة، إعدادات، بطاقات، بحث حي، نوافذ، ومنع زوم iOS)
+   ============================================================================== */
+.unified-search-box input {
+  min-width: 0;
+}
+
+.slide-search-scope {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: var(--sf2);
+  padding: 2px 4px;
+  border-radius: 999px;
+  border: 1px solid var(--ln-s);
+  flex-shrink: 0;
+}
+
+.slide-search-scope button {
+  border: none;
+  background: transparent;
+  color: var(--ink-m);
+  font-family: inherit;
+  font-weight: 700;
+  font-size: 0.72rem;
+  padding: 3px 9px;
+  border-radius: 999px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.slide-search-scope button.active {
+  background: var(--acc);
+  color: #000;
+}
+
+@media (max-width: 900px) {
+  .brand {
+    max-width: 100% !important;
+  }
+  .brand #brandName {
+    direction: rtl !important;
+    unicode-bidi: normal !important;
+    font-size: 0.82rem;
+  }
+  .top-actions .top-btn,
+  .top-actions #btnSearchToggle,
+  .top-actions #btnGlobalSearch,
+  .top-actions #btnModeToggle,
+  .top-actions #btnSet,
+  .top-actions #btnApp {
+    width: 34px !important;
+    height: 32px !important;
+    min-width: 34px !important;
+  }
+  .zen-toggle-group {
+    height: 32px;
+  }
+  .zen-opt {
+    height: 28px;
+    padding: 0 8px;
+    font-size: 0.7rem;
+  }
+  .setwrap {
+    max-height: calc(100dvh - 108px - env(safe-area-inset-bottom)) !important;
+  }
+}
+
+@media (max-width: 780px) {
+  .sc-head {
+    flex-wrap: wrap;
+    gap: 8px;
+    padding: 6px 4px 8px;
+  }
+  .sc-head .sc-title {
+    order: 2;
+    flex: 1 1 140px;
+    width: auto;
+    min-width: 0;
+  }
+  .sc-head .sc-actions {
+    order: 3;
+    width: 100%;
+    justify-content: flex-start;
+    gap: 6px;
+  }
+  .sc-head .sc-panel-seg {
+    margin-inline-end: auto;
+  }
+}
+
+@media (max-width: 680px) {
+  .book-studio-bar {
+    padding: 10px;
+    gap: 8px;
+    border-radius: var(--r-m);
+  }
+  .book-bar-row {
+    gap: 6px;
+  }
+  .book-studio-bar .fchip-group {
+    max-width: 100%;
+    flex-wrap: wrap;
+  }
+  .book-studio-bar .fchip-group .fchip {
+    padding: 4px 8px;
+    font-size: 0.72rem;
+  }
+  .book-page-jumper {
+    flex: 1 1 auto;
+    width: 100%;
+    justify-content: space-between;
+    padding: 4px 10px;
+  }
+  .book-page-jumper input {
+    width: 68px;
+  }
+  .book-notes-pane {
+    padding: 12px 10px !important;
+    gap: 10px;
+  }
+  .slide-live-search {
+    flex-wrap: wrap;
+    border-radius: 16px !important;
+    padding: 8px 12px;
+    gap: 8px;
+  }
+  .slide-search-scope {
+    width: 100%;
+    justify-content: center;
+  }
+  .set-acc-head {
+    padding: 10px 12px;
+    gap: 8px;
+  }
+  .set-acc-head-title {
+    font-size: 0.82rem;
+    gap: 7px;
+    min-width: 0;
+  }
+  .set-acc-badge {
+    max-width: 118px;
+    font-size: 0.66rem;
+    padding: 2px 7px;
+  }
+  .usp-modal-card,
+  .twin-modal-card,
+  .ref-modal-card {
+    padding: 14px !important;
+    border-radius: var(--r-m) !important;
+  }
+  /* منع التكبير القسري في Safari على آيفون عند التركيز على حقول الإدخال */
+  input[type="text"],
+  input[type="search"],
+  input[type="number"],
+  select,
+  textarea {
+    font-size: 16px !important;
+  }
+}
+
+@media (max-width: 520px) {
+  .pwa-install-banner {
+    flex-wrap: wrap;
+  }
+  .pwa-install-actions {
+    width: 100%;
+    justify-content: flex-end;
+  }
+  .sc-head .sc-title {
+    flex: 1 1 120px;
   }
 }
 

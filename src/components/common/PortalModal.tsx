@@ -86,11 +86,11 @@ export const PortalModal: React.FC<PortalModalProps> = ({
       onClick={onClose}
     >
       <div
-        className="card"
+        className="card usp-modal-card"
         style={{
           width: "100%",
           maxWidth: "800px",
-          maxHeight: "90vh",
+          maxHeight: "90dvh",
           overflowY: "auto",
           margin: 0,
           background: "var(--sf)",
@@ -98,23 +98,23 @@ export const PortalModal: React.FC<PortalModalProps> = ({
         }}
         onClick={(e) => e.stopPropagation()}
       >
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
-          <div>
-            <h2 style={{ fontSize: "1.35rem", fontWeight: 800, color: "var(--ink)", display: "flex", alignItems: "center", gap: "10px" }}>
-              <Icons.Portal size={24} />
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "10px", marginBottom: "18px" }}>
+          <div style={{ minWidth: 0 }}>
+            <h2 style={{ fontSize: "1.25rem", fontWeight: 800, color: "var(--ink)", display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
+              <Icons.Portal size={22} />
               <span>بوابة المقررات والفصول الدراسية</span>
             </h2>
-            <p style={{ color: "var(--ink-m)", fontSize: "0.88rem", marginTop: "4px" }}>
+            <p style={{ color: "var(--ink-m)", fontSize: "0.86rem", marginTop: "4px" }}>
               اختر المادة الدراسية لتصفح المحاضرات، الملخصات وبنوك الأسئلة
             </p>
           </div>
-          <button type="button" className="btn btn-icon btn-sm" onClick={onClose} aria-label="إغلاق البوابة">
+          <button type="button" className="btn btn-icon btn-sm" onClick={onClose} aria-label="إغلاق البوابة" style={{ flexShrink: 0 }}>
             <Icons.Cross size={18} />
           </button>
         </div>
 
         {/* فلاتر الفصول الدراسية */}
-        <div style={{ display: "flex", gap: "8px", marginBottom: "20px" }}>
+        <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "8px", marginBottom: "18px" }}>
           <button
             type="button"
             className={`btn btn-sm ${selectedTerm === "all" ? "btn-primary" : ""}`}
@@ -140,7 +140,7 @@ export const PortalModal: React.FC<PortalModalProps> = ({
             type="button"
             className="btn btn-sm"
             onClick={() => setShowAddForm(!showAddForm)}
-            style={{ marginRight: "auto" }}
+            style={{ marginInlineStart: "auto" }}
           >
             {showAddForm ? "إلغاء الإضافة" : "+ إضافة مقرر جديد"}
           </button>

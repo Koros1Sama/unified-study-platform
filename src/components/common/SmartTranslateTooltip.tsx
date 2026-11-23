@@ -60,8 +60,14 @@ export const SmartTranslateTooltip: React.FC<SmartTranslateTooltipProps> = ({
         onClose();
       }, 16000);
 
-      // استماع للتمرير لإغلاق النافذة فور تحرك الصفحة لمنع انفصالها عن السؤال
-      window.addEventListener("scroll", onClose, { passive: true });
+      // استماع للتمرير الحقيقي (أكثر من 22px) لإغلاق النافذة ومنع إغلاقها باهتزاز اللمس الطفيف على الهاتف
+      const openScrollY = typeof window !== "undefined" ? window.scrollY : 0;
+      const handleScroll = () => {
+        if (Math.abs(window.scrollY - openScrollY) > 22) {
+          onClose();
+        }
+      };
+      window.addEventListener("scroll", handleScroll, { passive: true });
 
       // استماع للنقر خارج النافذة مع حماية 280ms ضد النقرات الشبحية على الهواتف
       const handleOutsideClick = (e: MouseEvent | TouchEvent) => {
@@ -76,7 +82,7 @@ export const SmartTranslateTooltip: React.FC<SmartTranslateTooltipProps> = ({
       return () => {
         clearTimeout(timer);
         if (hoverOutTimerRef.current) clearTimeout(hoverOutTimerRef.current);
-        window.removeEventListener("scroll", onClose);
+        window.removeEventListener("scroll", handleScroll);
         document.removeEventListener("pointerdown", handleOutsideClick);
       };
     }
@@ -84,14 +90,20 @@ export const SmartTranslateTooltip: React.FC<SmartTranslateTooltipProps> = ({
 
   if (!visible || !position || !textAr) return null;
 
-  // حصر الموضع داخل حدود الشاشة المرئية أفقياً وعمودياً
+  // حصر الموضع والعرض بدقة داخل حدود الشاشة المرئية حتى على هواتف 360px
   const screenWidth = typeof window !== "undefined" ? window.innerWidth : 1000;
   const screenHeight = typeof window !== "undefined" ? window.innerHeight : 800;
-  const left = Math.min(Math.max(16, position.x - 150), Math.max(16, screenWidth - 340));
+  const safeMargin = 12;
+  const maxTooltipWidth = Math.min(360, Math.max(220, screenWidth - safeMargin * 2));
+  const left = Math.min(
+    Math.max(safeMargin, position.x - maxTooltipWidth / 2),
+    Math.max(safeMargin, screenWidth - maxTooltipWidth - safeMargin)
+  );
+  const estimatedHeight = 190;
   const top =
-    position.y + 165 > screenHeight
-      ? Math.max(16, position.y - 170)
-      : Math.max(16, position.y + 10);
+    position.y + estimatedHeight > screenHeight - 16
+      ? Math.max(safeMargin, position.y - estimatedHeight)
+      : Math.max(safeMargin, position.y + 8);
 
   const isTouchDevice =
     typeof window !== "undefined" &&
@@ -124,6 +136,9 @@ export const SmartTranslateTooltip: React.FC<SmartTranslateTooltipProps> = ({
         style={{
           left: `${left}px`,
           top: `${top}px`,
+          maxWidth: `${maxTooltipWidth}px`,
+          maxHeight: "42dvh",
+          overflowY: "auto",
           zIndex: 9999
         }}
         role="tooltip"

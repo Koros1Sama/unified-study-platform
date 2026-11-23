@@ -40,7 +40,10 @@ export const LightboxModal: React.FC<LightboxModalProps> = ({
 
   const dragStart = useRef({ x: 0, y: 0 });
   const panStart = useRef({ x: 0, y: 0 });
-  const lastTouchTime = useRef<number>(0);
+  const lastTouchRef = useRef<{ time: number; x: number; y: number }>({ time: 0, x: 0, y: 0 });
+  const swipeStartRef = useRef<{ x: number; y: number; time: number } | null>(null);
+  const swipeCurrentRef = useRef<{ x: number; y: number } | null>(null);
+  const wasPinchingRef = useRef<boolean>(false);
   const pinchStartDist = useRef<number>(0);
   const pinchStartScale = useRef<number>(1);
   const stageRef = useRef<HTMLDivElement>(null);
@@ -206,18 +209,29 @@ export const LightboxModal: React.FC<LightboxModalProps> = ({
 
   const handleTouchStart = (e: React.TouchEvent) => {
     if (e.touches.length === 1) {
+      const touch = e.touches[0];
       const now = Date.now();
-      if (now - lastTouchTime.current < 300) {
+      const prev = lastTouchRef.current;
+      const tapDist = Math.hypot(touch.clientX - prev.x, touch.clientY - prev.y);
+
+      if (!wasPinchingRef.current && now - prev.time < 300 && tapDist < 44) {
         handleDoubleTap();
-        lastTouchTime.current = 0;
+        lastTouchRef.current = { time: 0, x: 0, y: 0 };
+        swipeStartRef.current = null;
+        swipeCurrentRef.current = null;
         return;
       }
-      lastTouchTime.current = now;
+      lastTouchRef.current = { time: now, x: touch.clientX, y: touch.clientY };
 
       if (fitMode === "page" && scale > 1) {
         setIsDragging(true);
-        dragStart.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+        dragStart.current = { x: touch.clientX, y: touch.clientY };
         panStart.current = { ...pan };
+        swipeStartRef.current = null;
+        swipeCurrentRef.current = null;
+      } else if (scale === 1 && !wasPinchingRef.current) {
+        swipeStartRef.current = { x: touch.clientX, y: touch.clientY, time: now };
+        swipeCurrentRef.current = { x: touch.clientX, y: touch.clientY };
       }
     } else if (e.touches.length === 2) {
       const t1 = e.touches[0];
@@ -225,16 +239,21 @@ export const LightboxModal: React.FC<LightboxModalProps> = ({
       const dist = Math.hypot(t2.clientX - t1.clientX, t2.clientY - t1.clientY);
       pinchStartDist.current = dist;
       pinchStartScale.current = scale;
+      wasPinchingRef.current = true;
+      swipeStartRef.current = null;
+      swipeCurrentRef.current = null;
       setFitMode("page");
       setIsDragging(false);
     }
   };
 
   const handleTouchMove = (e: React.TouchEvent) => {
-    if (e.touches.length === 1 && isDragging && scale > 1 && fitMode === "page") {
+    if (e.touches.length === 1 && isDragging && scale > 1 && fitMode === "page" && !wasPinchingRef.current) {
       const dx = e.touches[0].clientX - dragStart.current.x;
       const dy = e.touches[0].clientY - dragStart.current.y;
       setPan(clampPan(panStart.current.x + dx, panStart.current.y + dy, scale));
+    } else if (e.touches.length === 1 && swipeStartRef.current && scale === 1) {
+      swipeCurrentRef.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
     } else if (e.touches.length === 2 && pinchStartDist.current > 0) {
       const t1 = e.touches[0];
       const t2 = e.touches[1];
@@ -246,9 +265,32 @@ export const LightboxModal: React.FC<LightboxModalProps> = ({
     }
   };
 
-  const handleTouchEnd = () => {
-    setIsDragging(false);
-    pinchStartDist.current = 0;
+  const handleTouchEnd = (e: React.TouchEvent) => {
+    if (e.touches.length === 0) {
+      if (!wasPinchingRef.current && scale === 1 && swipeStartRef.current && swipeCurrentRef.current) {
+        const dx = swipeCurrentRef.current.x - swipeStartRef.current.x;
+        const dy = swipeCurrentRef.current.y - swipeStartRef.current.y;
+        const elapsed = Date.now() - swipeStartRef.current.time;
+        if (elapsed < 650 && Math.abs(dx) >= 56 && Math.abs(dx) > Math.abs(dy) * 1.45) {
+          // في الواجهة العربية RTL: السهم الأيمن = السابق والأيسر = التالي، لذا السحب لليمين يقلب للتالي ولليسار للسابق
+          if (dx > 0 && currentIndex < slides.length - 1) {
+            onNavigate(currentIndex + 1);
+          } else if (dx < 0 && currentIndex > 0) {
+            onNavigate(currentIndex - 1);
+          }
+        }
+      }
+      setIsDragging(false);
+      pinchStartDist.current = 0;
+      wasPinchingRef.current = false;
+      swipeStartRef.current = null;
+      swipeCurrentRef.current = null;
+    } else if (e.touches.length === 1) {
+      setIsDragging(false);
+      pinchStartDist.current = 0;
+      swipeStartRef.current = null;
+      swipeCurrentRef.current = null;
+    }
   };
 
   const paperFilterClass =
@@ -275,28 +317,27 @@ export const LightboxModal: React.FC<LightboxModalProps> = ({
     >
       {/* الترويسة العلوية للـ Lightbox */}
       <div className="lb-topbar">
-        <div style={{ display: "flex", alignItems: "center", gap: "10px", minWidth: 0 }}>
-          <span style={{ fontWeight: 800, color: "var(--acc)", fontSize: "0.96rem", fontFamily: "var(--fm)" }}>
+        <div className="lb-top-meta">
+          <span className="lb-top-ref">
             {currentSlide.ref}
           </span>
-          <span style={{ color: "var(--ink-m)", fontSize: "0.82rem", whiteSpace: "nowrap" }}>
+          <span className="lb-top-count">
             {unitLabel} {currentIndex + 1} من {slides.length}
           </span>
         </div>
 
         {/* أزرار التحكم بالزوم والورق وملاءمة العرض */}
-        <div style={{ display: "flex", alignItems: "center", gap: "6px", flexWrap: "wrap" }}>
+        <div className="lb-top-controls">
           {isBookMode && (
             <button
               type="button"
-              className={`btn btn-sm ${fitMode === "width" ? "btn-primary" : ""}`}
+              className={`btn btn-sm lb-ctrl-btn ${fitMode === "width" ? "btn-primary" : ""}`}
               onClick={() => {
                 setScale(1);
                 setPan({ x: 0, y: 0 });
                 setFitMode((m) => (m === "width" ? "page" : "width"));
               }}
               title="التبديل بين ملاءمة عرض الشاشة (للقراءة المريحة للكتب) وكامل الصفحة"
-              style={{ fontSize: "0.75rem", padding: "4px 10px" }}
             >
               <Icons.BookOpen size={14} />
               <span>{fitMode === "width" ? "كامل الصفحة" : "ملاءمة العرض"}</span>
@@ -306,10 +347,9 @@ export const LightboxModal: React.FC<LightboxModalProps> = ({
           {isBookMode && onChangePaperFilter && (
             <button
               type="button"
-              className={`btn btn-sm ${paperFilter !== "original" ? "btn-primary" : ""}`}
+              className={`btn btn-sm lb-ctrl-btn ${paperFilter !== "original" ? "btn-primary" : ""}`}
               onClick={cyclePaperFilter}
               title="تبديل نمط ورق الكتاب (أصلي / دافئ / ليلي ذكي)"
-              style={{ fontSize: "0.75rem", padding: "4px 10px" }}
             >
               <Icons.Contrast size={14} />
               <span>{paperLabel}</span>
@@ -319,10 +359,9 @@ export const LightboxModal: React.FC<LightboxModalProps> = ({
           {hasTextNotes && (
             <button
               type="button"
-              className={`btn btn-sm ${showDrawer ? "btn-primary" : ""}`}
+              className={`btn btn-sm lb-ctrl-btn ${showDrawer ? "btn-primary" : ""}`}
               onClick={() => setShowDrawer((v) => !v)}
               title="إظهار أو إخفاء لوحة الترجمة والشرح"
-              style={{ fontSize: "0.75rem", padding: "4px 10px" }}
             >
               <Icons.Tip size={14} />
               <span>الشرح</span>
@@ -331,7 +370,7 @@ export const LightboxModal: React.FC<LightboxModalProps> = ({
 
           <button
             type="button"
-            className="btn btn-sm btn-icon"
+            className="btn btn-sm btn-icon lb-zoom-desktop"
             onClick={handleZoomIn}
             title="تقريب (+)"
             aria-label="تقريب"
@@ -340,7 +379,7 @@ export const LightboxModal: React.FC<LightboxModalProps> = ({
           </button>
           <button
             type="button"
-            className="btn btn-sm btn-icon"
+            className="btn btn-sm btn-icon lb-zoom-desktop"
             onClick={handleZoomOut}
             title="تصغير (-)"
             aria-label="تصغير"
@@ -349,23 +388,28 @@ export const LightboxModal: React.FC<LightboxModalProps> = ({
           </button>
           <button
             type="button"
-            className="btn btn-sm btn-icon"
+            className="btn btn-sm btn-icon lb-zoom-desktop"
             onClick={handleResetZoom}
             title="تصفير الزوم (0)"
             aria-label="إعادة ضبط الزوم"
           >
             <Icons.Reset size={17} />
           </button>
-          <span style={{ fontSize: "0.78rem", color: "var(--ink-m)", minWidth: "40px", textAlign: "center", fontFamily: "var(--fm)" }}>
-            {Math.round(scale * 100)}%
-          </span>
           <button
             type="button"
-            className="btn btn-sm btn-icon"
+            className={`lb-zoom-pill ${scale > 1 ? "is-zoomed" : ""}`}
+            onClick={handleResetZoom}
+            title={scale > 1 ? "انقر لإعادة التوسيط (100%)" : "مقياس العرض الحالي"}
+            aria-label={`مقياس التكبير ${Math.round(scale * 100)} بالمائة`}
+          >
+            {Math.round(scale * 100)}%
+          </button>
+          <button
+            type="button"
+            className="btn btn-sm btn-icon lb-close-btn"
             onClick={onClose}
             title="إغلاق (Esc)"
             aria-label="إغلاق"
-            style={{ marginInlineStart: "6px" }}
           >
             <Icons.Cross size={18} />
           </button>
@@ -416,10 +460,10 @@ export const LightboxModal: React.FC<LightboxModalProps> = ({
               dir="ltr"
               style={{
                 maxWidth: "780px",
-                width: "88vw",
-                maxHeight: "74vh",
+                width: "92vw",
+                maxHeight: "100%",
                 overflowY: "auto",
-                padding: "28px 32px",
+                padding: "20px 22px",
                 borderRadius: "16px",
                 background: "var(--sf)",
                 border: "1px solid var(--ln)",

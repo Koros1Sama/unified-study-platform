@@ -217,15 +217,17 @@ export const OfflineManagerModal: React.FC<OfflineManagerModalProps> = ({
       onClick={onClose}
     >
       <div
-        className="card"
+        className="card usp-modal-card"
         style={{
           width: "100%",
           maxWidth: "600px",
+          maxHeight: "90dvh",
+          overflowY: "auto",
           background: "var(--sf)",
           border: "1px solid var(--ln)",
           boxShadow: "0 24px 70px rgba(0, 0, 0, 0.55)",
           borderRadius: "var(--r-l)",
-          padding: "24px"
+          padding: "22px"
         }}
         onClick={(e) => e.stopPropagation()}
       >

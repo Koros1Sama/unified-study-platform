@@ -63,24 +63,26 @@ export const PwaInstallGuideModal: React.FC<PwaInstallGuideModalProps> = ({
       onClick={onClose}
     >
       <div
-        className="card"
+        className="card usp-modal-card"
         style={{
           width: "100%",
           maxWidth: "520px",
+          maxHeight: "90dvh",
+          overflowY: "auto",
           background: "var(--sf)",
           border: "1px solid var(--ln)",
           borderRadius: "var(--r-l)",
           boxShadow: "0 24px 64px rgba(0, 0, 0, 0.6)",
-          padding: "22px 24px",
+          padding: "20px 22px",
           display: "flex",
           flexDirection: "column",
-          gap: "18px"
+          gap: "16px"
         }}
         onClick={(e) => e.stopPropagation()}
       >
         {/* ترويسة النافذة */}
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "10px" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "10px", minWidth: 0 }}>
             <div
               style={{
                 width: "40px",
@@ -95,8 +97,8 @@ export const PwaInstallGuideModal: React.FC<PwaInstallGuideModalProps> = ({
             >
               <Icons.Download size={22} />
             </div>
-            <div>
-              <h3 style={{ fontSize: "1.15rem", fontWeight: 800, color: "var(--ink)", lineHeight: 1.3 }}>
+            <div style={{ minWidth: 0 }}>
+              <h3 style={{ fontSize: "1.1rem", fontWeight: 800, color: "var(--ink)", lineHeight: 1.3 }}>
                 تثبيت المنصة كتطبيق أصيل (PWA)
               </h3>
               <p style={{ fontSize: "0.78rem", color: "var(--ink-m)", marginTop: "2px" }}>
@@ -109,7 +111,7 @@ export const PwaInstallGuideModal: React.FC<PwaInstallGuideModalProps> = ({
             className="btn btn-icon btn-sm"
             onClick={onClose}
             aria-label="إغلاق النافذة"
-            style={{ borderRadius: "50%" }}
+            style={{ borderRadius: "50%", flexShrink: 0 }}
           >
             <Icons.Cross size={16} />
           </button>
@@ -117,9 +119,10 @@ export const PwaInstallGuideModal: React.FC<PwaInstallGuideModalProps> = ({
 
         {/* مبدل الأجهزة */}
         <div
+          className="pwa-guide-tabs"
           style={{
             display: "grid",
-            gridTemplateColumns: "repeat(3, 1fr)",
+            gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
             gap: "4px",
             background: "var(--sf2)",
             padding: "4px",
@@ -130,28 +133,28 @@ export const PwaInstallGuideModal: React.FC<PwaInstallGuideModalProps> = ({
           <button
             type="button"
             className={`btn btn-sm ${activeTab === "desktop" ? "btn-primary" : ""}`}
-            style={{ borderRadius: "var(--r-pill)", border: "none", display: "inline-flex", alignItems: "center", justifyContent: "center", gap: "6px", fontSize: "0.8rem", padding: "6px 8px" }}
+            style={{ borderRadius: "var(--r-pill)", border: "none", display: "inline-flex", alignItems: "center", justifyContent: "center", gap: "5px", fontSize: "0.76rem", padding: "6px 6px", whiteSpace: "nowrap" }}
             onClick={() => setActiveTab("desktop")}
           >
-            <Icons.Laptop size={15} />
-            <span>اللابتوب والحاسوب</span>
+            <Icons.Laptop size={14} />
+            <span>الحاسوب</span>
           </button>
           <button
             type="button"
             className={`btn btn-sm ${activeTab === "ios" ? "btn-primary" : ""}`}
-            style={{ borderRadius: "var(--r-pill)", border: "none", display: "inline-flex", alignItems: "center", justifyContent: "center", gap: "6px", fontSize: "0.8rem", padding: "6px 8px" }}
+            style={{ borderRadius: "var(--r-pill)", border: "none", display: "inline-flex", alignItems: "center", justifyContent: "center", gap: "5px", fontSize: "0.76rem", padding: "6px 6px", whiteSpace: "nowrap" }}
             onClick={() => setActiveTab("ios")}
           >
-            <Icons.Mobile size={15} />
-            <span>آيفون وآيباد</span>
+            <Icons.Mobile size={14} />
+            <span>آيفون</span>
           </button>
           <button
             type="button"
             className={`btn btn-sm ${activeTab === "android" ? "btn-primary" : ""}`}
-            style={{ borderRadius: "var(--r-pill)", border: "none", display: "inline-flex", alignItems: "center", justifyContent: "center", gap: "6px", fontSize: "0.8rem", padding: "6px 8px" }}
+            style={{ borderRadius: "var(--r-pill)", border: "none", display: "inline-flex", alignItems: "center", justifyContent: "center", gap: "5px", fontSize: "0.76rem", padding: "6px 6px", whiteSpace: "nowrap" }}
             onClick={() => setActiveTab("android")}
           >
-            <Icons.Mobile size={15} />
+            <Icons.Mobile size={14} />
             <span>أندرويد</span>
           </button>
         </div>

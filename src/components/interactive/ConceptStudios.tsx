@@ -1230,13 +1230,13 @@ function PmPrinciplesStudio() {
       </div>
 
       <div className="card" style={{ padding: 16, background: "var(--sf2)", border: "1px solid var(--ln)", marginBottom: 20 }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8, marginBottom: 8 }}>
           <h3 style={{ margin: 0, fontSize: "1.05rem", fontWeight: 800, color: "var(--ink)" }}>{current.name_ar}</h3>
           <span className="ref-chip">{current.ref} · مجال: {current.domain}</span>
         </div>
         <p style={{ fontSize: "0.9rem", color: "var(--ink-m)", marginBottom: 12 }}>{current.core}</p>
 
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 220px), 1fr))", gap: 12 }}>
           <div style={{ padding: 12, borderRadius: "var(--r-s)", background: "color-mix(in srgb, #22c55e 10%, var(--sf))", border: "1px solid #22c55e" }}>
             <h4 style={{ margin: "0 0 6px", fontSize: "0.85rem", fontWeight: 700, color: "#16a34a" }}>التطبيق الحقيقي الصادق</h4>
             <p style={{ margin: 0, fontSize: "0.82rem", lineHeight: 1.45 }}>{current.authentic}</p>
@@ -1416,14 +1416,14 @@ function PmValueChainStudio() {
       </div>
 
       <div className="card" style={{ padding: 16, background: "var(--sf2)", border: "1px solid var(--ln)", marginBottom: 16 }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8, marginBottom: 6 }}>
           <h3 style={{ margin: 0, fontSize: "1rem", fontWeight: 800 }}>{currentCase.title}</h3>
           <span className="ref-chip">{currentCase.ref}</span>
         </div>
         <p style={{ margin: 0, fontSize: "0.85rem", color: "var(--ink-m)" }}>{currentCase.subtitle}</p>
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 8, marginBottom: 16 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 130px), 1fr))", gap: 8, marginBottom: 16 }}>
         {currentCase.steps.map((s, idx) => (
           <button
             key={idx}
@@ -1445,7 +1445,7 @@ function PmValueChainStudio() {
       </div>
 
       <div className="card" style={{ padding: 18, border: "2px solid var(--acc)", background: "var(--sf)" }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8, marginBottom: 8 }}>
           <h4 style={{ margin: 0, fontSize: "1.1rem", fontWeight: 800, color: "var(--acc)" }}>
             {step.stage_ar}
           </h4>
@@ -1570,7 +1570,7 @@ function QcGatesStudio() {
         <div style={{ fontSize: "1.05rem", fontWeight: 800, color: "var(--acc)", fontFamily: "var(--fm)" }} dir="ltr">
           |psi&gt; = ({fmtC(alpha)})|0&gt; + ({fmtC(beta)})|1&gt;
         </div>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginTop: 14 }}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 180px), 1fr))", gap: 12, marginTop: 14 }}>
           <div>
             <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.84rem", marginBottom: 4 }}>
               <span>احتمال القياس |0&gt;</span>

@@ -533,7 +533,7 @@ export const InteractiveStudioHost: React.FC<InteractiveStudioHostProps> = ({
               </div>
 
               {/* شريط خلايا الإدخال وموضع المؤشر */}
-              <div style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: "4px", marginBottom: "20px", direction: "ltr" }}>
+              <div style={{ display: "flex", flexWrap: "wrap", justifyContent: "center", alignItems: "center", gap: "4px", marginBottom: "20px", direction: "ltr" }}>
                 {inputString.split("").map((ch, idx) => {
                   const isCurrent = idx === simStep;
                   const isProcessed = idx < simStep;
@@ -583,7 +583,7 @@ export const InteractiveStudioHost: React.FC<InteractiveStudioHostProps> = ({
                   justifyContent: "center"
                 }}
               >
-                <svg width="100%" height="220" viewBox="0 0 600 220" style={{ overflow: "visible" }}>
+                <svg width="100%" viewBox="0 0 600 220" style={{ height: "auto", maxHeight: "220px", overflow: "visible" }}>
                   <defs>
                     <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
                       <path d="M 0 1 L 10 5 L 0 9 z" fill="var(--ink-m)" />
@@ -1428,7 +1428,7 @@ export const InteractiveStudioHost: React.FC<InteractiveStudioHostProps> = ({
             </span>
           </div>
 
-          <div style={{ display: "flex", gap: "24px", justifyContent: "center", alignItems: "flex-end", padding: "20px", background: "var(--sf2)", borderRadius: "var(--r-m)" }}>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: "18px", justifyContent: "center", alignItems: "flex-end", padding: "16px", background: "var(--sf2)", borderRadius: "var(--r-m)" }}>
             {/* تمثيل المكدس العمودي */}
             <div style={{ width: "120px", display: "flex", flexDirection: "column-reverse", border: "3px solid var(--ln)", borderTop: "none", borderRadius: "0 0 8px 8px", padding: "4px", minHeight: "160px", background: "var(--sf)" }}>
               {pdaStack.map((item, idx) => (
@@ -1472,7 +1472,8 @@ export const InteractiveStudioHost: React.FC<InteractiveStudioHostProps> = ({
           </p>
 
           {/* الشريط المتجهي */}
-          <div style={{ display: "flex", justifyContent: "center", gap: "4px", overflowX: "auto", padding: "16px 0", direction: "ltr" }}>
+          <div style={{ overflowX: "auto", WebkitOverflowScrolling: "touch", padding: "16px 4px 26px", direction: "ltr" }}>
+            <div style={{ display: "flex", gap: "4px", width: "max-content", margin: "0 auto" }}>
             {tape.map((ch, idx) => {
               const isHead = idx === headPos;
               return (
@@ -1481,6 +1482,7 @@ export const InteractiveStudioHost: React.FC<InteractiveStudioHostProps> = ({
                   style={{
                     width: "44px",
                     height: "50px",
+                    flexShrink: 0,
                     border: `2px solid ${isHead ? "var(--acc)" : "var(--ln)"}`,
                     background: isHead ? "var(--acc-g)" : "var(--sf2)",
                     borderRadius: "var(--r-s)",
@@ -1497,13 +1499,14 @@ export const InteractiveStudioHost: React.FC<InteractiveStudioHostProps> = ({
                 >
                   <span>{ch}</span>
                   {isHead && (
-                    <div style={{ position: "absolute", bottom: "-18px", fontSize: "10px", color: "var(--acc)", fontWeight: 900 }}>
+                    <div style={{ position: "absolute", bottom: "-18px", fontSize: "10px", color: "var(--acc)", fontWeight: 900, whiteSpace: "nowrap" }}>
                       ^ HEAD
                     </div>
                   )}
                 </div>
               );
             })}
+            </div>
           </div>
 
           {/* أزرار تحريك الرأس والكتابة */}

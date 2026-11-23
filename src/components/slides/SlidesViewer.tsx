@@ -739,7 +739,7 @@ export const SlidesViewer: React.FC<SlidesViewerProps> = ({
 
       {/* شريط البحث الحي */}
       {(isSlideSearchOpen || slideSearchQuery) && (
-        <div className="unified-search-box">
+        <div className="unified-search-box slide-live-search">
           <Icons.Search size={16} style={{ color: "var(--acc)", flexShrink: 0 }} />
           <input
             type="search"
@@ -755,36 +755,18 @@ export const SlidesViewer: React.FC<SlidesViewerProps> = ({
           />
 
           {isSearching && (
-            <div style={{ display: "inline-flex", alignItems: "center", gap: "4px", background: "var(--sf2)", padding: "2px 4px", borderRadius: "999px", border: "1px solid var(--ln-s)" }}>
+            <div className="slide-search-scope">
               <button
                 type="button"
+                className={slideSearchScope === "all" ? "active" : undefined}
                 onClick={() => setSlideSearchScope("all")}
-                style={{
-                  border: "none",
-                  background: slideSearchScope === "all" ? "var(--acc)" : "transparent",
-                  color: slideSearchScope === "all" ? "#000" : "var(--ink-m)",
-                  fontWeight: 700,
-                  fontSize: "0.72rem",
-                  padding: "2px 8px",
-                  borderRadius: "999px",
-                  cursor: "pointer"
-                }}
               >
                 كامل المقرر ({allMatchesCount})
               </button>
               <button
                 type="button"
+                className={slideSearchScope === "lecture" ? "active" : undefined}
                 onClick={() => setSlideSearchScope("lecture")}
-                style={{
-                  border: "none",
-                  background: slideSearchScope === "lecture" ? "var(--acc)" : "transparent",
-                  color: slideSearchScope === "lecture" ? "#000" : "var(--ink-m)",
-                  fontWeight: 700,
-                  fontSize: "0.72rem",
-                  padding: "2px 8px",
-                  borderRadius: "999px",
-                  cursor: "pointer"
-                }}
               >
                 {activeLecture.id} ({lecMatchesCount})
               </button>

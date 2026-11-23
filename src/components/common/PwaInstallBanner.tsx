@@ -37,11 +37,12 @@ export const PwaInstallBanner: React.FC<PwaInstallBannerProps> = ({
   return (
     <aside
       id="pwaInstallBanner"
+      className="pwa-install-banner"
       role="region"
       aria-label="تثبيت المنصة كتطبيق"
       style={{
         position: "fixed",
-        bottom: "calc(64px + env(safe-area-inset-bottom))",
+        bottom: "calc(74px + env(safe-area-inset-bottom))",
         left: "50%",
         transform: "translateX(-50%)",
         zIndex: 1500,
@@ -54,14 +55,14 @@ export const PwaInstallBanner: React.FC<PwaInstallBannerProps> = ({
         padding: "12px 14px",
         display: "flex",
         alignItems: "center",
-        gap: "12px",
+        gap: "10px",
         animation: "rise 0.28s var(--ease)"
       }}
     >
       <div
         style={{
-          width: "38px",
-          height: "38px",
+          width: "36px",
+          height: "36px",
           borderRadius: "var(--r-m)",
           backgroundColor: "color-mix(in srgb, var(--acc) 18%, transparent)",
           color: "var(--acc)",
@@ -70,19 +71,19 @@ export const PwaInstallBanner: React.FC<PwaInstallBannerProps> = ({
           flexShrink: 0
         }}
       >
-        <Icons.Download size={20} />
+        <Icons.Download size={19} />
       </div>
 
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontSize: "0.85rem", fontWeight: 800, color: "var(--ink)", lineHeight: 1.3 }}>
+      <div style={{ flex: "1 1 180px", minWidth: 0 }}>
+        <div style={{ fontSize: "0.84rem", fontWeight: 800, color: "var(--ink)", lineHeight: 1.3 }}>
           {isDesktop ? "تثبيت المنصة على اللابتوب (PWA)" : "تثبيت المنصة كتطبيق على جهازك"}
         </div>
-        <div style={{ fontSize: "0.74rem", color: "var(--ink-m)", lineHeight: 1.35, marginTop: "2px" }}>
+        <div style={{ fontSize: "0.73rem", color: "var(--ink-m)", lineHeight: 1.35, marginTop: "2px" }}>
           تصفح شاشة كاملة، سرعة فائقة، وتجربة أوفلاين متكاملة بدون متصفح
         </div>
       </div>
 
-      <div style={{ display: "flex", alignItems: "center", gap: "6px", flexShrink: 0 }}>
+      <div className="pwa-install-actions" style={{ display: "flex", alignItems: "center", gap: "6px", flexShrink: 0 }}>
         <button
           type="button"
           className="btn btn-sm btn-primary"

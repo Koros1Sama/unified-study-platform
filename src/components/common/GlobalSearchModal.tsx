@@ -385,16 +385,16 @@ export const GlobalSearchModal: React.FC<GlobalSearchModalProps> = ({
         display: "flex",
         alignItems: "flex-start",
         justifyContent: "center",
-        padding: "50px 16px 20px"
+        padding: "max(16px, env(safe-area-inset-top)) 12px 16px"
       }}
       onClick={onClose}
     >
       <div
-        className="card"
+        className="card global-search-card"
         style={{
           width: "100%",
           maxWidth: "720px",
-          maxHeight: "85vh",
+          maxHeight: "min(88dvh, 740px)",
           display: "flex",
           flexDirection: "column",
           margin: 0,
@@ -531,9 +531,10 @@ export const GlobalSearchModal: React.FC<GlobalSearchModalProps> = ({
           ref={listRef}
           style={{
             flex: 1,
+            minHeight: 0,
             overflowY: "auto",
-            padding: "8px",
-            maxHeight: "calc(85vh - 140px)"
+            WebkitOverflowScrolling: "touch",
+            padding: "8px"
           }}
         >
           {!query.trim() ? (
@@ -562,9 +563,9 @@ export const GlobalSearchModal: React.FC<GlobalSearchModalProps> = ({
             </div>
           ) : (
             <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
-              <div style={{ padding: "4px 12px", fontSize: "0.75rem", color: "var(--ink-m)", display: "flex", justifyContent: "space-between" }}>
+              <div style={{ padding: "4px 12px", fontSize: "0.75rem", color: "var(--ink-m)", display: "flex", justifyContent: "space-between", gap: "8px", flexWrap: "wrap" }}>
                 <span>تم العثور على {results.length} نتيجة</span>
-                <span>استخدم الأسهم للتنقل و Enter للاختيار</span>
+                <span className="desktop-only">استخدم الأسهم للتنقل و Enter للاختيار</span>
               </div>
               {results.map((item, idx) => {
                 const isSelected = idx === selectedIndex;

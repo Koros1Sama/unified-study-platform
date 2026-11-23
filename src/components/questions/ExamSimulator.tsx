@@ -409,7 +409,7 @@ export const ExamSimulator: React.FC<ExamSimulatorProps> = ({
         <div className="exam-nav">
           <button
             type="button"
-            className="btn btn-sm"
+            className="btn btn-sm exam-nav-btn exam-nav-prev"
             disabled={currentIdx === 0}
             onClick={() => setCurrentIdx((i) => Math.max(0, i - 1))}
           >
@@ -419,7 +419,7 @@ export const ExamSimulator: React.FC<ExamSimulatorProps> = ({
 
           <button
             type="button"
-            className={`btn btn-sm ${flagged.has(currentQ.id) ? "btn-warning" : ""}`}
+            className={`btn btn-sm exam-nav-btn exam-nav-flag ${flagged.has(currentQ.id) ? "btn-warning" : ""}`}
             style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}
             onClick={() => toggleFlag(currentQ.id)}
             title="تأجيل أو تمييز السؤال للمراجعة قبل تسليم الاختبار"
@@ -450,12 +450,12 @@ export const ExamSimulator: React.FC<ExamSimulatorProps> = ({
           </div>
 
           {currentIdx < examQuestions.length - 1 ? (
-            <button type="button" className="btn btn-sm btn-primary" onClick={() => setCurrentIdx((i) => i + 1)}>
+            <button type="button" className="btn btn-sm btn-primary exam-nav-btn exam-nav-next" onClick={() => setCurrentIdx((i) => i + 1)}>
               <span>التالي</span>
               <Icons.ChevronLeft size={16} />
             </button>
           ) : (
-            <button type="button" className="btn btn-sm btn-primary" onClick={() => finishExam(false)}>
+            <button type="button" className="btn btn-sm btn-primary exam-nav-btn exam-nav-next" onClick={() => finishExam(false)}>
               <span>تسليم نهائي</span>
               <Icons.Check size={16} />
             </button>
