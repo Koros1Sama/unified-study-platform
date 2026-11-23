@@ -203,6 +203,7 @@ export const App: React.FC = () => {
     isInstalled: isPwaInstalled,
     isIos,
     isDesktop,
+    hasNativePrompt,
     showFirstOpenBanner,
     showGuideModal,
     promptInstall: promptPwaInstall,
@@ -249,7 +250,10 @@ export const App: React.FC = () => {
   const [targetStudioId, setTargetStudioId] = useState<string>("automata_simulator");
   const [targetTabId, setTargetTabId] = useState<string>("sim");
   const [focusQuestionId, setFocusQuestionId] = useState<string | null>(() => initialHash.qId || null);
+  const [targetPatternRuleId, setTargetPatternRuleId] = useState<string | null>(null);
   const [jumpReturn, setJumpReturn] = useState<{ fromView: ActiveView; scrollY: number; label: string; lectureId?: string } | null>(null);
+  const prevSubjectCodeRef = useRef<string>(currentSubjectCode);
+  const lastHandledHashRef = useRef<{ hash: string; at: number }>({ hash: "", at: 0 });
 
   // مزامنة حالة العرض data-view على مستوى الـ Body لإظهار أزرار السلايدات والنماذج في التوبار
   useEffect(() => {
@@ -388,13 +392,23 @@ export const App: React.FC = () => {
   const handleResetProgress = useCallback(async () => {
     const fresh = await DataService.resetSubjectProgress(currentSubjectCode);
     setUserProgress({ ...fresh });
+    try {
+      localStorage.removeItem(`unified_seen_${currentSubjectCode}`);
+      localStorage.removeItem(`unified_last_page_${currentSubjectCode}`);
+      localStorage.removeItem(`unified_retest_${currentSubjectCode}`);
+    } catch {
+      // تجاهل في البيئات المقيدة
+    }
+    setSeenSlides(new Set());
   }, [currentSubjectCode]);
 
   // تحميل قائمة المقررات
   useEffect(() => {
-    DataService.getSubjects().then((res) => {
-      setSubjects(res);
-    });
+    DataService.getSubjects()
+      .then((res) => {
+        setSubjects(res);
+      })
+      .catch(() => {});
   }, []);
 
   // التحقق من صلاحية المقرر المحفوظ بعد تحميل قائمة المقررات
@@ -411,37 +425,63 @@ export const App: React.FC = () => {
     setTablesLectureFilter("all");
     setActiveLabSession("all");
 
+    if (prevSubjectCodeRef.current !== currentSubjectCode) {
+      prevSubjectCodeRef.current = currentSubjectCode;
+      setJumpReturn(null);
+      setLastViewBeforeJump(null);
+      setTargetSlideRef(null);
+      setFocusQuestionId(null);
+      setTargetPatternRuleId(null);
+      try {
+        const parsed = parseLocationHash();
+        if (parsed.ref || parsed.qId) {
+          const cleanHash = buildLocationHash(activeView);
+          history.replaceState({ view: activeView, scroll: 0 }, "", cleanHash);
+        }
+      } catch (_) {}
+    }
+
     Promise.all([
       DataService.loadSubjectBundle(currentSubjectCode, (updatedCount) => {
         if (!isCancelled && updatedCount > 0) {
-          DataService.loadSubjectBundle(currentSubjectCode).then((fresh) => {
-            if (!isCancelled) {
-              setBundle(fresh);
-              showToast(`تمت مزامنة ${updatedCount} تحديثات جديدة للمقرر.`);
-            }
-          });
+          DataService.loadSubjectBundle(currentSubjectCode)
+            .then((fresh) => {
+              if (!isCancelled) {
+                setBundle(fresh);
+                showToast(`تمت مزامنة ${updatedCount} تحديثات جديدة للمقرر.`);
+              }
+            })
+            .catch(() => {});
         }
       }),
       DataService.getUserProgress(currentSubjectCode)
-    ]).then(([bundleRes, progressRes]) => {
-      if (!isCancelled) {
-        setBundle(bundleRes);
-        setUserProgress(progressRes);
+    ])
+      .then(([bundleRes, progressRes]) => {
+        if (!isCancelled) {
+          setBundle(bundleRes);
+          setUserProgress(progressRes);
 
-        if (bundleRes?.lab?.sessions?.[0]?.id) {
-          setActiveLabSession(bundleRes.lab.sessions[0].id);
-        }
+          if (bundleRes?.lab?.sessions?.[0]?.id) {
+            setActiveLabSession(bundleRes.lab.sessions[0].id);
+          }
 
-        // التحقق من صحة المحاضرة والنموذج المستعادين
-        if (activeLectureId !== "all" && bundleRes?.lectures && !bundleRes.lectures.some((l) => l.id === activeLectureId)) {
-          setActiveLectureId("all");
+          // التحقق من صحة المحاضرة والنموذج المستعادين
+          if (activeLectureId !== "all" && bundleRes?.lectures && !bundleRes.lectures.some((l) => l.id === activeLectureId)) {
+            setActiveLectureId("all");
+          }
+          if (selectedModelId !== "all" && bundleRes?.question_models && !bundleRes.question_models.some((m) => m.id === selectedModelId)) {
+            setSelectedModelId("all");
+          }
+          setLoading(false);
         }
-        if (selectedModelId !== "all" && bundleRes?.question_models && !bundleRes.question_models.some((m) => m.id === selectedModelId)) {
-          setSelectedModelId("all");
+      })
+      .catch((err) => {
+        console.error("Failed to load subject bundle:", err);
+        if (!isCancelled) {
+          setLoading(false);
+          showToast("تعذر تحميل بيانات المقرر. تحقق من الاتصال أو أعد المحاولة.");
         }
-        setLoading(false);
-      }
-    });
+      });
 
     localStorage.setItem("unified_active_subject", currentSubjectCode);
     return () => {
@@ -475,7 +515,7 @@ export const App: React.FC = () => {
       if (!ticking) {
         window.requestAnimationFrame(() => {
           const sy = window.scrollY;
-          viewScrollRef.current[activeView] = sy;
+          viewScrollRef.current[`${currentSubjectCode}:${activeView}`] = sy;
           try {
             sessionStorage.setItem(
               `unified_pos_${currentSubjectCode}`,
@@ -503,13 +543,14 @@ export const App: React.FC = () => {
     const handlePopState = (e: PopStateEvent) => {
       const state = e.state;
       const parsed = parseLocationHash();
+      lastHandledHashRef.current = { hash: window.location.hash, at: Date.now() };
       const targetView = state?.view || parsed.view || "slides";
       let targetLec = state?.lec || parsed.lec;
       const targetModel = state?.model || parsed.model;
       const targetScroll =
         typeof state?.scroll === "number"
           ? state.scroll
-          : (viewScrollRef.current[targetView] || 0);
+          : (viewScrollRef.current[`${currentSubjectCode}:${targetView}`] || 0);
 
       if (parsed.ref) {
         const resolved = resolveSlideReference(parsed.ref, targetLec || activeLectureId, bundle?.slides);
@@ -517,6 +558,8 @@ export const App: React.FC = () => {
         if (resolved && resolved.lecture_id) {
           targetLec = resolved.lecture_id;
         }
+        setFocusQuestionId(null);
+        setTargetPatternRuleId(null);
         setActiveView("slides");
         if (targetLec) setActiveLectureId(targetLec);
         if (targetModel) setSelectedModelId(targetModel);
@@ -525,6 +568,8 @@ export const App: React.FC = () => {
         return;
       }
 
+      setTargetSlideRef(null);
+      setTargetPatternRuleId(null);
       setActiveView(targetView);
       if (targetLec) setActiveLectureId(targetLec);
       if (targetModel) setSelectedModelId(targetModel);
@@ -532,11 +577,22 @@ export const App: React.FC = () => {
         setFocusQuestionId(parsed.qId);
         restoreScrollToElement(`[id="q-${parsed.qId}"]`, 100);
       } else {
+        setFocusQuestionId(null);
         restoreScrollPosition(targetScroll);
       }
     };
 
     const handleHashChange = () => {
+      const currentHash = window.location.hash;
+      const now = Date.now();
+      if (
+        lastHandledHashRef.current.hash === currentHash &&
+        now - lastHandledHashRef.current.at < 350
+      ) {
+        return;
+      }
+      lastHandledHashRef.current = { hash: currentHash, at: now };
+
       const parsed = parseLocationHash();
       if (parsed.ref) {
         const resolved = resolveSlideReference(parsed.ref, activeLectureId, bundle?.slides);
@@ -544,6 +600,8 @@ export const App: React.FC = () => {
         if (resolved && resolved.lecture_id && resolved.lecture_id !== activeLectureId) {
           setActiveLectureId(resolved.lecture_id);
         }
+        setFocusQuestionId(null);
+        setTargetPatternRuleId(null);
         setActiveView("slides");
         setTargetSlideRef(canonical);
         jumpDirectlyToSlide(canonical);
@@ -556,13 +614,16 @@ export const App: React.FC = () => {
       window.removeEventListener("popstate", handlePopState);
       window.removeEventListener("hashchange", handleHashChange);
     };
-  }, [bundle?.slides, activeLectureId]);
+  }, [bundle?.slides, activeLectureId, currentSubjectCode]);
 
   // تبديل القسم مع استعادة الموضع السابق لكل قسم وتحديث التاريخ والـ URL Hash بدقة (القاعدة 11)
   const handleSelectView = useCallback((nextView: ActiveView, opts: { keepScroll?: boolean } = {}) => {
     setJumpReturn(null);
+    setTargetSlideRef(null);
+    setFocusQuestionId(null);
+    setTargetPatternRuleId(null);
     const currScroll = window.scrollY;
-    viewScrollRef.current[activeView] = currScroll;
+    viewScrollRef.current[`${currentSubjectCode}:${activeView}`] = currScroll;
 
     try {
       history.replaceState(
@@ -578,7 +639,7 @@ export const App: React.FC = () => {
 
     setActiveView(nextView);
 
-    const targetY = opts.keepScroll ? currScroll : (viewScrollRef.current[nextView] || 0);
+    const targetY = opts.keepScroll ? currScroll : (viewScrollRef.current[`${currentSubjectCode}:${nextView}`] || 0);
 
     try {
       const hash = buildLocationHash(
@@ -599,22 +660,24 @@ export const App: React.FC = () => {
     } catch (_) {}
 
     restoreScrollPosition(targetY);
-  }, [activeView, activeLectureId, selectedModelId]);
+  }, [currentSubjectCode, activeView, activeLectureId, selectedModelId]);
 
   const handleSelectLecture = useCallback((lecId: string) => {
     setActiveLectureId(lecId);
+    setTargetSlideRef((prev) => {
+      if (!prev) return null;
+      const resolved = resolveSlideReference(prev, lecId, bundle?.slides || []);
+      return resolved && resolved.lecture_id === lecId ? prev : null;
+    });
     try {
-      const currentParsed = parseLocationHash();
-      const hash = currentParsed.ref
-        ? `#${currentParsed.ref}`
-        : buildLocationHash(activeView, lecId, selectedModelId);
+      const hash = buildLocationHash(activeView, lecId, selectedModelId);
       history.replaceState(
         { view: activeView, lec: lecId, model: selectedModelId, scroll: window.scrollY },
         "",
         hash
       );
     } catch (_) {}
-  }, [activeView, selectedModelId]);
+  }, [activeView, selectedModelId, bundle?.slides]);
 
   const handleSelectModel = useCallback((modelId: string) => {
     setSelectedModelId(modelId);
@@ -630,35 +693,60 @@ export const App: React.FC = () => {
 
   // قفزات البحث السريع إلى الجداول والملخص والتعاريف وملخص الملخص والمعجم والأنماط
   const handleJumpToTable = useCallback((tableId: string) => {
+    setTargetSlideRef(null);
+    setFocusQuestionId(null);
+    setTargetPatternRuleId(null);
     setTablesLectureFilter("all");
     setActiveView("tables");
     restoreScrollToElement(`#tbl-${tableId}`, 100);
   }, []);
 
   const handleJumpToSummaryPart = useCallback((partId: string) => {
+    setTargetSlideRef(null);
+    setFocusQuestionId(null);
+    setTargetPatternRuleId(null);
     setActiveLectureId("all");
     setActiveView("summary");
     restoreScrollToElement(`#part-${partId}`, 100);
   }, []);
 
   const handleJumpToDefinition = useCallback((defId: string) => {
+    setTargetSlideRef(null);
+    setFocusQuestionId(null);
+    setTargetPatternRuleId(null);
     setActiveView("definitions");
     restoreScrollToElement(`#def-${defId}`, 100);
   }, []);
 
-  const handleJumpToEmergency = useCallback(() => {
+  const handleJumpToEmergency = useCallback((sectionId?: string) => {
+    setTargetSlideRef(null);
+    setFocusQuestionId(null);
+    setTargetPatternRuleId(null);
     setActiveView("emergency");
-    restoreScrollPosition(0);
+    if (sectionId) {
+      const safeId = typeof CSS !== "undefined" && typeof CSS.escape === "function" ? CSS.escape(sectionId) : sectionId;
+      restoreScrollToElement(`#${safeId}`, 100);
+    } else {
+      restoreScrollPosition(0);
+    }
   }, []);
 
   const handleJumpToGlossary = useCallback(() => {
+    setTargetSlideRef(null);
+    setFocusQuestionId(null);
+    setTargetPatternRuleId(null);
     setActiveView("glossary");
     restoreScrollPosition(0);
   }, []);
 
-  const handleJumpToPattern = useCallback(() => {
+  const handleJumpToPattern = useCallback((ruleId?: string) => {
+    setTargetSlideRef(null);
+    setFocusQuestionId(null);
+    setTargetPatternRuleId(ruleId || null);
     setActiveView("patterns");
-    restoreScrollPosition(0);
+    if (!ruleId) {
+      restoreScrollPosition(0);
+    }
   }, []);
 
   // تصدير نسخة احتياطية شاملة من التقدم لجميع المواد
@@ -715,8 +803,20 @@ export const App: React.FC = () => {
         setIsOfflineModalOpen(false);
         setIsPortalOpen(false);
         setIsBmModalOpen(false);
+        if (showGuideModal) closeGuideModal();
         return;
       }
+
+      // منع تسرب الاختصارات العامة عند فتح أي نافذة منبثقة أو لايت بوكس أو لوحة الإعدادات
+      const hasOpenOverlay =
+        isGlobalSearchOpen ||
+        isShortcutsOpen ||
+        isOfflineModalOpen ||
+        isPortalOpen ||
+        isBmModalOpen ||
+        showGuideModal ||
+        Boolean(document.querySelector('[role="dialog"], #lightboxModal, #lb.open, #setPanel'));
+      if (hasOpenOverlay) return;
 
       // Ctrl+K أو / للبحث الشامل
       if (((e.ctrlKey || e.metaKey) && (e.code === "KeyK" || e.key.toLowerCase() === "k")) || (e.key === "/" && !isInput)) {
@@ -775,10 +875,7 @@ export const App: React.FC = () => {
 
       // تمرير سلس لثلاثة أرباع الصفحة بالأسهم (ArrowDown / ArrowUp) على الحواسيب
       if ((e.key === "ArrowDown" || e.key === "ArrowUp") && !isInput && !e.ctrlKey && !e.metaKey && !e.altKey) {
-        // حماية: عدم التمرير إذا كان اللايت بوكس أو أي نافذة منبثقة مفتوحة
-        const hasOpenModal = isGlobalSearchOpen || isShortcutsOpen || isOfflineModalOpen || isPortalOpen || isBmModalOpen;
-        const hasOpenLb = !!document.getElementById("lightboxModal") || !!document.getElementById("lb")?.classList.contains("open");
-        if (!hasOpenModal && !hasOpenLb && window.matchMedia("(hover: hover)").matches) {
+        if (window.matchMedia("(hover: hover)").matches) {
           e.preventDefault();
           window.scrollBy({
             top: (e.key === "ArrowDown" ? 1 : -1) * window.innerHeight * 0.75,
@@ -791,7 +888,7 @@ export const App: React.FC = () => {
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [zenLevel, isGlobalSearchOpen, isShortcutsOpen, isOfflineModalOpen, isPortalOpen, isBmModalOpen]);
+  }, [zenLevel, isGlobalSearchOpen, isShortcutsOpen, isOfflineModalOpen, isPortalOpen, isBmModalOpen, showGuideModal, closeGuideModal]);
 
   // القفز إلى استوديو تفاعلي من الملخص
   const handleJumpToInteractive = useCallback((studioId: string, tabId?: string) => {
@@ -802,9 +899,12 @@ export const App: React.FC = () => {
       scrollY: scroll,
       label: from === "summary" ? "العودة إلى الملخص" : "العودة إلى القسم السابق"
     });
+    setTargetSlideRef(null);
+    setFocusQuestionId(null);
+    setTargetPatternRuleId(null);
     setLastViewBeforeJump(from);
     setTargetStudioId(studioId);
-    if (tabId) setTargetTabId(tabId);
+    setTargetTabId(tabId || "sim");
     setActiveView("interactive");
     restoreScrollPosition(0);
   }, [activeView]);
@@ -814,6 +914,9 @@ export const App: React.FC = () => {
     if (!lastViewBeforeJump) return;
     const targetY =
       jumpReturn && jumpReturn.fromView === lastViewBeforeJump ? jumpReturn.scrollY : 0;
+    setTargetSlideRef(null);
+    setFocusQuestionId(null);
+    setTargetPatternRuleId(null);
     setActiveView(lastViewBeforeJump);
     setLastViewBeforeJump(null);
     setJumpReturn(null);
@@ -847,8 +950,10 @@ export const App: React.FC = () => {
     }
 
     // 3. تصفير موضع التمرير السابق للشرائح لعدم استرجاع الموضع القديم الميت
-    viewScrollRef.current["slides"] = 0;
+    viewScrollRef.current[`${currentSubjectCode}:slides`] = 0;
 
+    setFocusQuestionId(null);
+    setTargetPatternRuleId(null);
     setTargetSlideRef(canonicalRef);
     setActiveView("slides");
 
@@ -862,7 +967,7 @@ export const App: React.FC = () => {
 
     // 4. قنص فوري مباشر متمركز على صورة الشريحة بدون أي ترانزيشن تدريجي من أعلى الصفحة
     jumpDirectlyToSlide(canonicalRef);
-  }, [activeView, bundle?.slides, activeLectureId]);
+  }, [currentSubjectCode, activeView, bundle?.slides, activeLectureId]);
 
   // القفز إلى سؤال في بنك الأسئلة من المستكشف
   const handleJumpToQuestion = useCallback((questionId: string) => {
@@ -878,6 +983,8 @@ export const App: React.FC = () => {
             ? "العودة إلى البنك"
             : "العودة إلى المستكشف"
     });
+    setTargetSlideRef(null);
+    setTargetPatternRuleId(null);
     setFocusQuestionId(questionId);
     setActiveView("questions");
     try {
@@ -974,23 +1081,25 @@ export const App: React.FC = () => {
   const hasQuestions = (bundle?.questions?.length || 0) > 0;
   const summaryTitle = bundle?.summary?.title_ar || "";
   const emergencyTitle = bundle?.emergency?.title_ar || "";
-  const isPlaceholderModule = (title: string) =>
-    !title || title.includes("{المادة}") || title.includes("التجريبي");
-  const availableViews: Record<ActiveView, boolean> = {
-    dashboard: false,
-    slides: (bundle?.slides?.length || 0) > 0,
-    summary: (bundle?.summary?.parts?.length || 0) > 0 && !isPlaceholderModule(summaryTitle),
-    emergency: (bundle?.emergency?.sections?.length || 0) > 0 && !isPlaceholderModule(emergencyTitle),
-    tables: (bundle?.tables?.length || 0) > 0,
-    questions: hasQuestions,
-    explorer: hasQuestions,
-    exam: hasQuestions,
-    interactive: ["toc", "rm", "sec", "se", "pm", "phy"].includes(currentSubjectCode),
-    definitions: Boolean(bundle?.definitions?.items?.length),
-    glossary: Boolean(bundle?.glossary) && !isArabicOnly,
-    patterns: Boolean(bundle?.patterns?.rules?.length),
-    lab: Boolean(bundle?.lab?.slides?.length)
-  };
+  const availableViews = useMemo<Record<ActiveView, boolean>>(() => {
+    const isPlaceholder = (title: string) =>
+      !title || title.includes("{المادة}") || title.includes("التجريبي");
+    return {
+      dashboard: false,
+      slides: (bundle?.slides?.length || 0) > 0,
+      summary: (bundle?.summary?.parts?.length || 0) > 0 && !isPlaceholder(summaryTitle),
+      emergency: (bundle?.emergency?.sections?.length || 0) > 0 && !isPlaceholder(emergencyTitle),
+      tables: (bundle?.tables?.length || 0) > 0,
+      questions: hasQuestions,
+      explorer: hasQuestions,
+      exam: hasQuestions,
+      interactive: ["toc", "rm", "sec", "se", "pm", "phy"].includes(currentSubjectCode),
+      definitions: Boolean(bundle?.definitions?.items?.length),
+      glossary: Boolean(bundle?.glossary) && !isArabicOnly,
+      patterns: Boolean(bundle?.patterns?.rules?.length),
+      lab: Boolean(bundle?.lab?.slides?.length)
+    };
+  }, [bundle, summaryTitle, emergencyTitle, hasQuestions, currentSubjectCode, isArabicOnly]);
 
   useEffect(() => {
     if (!bundle) return;
@@ -1010,16 +1119,33 @@ export const App: React.FC = () => {
       "exam"
     ];
     const next = order.find((view) => availableViews[view]);
-    if (next) setActiveView(next);
+    if (next) {
+      setActiveView(next);
+      try {
+        const hash = buildLocationHash(
+          next,
+          next === "slides" ? activeLectureId : undefined,
+          next === "questions" ? selectedModelId : undefined
+        );
+        history.replaceState(
+          { view: next, lec: activeLectureId, model: selectedModelId, scroll: 0 },
+          "",
+          hash
+        );
+      } catch (_) {}
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [bundle, currentSubjectCode]);
 
   const hasAnyAvailableView = Object.values(availableViews).some(Boolean);
   const totalQuestionsCount = bundle?.questions?.length || 0;
   const answeredQuestionsCount = Object.values(userProgress?.answered_questions || {}).filter(
-    (a) => a.selected_answer >= 0
+    (a) => Boolean(a && typeof a.selected_answer === "number" && a.selected_answer >= 0)
   ).length;
-  const progressPct = totalQuestionsCount > 0 ? (answeredQuestionsCount / totalQuestionsCount) * 100 : 0;
+  const progressPct =
+    totalQuestionsCount > 0
+      ? Math.min(100, Math.max(0, (answeredQuestionsCount / totalQuestionsCount) * 100))
+      : 0;
 
   return (
     <div className="app-shell">
@@ -1148,6 +1274,7 @@ export const App: React.FC = () => {
                     lectures={bundle?.lectures || []}
                     slides={bundle?.slides || []}
                     targetSlideRef={targetSlideRef}
+                    onTargetSlideHandled={() => setTargetSlideRef(null)}
                     activeLectureId={activeLectureId}
                     onSelectLecture={handleSelectLecture}
                     autoTranslate={!isArabicOnly && autoTranslateSlides}
@@ -1209,6 +1336,7 @@ export const App: React.FC = () => {
                     onJumpToSlide={handleJumpToSlide}
                     onJumpToQuestion={handleJumpToQuestion}
                     focusQuestionId={focusQuestionId}
+                    onFocusQuestionHandled={() => setFocusQuestionId(null)}
                     languageMode={effectiveLanguageMode}
                     onLanguageChange={handleLanguageChange}
                     arabicOnly={isArabicOnly}
@@ -1281,6 +1409,8 @@ export const App: React.FC = () => {
                     data={bundle?.patterns}
                     subjectCode={currentSubjectCode}
                     onJumpToQuestion={handleJumpToQuestion}
+                    targetRuleId={targetPatternRuleId}
+                    onTargetRuleHandled={() => setTargetPatternRuleId(null)}
                   />
                 )}
 
@@ -1302,6 +1432,7 @@ export const App: React.FC = () => {
                       initialStudioId={targetStudioId}
                       initialTabId={targetTabId}
                       onReturnToSummary={lastViewBeforeJump ? handleReturnFromInteractive : undefined}
+                      onJumpToSlide={handleJumpToSlide}
                     />
                   ) : (
                     <InteractiveStudioHost
@@ -1366,6 +1497,9 @@ export const App: React.FC = () => {
           onClick={() => {
             const { fromView, scrollY, lectureId } = jumpReturn;
             setJumpReturn(null);
+            setTargetSlideRef(null);
+            setFocusQuestionId(null);
+            setTargetPatternRuleId(null);
             if (lectureId !== undefined) setActiveLectureId(lectureId);
             setActiveView(fromView);
             restoreScrollPosition(scrollY);
@@ -1443,6 +1577,7 @@ export const App: React.FC = () => {
         onClose={closeGuideModal}
         isDesktop={isDesktop}
         isIos={isIos}
+        hasNativePrompt={hasNativePrompt}
         onPromptNative={promptPwaInstall}
       />
     </div>

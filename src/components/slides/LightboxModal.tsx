@@ -180,6 +180,29 @@ export const LightboxModal: React.FC<LightboxModalProps> = ({
     return () => window.removeEventListener("keydown", handleKeyDown, { capture: true });
   }, [isOpen, currentIndex, slides.length, isBookMode, onChangePaperFilter, cyclePaperFilter, onNavigate, onClose, handleZoomIn, handleZoomOut, handleResetZoom]);
 
+  // مستمع wheel أصلي غير سلبي (passive: false) لمنع زوم المتصفح عند Ctrl+Wheel
+  useEffect(() => {
+    if (!isOpen) return;
+    const stage = stageRef.current;
+    if (!stage) return;
+    const onWheel = (e: WheelEvent) => {
+      if (!e.ctrlKey) return;
+      e.preventDefault();
+      if (e.deltaY < 0) handleZoomIn();
+      else handleZoomOut();
+    };
+    stage.addEventListener("wheel", onWheel, { passive: false });
+    return () => stage.removeEventListener("wheel", onWheel);
+  }, [isOpen, handleZoomIn, handleZoomOut]);
+
+  // إنهاء السحب حتى لو أُفلت زر الفأرة خارج النافذة
+  useEffect(() => {
+    if (!isDragging) return;
+    const onWindowMouseUp = () => setIsDragging(false);
+    window.addEventListener("mouseup", onWindowMouseUp);
+    return () => window.removeEventListener("mouseup", onWindowMouseUp);
+  }, [isDragging]);
+
   if (!isOpen || !currentSlide) return null;
 
   const handleMouseDown = (e: React.MouseEvent) => {
@@ -198,13 +221,6 @@ export const LightboxModal: React.FC<LightboxModalProps> = ({
 
   const handleMouseUp = () => {
     setIsDragging(false);
-  };
-
-  const handleWheel = (e: React.WheelEvent) => {
-    if (!e.ctrlKey) return;
-    e.preventDefault();
-    if (e.deltaY < 0) handleZoomIn();
-    else handleZoomOut();
   };
 
   const handleTouchStart = (e: React.TouchEvent) => {
@@ -427,7 +443,6 @@ export const LightboxModal: React.FC<LightboxModalProps> = ({
           }}
           onMouseDown={handleMouseDown}
           onMouseMove={handleMouseMove}
-          onWheel={handleWheel}
           onDoubleClick={handleDoubleTap}
           onTouchStart={handleTouchStart}
           onTouchMove={handleTouchMove}

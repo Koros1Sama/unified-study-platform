@@ -65,6 +65,9 @@ export const ShortcutsCheatsheetModal: React.FC<ShortcutsCheatsheetModalProps> =
 
   return (
     <div
+      role="dialog"
+      aria-modal="true"
+      aria-label="اختصارات لوحة المفاتيح والتحكم السريع"
       style={{
         position: "fixed",
         inset: 0,

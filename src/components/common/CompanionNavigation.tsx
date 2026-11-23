@@ -429,7 +429,7 @@ export const CompanionNavigation: React.FC<CompanionNavigationProps> = ({
           {can("lab") && (
             <button type="button" className={activeView === "lab" ? "active" : ""} onClick={() => onSelectView("lab")}>
               <Icons.Lab size={18} />
-              <span>المعمل</span>
+              <span>العملي</span>
             </button>
           )}
         </div>

@@ -12,6 +12,7 @@ interface PwaInstallGuideModalProps {
   onClose: () => void;
   isDesktop: boolean;
   isIos: boolean;
+  hasNativePrompt?: boolean;
   onPromptNative?: () => Promise<boolean>;
 }
 
@@ -20,6 +21,7 @@ export const PwaInstallGuideModal: React.FC<PwaInstallGuideModalProps> = ({
   onClose,
   isDesktop,
   isIos,
+  hasNativePrompt = false,
   onPromptNative
 }) => {
   const [activeTab, setActiveTab] = useState<"desktop" | "ios" | "android">(() => {
@@ -47,6 +49,9 @@ export const PwaInstallGuideModal: React.FC<PwaInstallGuideModalProps> = ({
 
   return (
     <div
+      role="dialog"
+      aria-modal="true"
+      aria-label="تثبيت المنصة كتطبيق أصيل"
       style={{
         position: "fixed",
         inset: 0,
@@ -232,7 +237,7 @@ export const PwaInstallGuideModal: React.FC<PwaInstallGuideModalProps> = ({
 
         {/* أزرار الإجراءات */}
         <div style={{ display: "flex", gap: "10px", justifyContent: "flex-end", marginTop: "4px" }}>
-          {onPromptNative && (
+          {hasNativePrompt && onPromptNative && (
             <button
               type="button"
               className="btn btn-primary"

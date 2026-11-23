@@ -262,9 +262,19 @@ export const PortalModal: React.FC<PortalModalProps> = ({
             return (
               <div
                 key={s.code}
+                role="button"
+                tabIndex={0}
+                aria-pressed={isSelected}
                 onClick={() => {
                   onSelectSubject(s.code);
                   onClose();
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    onSelectSubject(s.code);
+                    onClose();
+                  }
                 }}
                 style={{
                   background: isSelected ? "color-mix(in srgb, var(--acc) 14%, var(--sf))" : "var(--sf2)",

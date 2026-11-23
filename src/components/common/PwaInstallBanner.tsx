@@ -42,7 +42,7 @@ export const PwaInstallBanner: React.FC<PwaInstallBannerProps> = ({
       aria-label="تثبيت المنصة كتطبيق"
       style={{
         position: "fixed",
-        bottom: "calc(74px + env(safe-area-inset-bottom))",
+        bottom: "var(--usp-bottom-base, calc(74px + env(safe-area-inset-bottom)))",
         left: "50%",
         transform: "translateX(-50%)",
         zIndex: 1500,
@@ -55,8 +55,7 @@ export const PwaInstallBanner: React.FC<PwaInstallBannerProps> = ({
         padding: "12px 14px",
         display: "flex",
         alignItems: "center",
-        gap: "10px",
-        animation: "rise 0.28s var(--ease)"
+        gap: "10px"
       }}
     >
       <div

@@ -28,6 +28,22 @@ export const OfflineManagerModal: React.FC<OfflineManagerModalProps> = ({
   const [statusText, setStatusText] = useState("فحص حالة التخزين المحلي...");
   const [errorCount, setErrorCount] = useState(0);
   const abortRef = useRef<boolean>(false);
+  const runIdRef = useRef<number>(0);
+  const runControllerRef = useRef<AbortController | null>(null);
+  const isDownloadingRef = useRef<boolean>(false);
+  const prevSubjectRef = useRef<string>(currentSubjectCode);
+
+  const prefetchLazyViewChunks = async () => {
+    const loaders: Array<() => Promise<unknown>> = [
+      () => import("../questions/ExamSimulator"),
+      () => import("../interactive/InteractiveStudioHost"),
+      () => import("../interactive/ConceptStudios"),
+      () => import("../glossary/GlossaryView"),
+      () => import("../patterns/PatternsLabView"),
+      () => import("../lab/LabAppendixView")
+    ];
+    await Promise.allSettled(loaders.map((load) => load()));
+  };
 
   // جمع كافة روابط الملفات الخاصة بالمادة (السلايدات والبيانات)
   const getResourceList = (): string[] => {
@@ -52,6 +68,7 @@ export const OfflineManagerModal: React.FC<OfflineManagerModalProps> = ({
 
   // فحص الملفات المحفوظة مسبقاً في كاش المتصفح
   const checkCachedStatus = async () => {
+    if (isDownloadingRef.current) return;
     if (typeof window === "undefined" || !("caches" in window)) {
       setStatusText("المتصفح لا يدعم واجهة التخزين المؤقت Cache API");
       return;
@@ -70,6 +87,7 @@ export const OfflineManagerModal: React.FC<OfflineManagerModalProps> = ({
         if (match) count++;
       }
 
+      if (isDownloadingRef.current) return;
       setCachedCount(count);
       const pct = resources.length > 0 ? Math.round((count / resources.length) * 100) : 0;
       setProgressPct(pct);
@@ -82,56 +100,111 @@ export const OfflineManagerModal: React.FC<OfflineManagerModalProps> = ({
         setStatusText("المقرر غير محفوظ أوفلاين بعد — انقر للتحميل والتخزين");
       }
     } catch (_) {
-      setStatusText("تعذر الوصول إلى الكاش المحلي");
+      if (!isDownloadingRef.current) {
+        setStatusText("تعذر الوصول إلى الكاش المحلي");
+      }
     }
   };
 
   useEffect(() => {
-    if (isOpen) {
-      abortRef.current = false;
+    if (prevSubjectRef.current !== currentSubjectCode) {
+      prevSubjectRef.current = currentSubjectCode;
+      if (isDownloadingRef.current) {
+        runIdRef.current++;
+        abortRef.current = true;
+        runControllerRef.current?.abort();
+        runControllerRef.current = null;
+        isDownloadingRef.current = false;
+        setIsDownloading(false);
+        (window as Window & { __OFFLINE_DOWNLOADING__?: boolean }).__OFFLINE_DOWNLOADING__ = false;
+      }
+    }
+    if (isOpen && !isDownloadingRef.current) {
       checkCachedStatus();
     }
   }, [isOpen, bundle, currentSubjectCode]);
 
+  useEffect(() => {
+    return () => {
+      runIdRef.current++;
+      abortRef.current = true;
+      runControllerRef.current?.abort();
+      runControllerRef.current = null;
+      isDownloadingRef.current = false;
+      (window as Window & { __OFFLINE_DOWNLOADING__?: boolean }).__OFFLINE_DOWNLOADING__ = false;
+    };
+  }, []);
+
   // جلب مرن مع إعادة المحاولة بتأخير متصاعد (Rule 7: fetchWithRetry)
-  const fetchWithRetry = async (url: string, retries = 2, delay = 400): Promise<Response> => {
+  const fetchWithRetry = async (
+    url: string,
+    runSignal: AbortSignal,
+    myRunId: number,
+    retries = 2,
+    delay = 400
+  ): Promise<Response> => {
+    if (runSignal.aborted || abortRef.current || runIdRef.current !== myRunId) {
+      throw new DOMException("Aborted", "AbortError");
+    }
+
+    const controller = new AbortController();
+    const onRunAbort = () => controller.abort();
+    runSignal.addEventListener("abort", onRunAbort, { once: true });
+    const timer = window.setTimeout(() => controller.abort(), 12000); // 12 ثانية مهلة
+
     try {
-      const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), 12000); // 12 ثانية مهلة
       const res = await fetch(url, { signal: controller.signal, cache: "reload" });
-      clearTimeout(timer);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       return res;
     } catch (err) {
-      if (retries > 0 && !abortRef.current) {
-        await new Promise((r) => setTimeout(r, delay));
-        return fetchWithRetry(url, retries - 1, delay * 2);
+      if (runSignal.aborted || abortRef.current || runIdRef.current !== myRunId) {
+        throw err;
+      }
+      if (retries > 0) {
+        await new Promise((r) => window.setTimeout(r, delay));
+        if (runSignal.aborted || abortRef.current || runIdRef.current !== myRunId) {
+          throw err;
+        }
+        return fetchWithRetry(url, runSignal, myRunId, retries - 1, delay * 2);
       }
       throw err;
+    } finally {
+      window.clearTimeout(timer);
+      runSignal.removeEventListener("abort", onRunAbort);
     }
   };
 
   // بدء التحميل الذري الموحد
   const startDownload = async () => {
-    if (isDownloading) return;
-    setIsDownloading(true);
+    if (isDownloadingRef.current) return;
+    const myRunId = ++runIdRef.current;
+    const runController = new AbortController();
+    runControllerRef.current = runController;
     abortRef.current = false;
+    isDownloadingRef.current = true;
+    setIsDownloading(true);
     setErrorCount(0);
     (window as Window & { __OFFLINE_DOWNLOADING__?: boolean }).__OFFLINE_DOWNLOADING__ = true;
 
     try {
       const resources = getResourceList();
+      setTotalFiles(resources.length);
       const cacheName = `usp-offline-${currentSubjectCode}`;
       const cache = await caches.open(cacheName);
+      if (runIdRef.current !== myRunId || runController.signal.aborted) return;
 
       // حصر الملفات المتبقية فقط التي لم يتم تحميلها بعد
       const todo: string[] = [];
       for (const url of resources) {
+        if (runIdRef.current !== myRunId || runController.signal.aborted) return;
         const match = await cache.match(url, { ignoreSearch: true });
         if (!match) todo.push(url);
       }
 
       if (todo.length === 0) {
+        setStatusText("جاري تجهيز وحدات الأقسام للعمل أوفلاين...");
+        await prefetchLazyViewChunks();
+        if (runIdRef.current !== myRunId || runController.signal.aborted) return;
         setStatusText("جميع الملفات مخزنة ومحدثة بالفعل!");
         setProgressPct(100);
         return;
@@ -144,23 +217,32 @@ export const OfflineManagerModal: React.FC<OfflineManagerModalProps> = ({
       const concurrency = 4; // 4 خيوط متوازية لمنع اختناق السوكيت
 
       const worker = async () => {
-        while (!abortRef.current) {
+        while (!abortRef.current && !runController.signal.aborted && runIdRef.current === myRunId) {
           if (nextIdx >= todo.length) break;
           const currentUrl = todo[nextIdx++];
 
           try {
-            const res = await fetchWithRetry(currentUrl);
+            const res = await fetchWithRetry(currentUrl, runController.signal, myRunId);
+            if (runIdRef.current !== myRunId || abortRef.current || runController.signal.aborted) {
+              break;
+            }
             const ct = (res.headers.get("content-type") || "").toLowerCase();
             if (ct.includes("text/html")) {
               throw new Error("Unexpected HTML fallback");
             }
             await cache.put(currentUrl, res);
+            if (runIdRef.current !== myRunId || abortRef.current || runController.signal.aborted) {
+              break;
+            }
             completed++;
             setCachedCount(completed);
             const pct = Math.round((completed / resources.length) * 100);
             setProgressPct(pct);
             setStatusText(`جاري التحميل والتخزين: ${completed} من ${resources.length} (${pct}%)`);
           } catch (_) {
+            if (runIdRef.current !== myRunId || abortRef.current || runController.signal.aborted) {
+              break;
+            }
             failed++;
             setErrorCount(failed);
           }
@@ -170,24 +252,41 @@ export const OfflineManagerModal: React.FC<OfflineManagerModalProps> = ({
       const workers = Array.from({ length: Math.min(concurrency, todo.length) }, () => worker());
       await Promise.all(workers);
 
-      if (abortRef.current) {
+      if (runIdRef.current !== myRunId) return;
+
+      if (abortRef.current || runController.signal.aborted) {
         setStatusText("تم إيقاف التحميل مؤقتاً — يمكنك استئنافه في أي وقت");
-      } else if (failed > 0) {
-        setStatusText(`اكتمل التحميل مع تعثر ${failed} ملف — يمكنك النقر مجدداً للاستئناف`);
       } else {
-        setStatusText("اكتمل التحميل بنجاح تام! المادة جاهزة للدراسة بدون إنترنت.");
-        setProgressPct(100);
+        // تحميل حزم الأقسام الكسولة (Lazy Views) لضمان عمل كل الأقسام أوفلاين بدون أخطاء
+        await prefetchLazyViewChunks();
+        if (runIdRef.current !== myRunId) return;
+        if (failed > 0) {
+          setStatusText(`اكتمل التحميل مع تعثر ${failed} ملف — يمكنك النقر مجدداً للاستئناف`);
+        } else {
+          setStatusText("اكتمل التحميل بنجاح تام! المادة جاهزة للدراسة بدون إنترنت.");
+          setProgressPct(100);
+        }
       }
     } finally {
-      setIsDownloading(false);
-      (window as Window & { __OFFLINE_DOWNLOADING__?: boolean }).__OFFLINE_DOWNLOADING__ = false;
-      window.dispatchEvent(new CustomEvent("offline-download-complete"));
+      if (runIdRef.current === myRunId) {
+        runControllerRef.current = null;
+        isDownloadingRef.current = false;
+        setIsDownloading(false);
+        (window as Window & { __OFFLINE_DOWNLOADING__?: boolean }).__OFFLINE_DOWNLOADING__ = false;
+        window.dispatchEvent(new CustomEvent("offline-download-complete"));
+      }
     }
   };
 
   const handlePause = () => {
+    runIdRef.current++;
     abortRef.current = true;
+    runControllerRef.current?.abort();
+    runControllerRef.current = null;
+    isDownloadingRef.current = false;
     setIsDownloading(false);
+    (window as Window & { __OFFLINE_DOWNLOADING__?: boolean }).__OFFLINE_DOWNLOADING__ = false;
+    setStatusText("تم إيقاف التحميل مؤقتاً — يمكنك استئنافه في أي وقت");
   };
 
   const handleClearCache = async () => {
@@ -203,6 +302,9 @@ export const OfflineManagerModal: React.FC<OfflineManagerModalProps> = ({
 
   return (
     <div
+      role="dialog"
+      aria-modal="true"
+      aria-label="حزمة الدراسة بدون إنترنت"
       style={{
         position: "fixed",
         inset: 0,

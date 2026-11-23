@@ -7,7 +7,7 @@
 
 import React, { useState, useEffect, useMemo, useRef } from "react";
 import { Icons } from "../icons/SvgIcons";
-import { highlightSearchText, matchesNormalizedTerms } from "../../lib/textUtils";
+import { highlightSearchText, matchesNormalizedTerms, stripHtmlTags } from "../../lib/textUtils";
 import type { SubjectBundle } from "../../lib/dataService";
 
 export interface GlobalSearchModalProps {
@@ -19,9 +19,9 @@ export interface GlobalSearchModalProps {
   onJumpToTable?: (tableId: string) => void;
   onJumpToSummaryPart?: (partId: string) => void;
   onJumpToDefinition?: (defId: string) => void;
-  onJumpToEmergency?: () => void;
+  onJumpToEmergency?: (sectionId?: string) => void;
   onJumpToGlossary?: () => void;
-  onJumpToPattern?: () => void;
+  onJumpToPattern?: (ruleId?: string) => void;
 }
 
 type SearchCategory =
@@ -87,24 +87,30 @@ export const GlobalSearchModal: React.FC<GlobalSearchModalProps> = ({
     // 1. بحث في بنك الأسئلة
     if (category === "all" || category === "questions") {
       (bundle.questions || []).forEach((qItem) => {
-        const fullText = [
-          qItem.question_en,
-          qItem.question_ar,
-          ...qItem.options_en,
-          ...qItem.options_ar,
-          qItem.why_correct || "",
-          qItem.exam_tip || "",
-          qItem.slide_ref || ""
-        ].join(" ");
+        const cleanQEn = stripHtmlTags(qItem.question_en || "");
+        const cleanQAr = stripHtmlTags(qItem.question_ar || "");
+        const cleanTip = stripHtmlTags(qItem.exam_tip || "");
+        const cleanWhy = stripHtmlTags(qItem.why_correct || "");
+        const fullText = stripHtmlTags(
+          [
+            cleanQEn,
+            cleanQAr,
+            ...(qItem.options_en || []),
+            ...(qItem.options_ar || []),
+            cleanWhy,
+            cleanTip,
+            qItem.slide_ref || ""
+          ].join(" ")
+        );
 
         if (matchesAllTerms(fullText)) {
           items.push({
             id: `q-${qItem.id}`,
             category: "questions",
             categoryLabel: "بنك الأسئلة",
-            title: qItem.question_ar || qItem.question_en,
-            subtitle: qItem.question_en ? qItem.question_en : `سؤال رقم ${qItem.orig_q_num || qItem.id}`,
-            snippet: qItem.exam_tip ? `تكتيك الحل: ${qItem.exam_tip}` : qItem.why_correct,
+            title: cleanQAr || cleanQEn,
+            subtitle: cleanQEn ? cleanQEn : `سؤال رقم ${qItem.orig_q_num || qItem.id}`,
+            snippet: cleanTip ? `تكتيك الحل: ${cleanTip}` : cleanWhy || undefined,
             badge: qItem.slide_ref || `سؤال ${qItem.orig_q_num || ""}`,
             onSelect: () => {
               onJumpToQuestion(qItem.id);
@@ -119,22 +125,20 @@ export const GlobalSearchModal: React.FC<GlobalSearchModalProps> = ({
     if (category === "all" || category === "slides") {
       const isBook = bundle.meta.page_layout === "book";
       (bundle.slides || []).forEach((slide) => {
-        const fullText = [
-          slide.ref,
-          slide.title || "",
-          slide.content_en || "",
-          slide.content_ar || "",
-          slide.notes_ar || ""
-        ].join(" ");
+        const cleanTitle = stripHtmlTags(slide.title || "");
+        const cleanEn = stripHtmlTags(slide.content_en || "");
+        const cleanAr = stripHtmlTags(slide.content_ar || "");
+        const cleanNotes = stripHtmlTags(slide.notes_ar || "");
+        const fullText = [slide.ref, cleanTitle, cleanEn, cleanAr, cleanNotes].join(" ");
 
         if (matchesAllTerms(fullText)) {
           items.push({
             id: `slide-${slide.ref}`,
             category: "slides",
             categoryLabel: isBook ? "الكتاب" : "السلايدات",
-            title: slide.title || slide.content_en || `${isBook ? "صفحة" : "شريحة"} ${slide.slide_num}`,
-            subtitle: slide.content_ar ? slide.content_ar.substring(0, 100) + "..." : slide.content_en || "",
-            snippet: slide.notes_ar ? `شرح: ${slide.notes_ar.substring(0, 120)}...` : undefined,
+            title: cleanTitle || cleanEn || `${isBook ? "صفحة" : "شريحة"} ${slide.slide_num}`,
+            subtitle: cleanAr ? (cleanAr.length > 100 ? cleanAr.substring(0, 100) + "..." : cleanAr) : cleanEn,
+            snippet: cleanNotes ? `شرح: ${cleanNotes.length > 120 ? cleanNotes.substring(0, 120) + "..." : cleanNotes}` : undefined,
             badge: slide.ref,
             onSelect: () => {
               onJumpToSlide(slide.ref);
@@ -148,18 +152,22 @@ export const GlobalSearchModal: React.FC<GlobalSearchModalProps> = ({
     // 3. بحث في جداول المقارنة
     if (category === "all" || category === "tables") {
       (bundle.tables || []).forEach((table) => {
-        const rowText = table.rows.flat().join(" ");
-        const colText = table.cols.map((c) => c.label).join(" ");
-        const fullText = [table.title, table.title_ar, table.desc || "", table.note_ar || "", colText, rowText].join(" ");
+        const cleanTitle = stripHtmlTags(table.title || "");
+        const cleanTitleAr = stripHtmlTags(table.title_ar || "");
+        const cleanDesc = stripHtmlTags(table.desc || "");
+        const cleanNote = stripHtmlTags(table.note_ar || "");
+        const rowText = stripHtmlTags(table.rows.flat().join(" "));
+        const colText = stripHtmlTags(table.cols.map((c) => c.label).join(" "));
+        const fullText = [cleanTitle, cleanTitleAr, cleanDesc, cleanNote, colText, rowText].join(" ");
 
         if (matchesAllTerms(fullText)) {
           items.push({
             id: `tbl-${table.id}`,
             category: "tables",
             categoryLabel: "جداول المقارنة",
-            title: table.title_ar,
-            subtitle: table.title,
-            snippet: table.desc || `جدول من ${table.rows.length} صفاً و ${table.cols.length} أعمدة`,
+            title: cleanTitleAr || cleanTitle,
+            subtitle: cleanTitle !== cleanTitleAr ? cleanTitle : "",
+            snippet: cleanDesc || `جدول من ${table.rows.length} صفاً و ${table.cols.length} أعمدة`,
             badge: table.lec ? `محاضرة ${table.lec}` : "جدول",
             onSelect: () => {
               if (onJumpToTable) onJumpToTable(table.id);
@@ -173,17 +181,20 @@ export const GlobalSearchModal: React.FC<GlobalSearchModalProps> = ({
     // 4. بحث في الملخص النظري
     if (category === "all" || category === "summary") {
       (bundle.summary?.parts || []).forEach((part) => {
-        const blockText = (part.blocks || []).map((b) => [b.head || "", b.body || "", (b.items || []).join(" ")].join(" ")).join(" ");
-        const fullText = [part.title, part.lec, blockText].join(" ");
+        const cleanTitle = stripHtmlTags(part.title || "");
+        const blockText = stripHtmlTags(
+          (part.blocks || []).map((b) => [b.head || "", b.body || "", (b.items || []).join(" ")].join(" ")).join(" ")
+        );
+        const fullText = [cleanTitle, part.lec, blockText].join(" ");
 
         if (matchesAllTerms(fullText)) {
           items.push({
             id: `part-${part.lec}`,
             category: "summary",
             categoryLabel: "الملخص النظري",
-            title: part.title,
+            title: cleanTitle,
             subtitle: `محاضرة ${part.lec}`,
-            snippet: blockText.substring(0, 120) + "...",
+            snippet: blockText ? (blockText.length > 120 ? blockText.substring(0, 120) + "..." : blockText) : undefined,
             badge: part.lec,
             onSelect: () => {
               if (onJumpToSummaryPart) onJumpToSummaryPart(part.lec);
@@ -197,8 +208,11 @@ export const GlobalSearchModal: React.FC<GlobalSearchModalProps> = ({
     // 5. بحث في بنك التعاريف
     if (category === "all" || category === "definitions") {
       (bundle.definitions?.items || []).forEach((def) => {
-        const triggersText = (def.triggers || []).map((t) => `${t.en} ${t.ar}`).join(" ");
-        const fullText = [def.term_en, def.term_ar, def.def_ar, def.def_en || "", def.exam_pitfall?.ar || "", triggersText].join(" ");
+        const cleanDefAr = stripHtmlTags(def.def_ar || "");
+        const cleanDefEn = stripHtmlTags(def.def_en || "");
+        const cleanPitfall = stripHtmlTags(def.exam_pitfall?.ar || "");
+        const triggersText = stripHtmlTags((def.triggers || []).map((t) => `${t.en} ${t.ar}`).join(" "));
+        const fullText = [def.term_en, def.term_ar, cleanDefAr, cleanDefEn, cleanPitfall, triggersText].join(" ");
 
         if (matchesAllTerms(fullText)) {
           items.push({
@@ -206,8 +220,8 @@ export const GlobalSearchModal: React.FC<GlobalSearchModalProps> = ({
             category: "definitions",
             categoryLabel: "بنك التعاريف",
             title: `${def.term_ar} (${def.term_en})`,
-            subtitle: def.def_ar,
-            snippet: def.exam_pitfall?.ar ? `فخ امتحاني: ${def.exam_pitfall.ar}` : undefined,
+            subtitle: cleanDefAr,
+            snippet: cleanPitfall ? `فخ امتحاني: ${cleanPitfall}` : undefined,
             badge: def.lec || "تعريف",
             onSelect: () => {
               if (onJumpToDefinition) onJumpToDefinition(def.id);
@@ -243,18 +257,20 @@ export const GlobalSearchModal: React.FC<GlobalSearchModalProps> = ({
         } else if (sec.type === "timeline") {
           sec.steps.forEach((st) => parts.push(st.time, st.target, st.detail));
         }
-        const fullText = parts.join(" ");
+        const fullText = stripHtmlTags(parts.join(" "));
         if (matchesAllTerms(fullText)) {
+          const cleanDesc = stripHtmlTags(sec.desc || "");
+          const cleanBody = stripHtmlTags(parts.slice(4).join(" "));
           items.push({
             id: `em-${sec.id}`,
             category: "emergency",
             categoryLabel: "ملخص الملخص",
-            title: sec.title,
-            subtitle: sec.nav_title || "",
-            snippet: sec.desc || parts.slice(4).join(" ").substring(0, 120),
+            title: stripHtmlTags(sec.title),
+            subtitle: stripHtmlTags(sec.nav_title || ""),
+            snippet: cleanDesc || (cleanBody.length > 120 ? cleanBody.substring(0, 120) + "..." : cleanBody),
             badge: sec.badge || "80/20",
             onSelect: () => {
-              if (onJumpToEmergency) onJumpToEmergency();
+              if (onJumpToEmergency) onJumpToEmergency(sec.id);
               onClose();
             }
           });
@@ -268,7 +284,8 @@ export const GlobalSearchModal: React.FC<GlobalSearchModalProps> = ({
       if (glossary) {
         const structured = glossary.curated_items || glossary.items || [];
         structured.forEach((term, idx) => {
-          const fullText = [term.term_en, term.term_ar, term.context || "", term.category || ""].join(" ");
+          const cleanContext = stripHtmlTags(term.context || "");
+          const fullText = [term.term_en, term.term_ar, cleanContext, term.category || ""].join(" ");
           if (matchesAllTerms(fullText)) {
             items.push({
               id: `gl-cur-${idx}-${term.term_en}`,
@@ -276,7 +293,7 @@ export const GlobalSearchModal: React.FC<GlobalSearchModalProps> = ({
               categoryLabel: "المعجم",
               title: `${term.term_ar} (${term.term_en})`,
               subtitle: term.term_en,
-              snippet: term.context,
+              snippet: cleanContext || undefined,
               badge: term.category || "مصطلح",
               onSelect: () => {
                 if (onJumpToGlossary) onJumpToGlossary();
@@ -292,7 +309,7 @@ export const GlobalSearchModal: React.FC<GlobalSearchModalProps> = ({
         for (let i = 0; i < dictBuckets.length && items.length < 70; i++) {
           const [en, val] = dictBuckets[i];
           const ar = typeof val === "string" ? val : val.arabic;
-          const ctx = typeof val === "string" ? undefined : val.context;
+          const ctx = typeof val === "string" ? undefined : stripHtmlTags(val.context || "");
           const cat = typeof val === "string" ? undefined : val.category;
           if (matchesAllTerms(`${en} ${ar} ${ctx || ""} ${cat || ""}`)) {
             items.push({
@@ -301,7 +318,7 @@ export const GlobalSearchModal: React.FC<GlobalSearchModalProps> = ({
               categoryLabel: "المعجم",
               title: `${ar} (${en})`,
               subtitle: en,
-              snippet: ctx,
+              snippet: ctx || undefined,
               badge: cat || "مصطلح",
               onSelect: () => {
                 if (onJumpToGlossary) onJumpToGlossary();
@@ -316,21 +333,26 @@ export const GlobalSearchModal: React.FC<GlobalSearchModalProps> = ({
     // 8. بحث في أنماط الأسئلة
     if (category === "all" || category === "patterns") {
       (bundle.patterns?.rules || []).forEach((rule) => {
-        const casesText = (rule.cases || [])
-          .map((c) => [c.q, c.q_ar || "", c.ans, c.note || "", c.trigger_word || ""].join(" "))
-          .join(" ");
-        const fullText = [rule.title, rule.subtitle || "", rule.rule, rule.trigger || "", casesText].join(" ");
+        const cleanTitle = stripHtmlTags(rule.title || "");
+        const cleanSub = stripHtmlTags(rule.subtitle || rule.trigger || "");
+        const cleanRule = stripHtmlTags(rule.rule || "");
+        const casesText = stripHtmlTags(
+          (rule.cases || [])
+            .map((c) => [c.q, c.q_ar || "", c.ans, c.note || "", c.trigger_word || ""].join(" "))
+            .join(" ")
+        );
+        const fullText = [cleanTitle, cleanSub, cleanRule, casesText].join(" ");
         if (matchesAllTerms(fullText)) {
           items.push({
             id: `pat-${rule.id}`,
             category: "patterns",
             categoryLabel: "أنماط الأسئلة",
-            title: rule.title,
-            subtitle: rule.subtitle || rule.trigger || "",
-            snippet: rule.rule,
+            title: cleanTitle,
+            subtitle: cleanSub,
+            snippet: cleanRule,
             badge: rule.accuracy || rule.id.toUpperCase(),
             onSelect: () => {
-              if (onJumpToPattern) onJumpToPattern();
+              if (onJumpToPattern) onJumpToPattern(rule.id);
               onClose();
             }
           });
@@ -445,11 +467,27 @@ export const GlobalSearchModal: React.FC<GlobalSearchModalProps> = ({
           {query && (
             <button
               type="button"
-              className="btn btn-icon btn-sm"
-              onClick={() => setQuery("")}
+              onClick={() => {
+                setQuery("");
+                setSelectedIndex(0);
+                inputRef.current?.focus();
+              }}
               aria-label="مسح نص البحث"
+              title="مسح نص البحث"
+              style={{
+                background: "var(--sf)",
+                border: "1px solid var(--ln)",
+                color: "var(--ink-m)",
+                cursor: "pointer",
+                fontSize: "0.74rem",
+                fontWeight: 700,
+                padding: "4px 10px",
+                borderRadius: "var(--r-pill)",
+                flexShrink: 0,
+                whiteSpace: "nowrap"
+              }}
             >
-              <Icons.Cross size={16} />
+              مسح
             </button>
           )}
           <button
@@ -497,7 +535,8 @@ export const GlobalSearchModal: React.FC<GlobalSearchModalProps> = ({
             borderBottom: "1px solid var(--ln)",
             background: "var(--sf)",
             overflowX: "auto",
-            scrollbarWidth: "none"
+            scrollbarWidth: "none",
+            flexShrink: 0
           }}
         >
           {[
@@ -519,7 +558,7 @@ export const GlobalSearchModal: React.FC<GlobalSearchModalProps> = ({
                 setCategory(cat.id as SearchCategory);
                 setSelectedIndex(0);
               }}
-              style={{ fontSize: "0.78rem", padding: "4px 10px" }}
+              style={{ fontSize: "0.78rem", padding: "4px 10px", flexShrink: 0, whiteSpace: "nowrap" }}
             >
               {cat.label}
             </button>
@@ -618,7 +657,7 @@ export const GlobalSearchModal: React.FC<GlobalSearchModalProps> = ({
                       {highlightText(item.title, query)}
                     </div>
                     {item.subtitle && (
-                      <div style={{ fontSize: "0.8rem", color: "var(--ink-m)", direction: "ltr", textAlign: "left" }}>
+                      <div dir="auto" style={{ fontSize: "0.8rem", color: "var(--ink-m)", unicodeBidi: "plaintext" }}>
                         {highlightText(item.subtitle, query)}
                       </div>
                     )}

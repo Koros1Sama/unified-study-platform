@@ -130,24 +130,25 @@ export const UnifiedAppHeader: React.FC<UnifiedAppHeaderProps> = ({
     const el = navWrapRef.current;
     if (!el) return;
     const maxScroll = el.scrollWidth - el.clientWidth;
-    if (maxScroll <= 4) {
-      setNavOverflow({ canStart: false, canEnd: false });
-      return;
+    let nextStart = false;
+    let nextEnd = false;
+    if (maxScroll > 4) {
+      const isRtl = getComputedStyle(el).direction === "rtl";
+      const sl = el.scrollLeft;
+      if (isRtl) {
+        const distFromStart = Math.abs(sl);
+        nextStart = distFromStart > 4;
+        nextEnd = distFromStart < maxScroll - 4;
+      } else {
+        nextStart = sl > 4;
+        nextEnd = sl < maxScroll - 4;
+      }
     }
-    const isRtl = getComputedStyle(el).direction === "rtl";
-    const sl = el.scrollLeft;
-    if (isRtl) {
-      const distFromStart = Math.abs(sl);
-      setNavOverflow({
-        canStart: distFromStart > 4,
-        canEnd: distFromStart < maxScroll - 4
-      });
-    } else {
-      setNavOverflow({
-        canStart: sl > 4,
-        canEnd: sl < maxScroll - 4
-      });
-    }
+    setNavOverflow((prev) =>
+      prev.canStart === nextStart && prev.canEnd === nextEnd
+        ? prev
+        : { canStart: nextStart, canEnd: nextEnd }
+    );
   };
 
   useEffect(() => {
@@ -172,16 +173,21 @@ export const UnifiedAppHeader: React.FC<UnifiedAppHeaderProps> = ({
     return () => window.clearTimeout(id);
   }, [activeView, currentSubject.code]);
 
-  const handleNavWheel = (e: React.WheelEvent<HTMLDivElement>) => {
+  // مستمع wheel أصلي غير سلبي (passive: false) لتحويل التمرير العمودي إلى أفقي داخل شريط الأقسام
+  useEffect(() => {
     const el = navWrapRef.current;
     if (!el) return;
-    if (el.scrollWidth <= el.clientWidth + 4) return;
-    if (Math.abs(e.deltaY) > Math.abs(e.deltaX)) {
-      e.preventDefault();
-      const isRtl = getComputedStyle(el).direction === "rtl";
-      el.scrollLeft += isRtl ? -e.deltaY : e.deltaY;
-    }
-  };
+    const onWheel = (e: WheelEvent) => {
+      if (el.scrollWidth <= el.clientWidth + 4) return;
+      if (Math.abs(e.deltaY) > Math.abs(e.deltaX)) {
+        e.preventDefault();
+        const isRtl = getComputedStyle(el).direction === "rtl";
+        el.scrollLeft += isRtl ? -e.deltaY : e.deltaY;
+      }
+    };
+    el.addEventListener("wheel", onWheel, { passive: false });
+    return () => el.removeEventListener("wheel", onWheel);
+  }, []);
 
   const scrollNavBy = (dir: "start" | "end") => {
     const el = navWrapRef.current;
@@ -339,7 +345,16 @@ export const UnifiedAppHeader: React.FC<UnifiedAppHeaderProps> = ({
         {/* Brand with Subject Switcher */}
         <div
           className="brand"
+          role="button"
+          tabIndex={0}
+          aria-label={`تبديل المقرر الدراسي — ${currentSubject.name_ar}`}
           onClick={onOpenPortal}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === " ") {
+              e.preventDefault();
+              onOpenPortal();
+            }
+          }}
           style={{ cursor: "pointer" }}
           title="انقر لتبديل المادة الدراسية (المقررات)"
         >
@@ -377,7 +392,7 @@ export const UnifiedAppHeader: React.FC<UnifiedAppHeaderProps> = ({
               <Icons.ChevronRight size={14} />
             </button>
           )}
-          <div className="top-nav-wrap" ref={navWrapRef} onWheel={handleNavWheel}>
+          <div className="top-nav-wrap" ref={navWrapRef}>
           <div className="seg-pills">
             <button
               type="button"

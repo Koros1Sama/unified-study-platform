@@ -18,6 +18,7 @@ interface SlidesViewerProps {
   lectures: Lecture[];
   slides: SlideItem[];
   targetSlideRef?: string | null;
+  onTargetSlideHandled?: () => void;
   activeLectureId?: string;
   onSelectLecture?: (id: string) => void;
   autoTranslate?: boolean;
@@ -38,6 +39,7 @@ export const SlidesViewer: React.FC<SlidesViewerProps> = ({
   lectures,
   slides,
   targetSlideRef,
+  onTargetSlideHandled,
   activeLectureId: controlledLectureId,
   onSelectLecture,
   autoTranslate = true,
@@ -94,10 +96,15 @@ export const SlidesViewer: React.FC<SlidesViewerProps> = ({
   const [isSlideSearchOpen, setIsSlideSearchOpen] = useState(false);
   const [copiedSlideRef, setCopiedSlideRef] = useState<string | null>(null);
   const [visibleLimit, setVisibleLimit] = useState(INITIAL_VISIBLE_COUNT);
+  const [pendingResumeRef, setPendingResumeRef] = useState<string | null>(null);
   const sentinelRef = useRef<HTMLDivElement>(null);
   const handledTargetRef = useRef<string | null>(null);
   const prevAutoTranslateRef = useRef(autoTranslate);
   const prevAutoExplainRef = useRef(autoExplain);
+
+  useEffect(() => {
+    setLastReadRef(localStorage.getItem(`unified_last_page_${subjectCode}`));
+  }, [subjectCode, seenSlides]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -161,16 +168,35 @@ export const SlidesViewer: React.FC<SlidesViewerProps> = ({
 
   const handleCopySlideLink = (ref: string) => {
     const url = `${window.location.origin}${window.location.pathname}#${ref}`;
-    if (navigator.clipboard) {
-      navigator.clipboard.writeText(url).then(() => {
-        setCopiedSlideRef(ref);
-        setTimeout(() => setCopiedSlideRef(null), 2000);
-      });
+    const markCopied = () => {
+      setCopiedSlideRef(ref);
+      window.setTimeout(() => setCopiedSlideRef((prev) => (prev === ref ? null : prev)), 2000);
+    };
+    const fallbackCopy = () => {
+      try {
+        const ta = document.createElement("textarea");
+        ta.value = url;
+        ta.setAttribute("readonly", "");
+        ta.style.position = "fixed";
+        ta.style.opacity = "0";
+        document.body.appendChild(ta);
+        ta.select();
+        const ok = document.execCommand("copy");
+        document.body.removeChild(ta);
+        if (ok) markCopied();
+      } catch {
+        // تجاهل في البيئات التي تمنع النسخ
+      }
+    };
+    if (navigator.clipboard && typeof navigator.clipboard.writeText === "function") {
+      navigator.clipboard.writeText(url).then(markCopied).catch(fallbackCopy);
+    } else {
+      fallbackCopy();
     }
   };
 
   useEffect(() => {
-    if (!targetSlideRef) return;
+    if (!targetSlideRef || handledTargetRef.current === targetSlideRef) return;
     const target = resolveSlideReference(targetSlideRef, activeLectureId, slides);
     if (target && target.lecture_id && target.lecture_id !== activeLectureId) {
       selectLecture(target.lecture_id);
@@ -222,7 +248,19 @@ export const SlidesViewer: React.FC<SlidesViewerProps> = ({
   );
 
   useEffect(() => {
+    const activeJumpRef =
+      pendingResumeRef || (targetSlideRef && handledTargetRef.current !== targetSlideRef ? targetSlideRef : null);
+    if (activeJumpRef) {
+      const resolved = resolveSlideReference(activeJumpRef, activeLectureId, slides);
+      const targetRef = resolved ? resolved.ref : activeJumpRef;
+      const idx = currentSlides.findIndex((s) => s.ref === targetRef);
+      if (idx >= INITIAL_VISIBLE_COUNT) {
+        setVisibleLimit(idx + 15);
+        return;
+      }
+    }
     setVisibleLimit(INITIAL_VISIBLE_COUNT);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeLectureId, slideSearchQuery, seenFilter, slideSearchScope]);
 
   useEffect(() => {
@@ -238,7 +276,14 @@ export const SlidesViewer: React.FC<SlidesViewerProps> = ({
   useEffect(() => {
     if (!targetSlideRef || handledTargetRef.current === targetSlideRef) return;
     const resolved = resolveSlideReference(targetSlideRef, activeLectureId, slides);
-    const targetRef = resolved ? resolved.ref : targetSlideRef;
+    if (!resolved) {
+      if (slides.length > 0) {
+        handledTargetRef.current = targetSlideRef;
+        onTargetSlideHandled?.();
+      }
+      return;
+    }
+    const targetRef = resolved.ref;
     const idx = currentSlides.findIndex((s) => s.ref === targetRef);
     if (idx < 0) return;
     if (idx >= visibleLimit) {
@@ -248,7 +293,26 @@ export const SlidesViewer: React.FC<SlidesViewerProps> = ({
     handledTargetRef.current = targetSlideRef;
     rememberLastPage(targetRef);
     jumpDirectlyToSlide(targetRef);
-  }, [targetSlideRef, currentSlides, visibleLimit, activeLectureId, slides, rememberLastPage]);
+    onTargetSlideHandled?.();
+  }, [targetSlideRef, currentSlides, visibleLimit, activeLectureId, slides, rememberLastPage, onTargetSlideHandled]);
+
+  useEffect(() => {
+    if (!pendingResumeRef) return;
+    const idx = currentSlides.findIndex((s) => s.ref === pendingResumeRef);
+    if (idx < 0) {
+      if (slides.length > 0 && !slides.some((s) => s.ref === pendingResumeRef)) {
+        setPendingResumeRef(null);
+      }
+      return;
+    }
+    if (idx >= visibleLimit) {
+      setVisibleLimit(idx + 15);
+      return;
+    }
+    const refToJump = pendingResumeRef;
+    setPendingResumeRef(null);
+    jumpDirectlyToSlide(refToJump);
+  }, [pendingResumeRef, currentSlides, visibleLimit, slides]);
 
   // تحميل تدريجي تلقائي سلس عند اقتراب المستخدم من نهاية القائمة
   useEffect(() => {
@@ -321,15 +385,12 @@ export const SlidesViewer: React.FC<SlidesViewerProps> = ({
     if (!lastReadRef) return;
     const target = resolveSlideReference(lastReadRef, activeLectureId, slides);
     if (!target) return;
-    if (activeLectureId !== "all" && target.lecture_id !== activeLectureId) {
+    setSlideSearchQuery("");
+    setSeenFilter("all");
+    if (activeLectureId !== "all" && target.lecture_id && target.lecture_id !== activeLectureId) {
       selectLecture(target.lecture_id);
     }
-    const pool = activeLectureId === "all" ? slides : slides.filter((s) => s.lecture_id === target.lecture_id);
-    const idx = pool.findIndex((s) => s.ref === target.ref);
-    if (idx >= visibleLimit) {
-      setVisibleLimit(idx + 15);
-    }
-    jumpDirectlyToSlide(target.ref);
+    setPendingResumeRef(target.ref);
   };
 
   const isArShown = (ref: string) => (localAr[ref] !== undefined ? localAr[ref] : autoTranslate);
