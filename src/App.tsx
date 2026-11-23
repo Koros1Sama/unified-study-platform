@@ -544,6 +544,7 @@ export const App: React.FC = () => {
       const state = e.state;
       const parsed = parseLocationHash();
       lastHandledHashRef.current = { hash: window.location.hash, at: Date.now() };
+      setJumpReturn(null);
       const targetView = state?.view || parsed.view || "slides";
       let targetLec = state?.lec || parsed.lec;
       const targetModel = state?.model || parsed.model;
