@@ -76,8 +76,10 @@ export const SlidesViewer: React.FC<SlidesViewerProps> = ({
   });
 
   const [pageJumpInput, setPageJumpInput] = useState("");
-  const [activeNoteTab, setActiveNoteTab] = useState<Record<string, "both" | "ar" | "ex">>({});
   const [spreadExpanded, setSpreadExpanded] = useState<Record<string, boolean>>({});
+  const [isNarrowScreen, setIsNarrowScreen] = useState<boolean>(() =>
+    typeof window !== "undefined" ? window.innerWidth < 980 : false
+  );
   const [lastReadRef, setLastReadRef] = useState<string | null>(() =>
     localStorage.getItem(`unified_last_page_${subjectCode}`)
   );
@@ -93,6 +95,36 @@ export const SlidesViewer: React.FC<SlidesViewerProps> = ({
   const [copiedSlideRef, setCopiedSlideRef] = useState<string | null>(null);
   const [visibleLimit, setVisibleLimit] = useState(INITIAL_VISIBLE_COUNT);
   const sentinelRef = useRef<HTMLDivElement>(null);
+  const handledTargetRef = useRef<string | null>(null);
+  const prevAutoTranslateRef = useRef(autoTranslate);
+  const prevAutoExplainRef = useRef(autoExplain);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const mq = window.matchMedia("(max-width: 979px)");
+    const sync = () => setIsNarrowScreen(mq.matches);
+    sync();
+    mq.addEventListener("change", sync);
+    return () => mq.removeEventListener("change", sync);
+  }, []);
+
+  // مزامنة الأزرار العامة (ترجمة الكل / شرح الكل) مع حالات البطاقات الفردية
+  useEffect(() => {
+    if (prevAutoTranslateRef.current !== autoTranslate) {
+      prevAutoTranslateRef.current = autoTranslate;
+      setLocalAr({});
+    }
+  }, [autoTranslate]);
+
+  useEffect(() => {
+    if (prevAutoExplainRef.current !== autoExplain) {
+      prevAutoExplainRef.current = autoExplain;
+      setLocalEx({});
+    }
+  }, [autoExplain]);
+
+  const effectiveBookLayout: BookLayoutMode =
+    isNarrowScreen && bookLayout === "spread" ? "continuous" : bookLayout;
 
   const unitLabel = isBookMode ? "صفحة" : "شريحة";
   const unitsPlural = isBookMode ? "صفحات الكتاب" : "السلايدات";
@@ -194,20 +226,26 @@ export const SlidesViewer: React.FC<SlidesViewerProps> = ({
   }, [activeLectureId, slideSearchQuery, seenFilter, slideSearchScope]);
 
   useEffect(() => {
-    if (targetSlideRef) {
-      if (slideSearchQuery) setSlideSearchQuery("");
-      if (seenFilter !== "all") setSeenFilter("all");
+    if (!targetSlideRef) {
+      handledTargetRef.current = null;
+      return;
     }
-  }, [targetSlideRef, slideSearchQuery, seenFilter]);
+    if (handledTargetRef.current === targetSlideRef) return;
+    setSlideSearchQuery("");
+    setSeenFilter("all");
+  }, [targetSlideRef]);
 
   useEffect(() => {
-    if (!targetSlideRef) return;
+    if (!targetSlideRef || handledTargetRef.current === targetSlideRef) return;
     const resolved = resolveSlideReference(targetSlideRef, activeLectureId, slides);
     const targetRef = resolved ? resolved.ref : targetSlideRef;
     const idx = currentSlides.findIndex((s) => s.ref === targetRef);
-    if (idx >= 0 && idx >= visibleLimit) {
+    if (idx < 0) return;
+    if (idx >= visibleLimit) {
       setVisibleLimit(idx + 15);
+      return;
     }
+    handledTargetRef.current = targetSlideRef;
     rememberLastPage(targetRef);
     jumpDirectlyToSlide(targetRef);
   }, [targetSlideRef, currentSlides, visibleLimit, activeLectureId, slides, rememberLastPage]);
@@ -297,18 +335,27 @@ export const SlidesViewer: React.FC<SlidesViewerProps> = ({
   const isArShown = (ref: string) => (localAr[ref] !== undefined ? localAr[ref] : autoTranslate);
   const isExShown = (ref: string) => (localEx[ref] !== undefined ? localEx[ref] : autoExplain);
 
-  const toggleCardAr = (ref: string) => {
-    setLocalAr((prev) => ({
-      ...prev,
-      [ref]: prev[ref] !== undefined ? !prev[ref] : !autoTranslate
-    }));
-  };
-
   const toggleCardEx = (ref: string) => {
     setLocalEx((prev) => ({
       ...prev,
       [ref]: prev[ref] !== undefined ? !prev[ref] : !autoExplain
     }));
+  };
+
+  const setCardPanelMode = (ref: string, mode: "both" | "ar" | "ex" | "none") => {
+    const wantAr = mode === "both" || mode === "ar";
+    const wantEx = mode === "both" || mode === "ex";
+    setLocalAr((prev) => ({ ...prev, [ref]: wantAr }));
+    setLocalEx((prev) => ({ ...prev, [ref]: wantEx }));
+  };
+
+  const getCardPanelMode = (ref: string): "both" | "ar" | "ex" | "none" => {
+    const showAr = !arabicOnly && isArShown(ref);
+    const showEx = isExShown(ref);
+    if (showAr && showEx) return "both";
+    if (showAr) return "ar";
+    if (showEx) return "ex";
+    return "none";
   };
 
   const seenInScopeCount = useMemo(
@@ -326,52 +373,74 @@ export const SlidesViewer: React.FC<SlidesViewerProps> = ({
 
   // تجميع الصفحات في أزواج لوضع «صفحتان متقابلتان»
   const spreadPairs = useMemo(() => {
-    if (!isBookMode || bookLayout !== "spread") return [];
+    if (!isBookMode || effectiveBookLayout !== "spread") return [];
     const pairs: Array<[SlideItem, SlideItem | null]> = [];
     for (let i = 0; i < renderedSlides.length; i += 2) {
       pairs.push([renderedSlides[i], renderedSlides[i + 1] || null]);
     }
     return pairs;
-  }, [isBookMode, bookLayout, renderedSlides]);
+  }, [isBookMode, effectiveBookLayout, renderedSlides]);
 
-  const renderPagePanels = (slide: SlideItem, compactTabs = false) => {
-    const showAr = isArShown(slide.ref);
-    const showEx = isExShown(slide.ref);
-    const noteTab = activeNoteTab[slide.ref] || "both";
-    const visibleAr = !arabicOnly && showAr && (!compactTabs || noteTab === "both" || noteTab === "ar");
-    const visibleEx = showEx && (!compactTabs || noteTab === "both" || noteTab === "ex");
+  const renderPanelSegment = (ref: string) => {
+    if (arabicOnly) {
+      const showEx = isExShown(ref);
+      return (
+        <button
+          type="button"
+          className={`mini ex-btn ${showEx ? "on" : ""}`}
+          onClick={(e) => {
+            e.stopPropagation();
+            toggleCardEx(ref);
+          }}
+          title="إظهار أو طي الشرح التعليمي"
+        >
+          <Icons.Tip size={12} />
+          <span>شرح</span>
+        </button>
+      );
+    }
+
+    const activeMode = getCardPanelMode(ref);
+    return (
+      <div
+        className="sc-panel-seg"
+        role="group"
+        aria-label="عرض الترجمة والشرح"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {(
+          [
+            { id: "both", label: "الكل", title: "عرض الترجمة والشرح معاً" },
+            { id: "ar", label: "الترجمة", title: "عرض الترجمة العربية فقط" },
+            { id: "ex", label: "الشرح", title: "عرض الشرح التعليمي فقط" },
+            { id: "none", label: "إخفاء", title: "طي الترجمة والشرح للتركيز على الصفحة" }
+          ] as const
+        ).map((item) => (
+          <button
+            key={item.id}
+            type="button"
+            className={`sc-seg-btn ${activeMode === item.id ? "active" : ""} ${item.id === "none" ? "is-hide" : ""}`}
+            aria-pressed={activeMode === item.id}
+            title={item.title}
+            onClick={() => setCardPanelMode(ref, item.id)}
+          >
+            {item.label}
+          </button>
+        ))}
+      </div>
+    );
+  };
+
+  const renderPagePanels = (slide: SlideItem) => {
+    const visibleAr = !arabicOnly && isArShown(slide.ref);
+    const visibleEx = isExShown(slide.ref);
 
     if (!visibleAr && !visibleEx) {
-      return (
-        <div className="book-notes-collapsed">
-          <span>تم طي الترجمة والشرح — استخدم أزرار الشريط العلوي للعرض</span>
-        </div>
-      );
+      return null;
     }
 
     return (
       <>
-        {compactTabs && !arabicOnly && showAr && showEx && (
-          <div className="book-note-tabs" role="tablist" aria-label="تبويبات الشرح">
-            {[
-              { id: "both" as const, label: "الكل" },
-              { id: "ar" as const, label: "الترجمة" },
-              { id: "ex" as const, label: "الشرح" }
-            ].map((t) => (
-              <button
-                key={t.id}
-                type="button"
-                role="tab"
-                aria-selected={noteTab === t.id}
-                className={`book-note-tab ${noteTab === t.id ? "active" : ""}`}
-                onClick={() => setActiveNoteTab((prev) => ({ ...prev, [slide.ref]: t.id }))}
-              >
-                {t.label}
-              </button>
-            ))}
-          </div>
-        )}
-
         {visibleAr && (
           <div className="ar-panel show">
             <div className="ex-head" style={{ color: "var(--acc)", display: "flex", alignItems: "center", gap: "6px" }}>
@@ -421,8 +490,6 @@ export const SlidesViewer: React.FC<SlidesViewerProps> = ({
 
   const renderCardHeader = (slide: SlideItem, pageNumInList: number) => {
     const isSeen = seenSlides.has(slide.ref);
-    const showAr = isArShown(slide.ref);
-    const showEx = isExShown(slide.ref);
 
     return (
       <div className="sc-head">
@@ -438,32 +505,7 @@ export const SlidesViewer: React.FC<SlidesViewerProps> = ({
           {slide.title || slide.content_en || `${unitLabel} ${slide.slide_num}`}
         </span>
         <div className="sc-actions">
-          {!arabicOnly && (
-            <button
-              type="button"
-              className={`mini ar-btn ${showAr ? "on" : ""}`}
-              onClick={(e) => {
-                e.stopPropagation();
-                toggleCardAr(slide.ref);
-              }}
-              title="إظهار أو طي الترجمة العربية"
-            >
-              <Icons.Translate size={12} />
-              <span>ترجمة</span>
-            </button>
-          )}
-          <button
-            type="button"
-            className={`mini ex-btn ${showEx ? "on" : ""}`}
-            onClick={(e) => {
-              e.stopPropagation();
-              toggleCardEx(slide.ref);
-            }}
-            title="إظهار أو طي الشرح التعليمي"
-          >
-            <Icons.Tip size={12} />
-            <span>شرح</span>
-          </button>
+          {renderPanelSegment(slide.ref)}
           {onToggleSeenSlide && (
             <button
               type="button"
@@ -809,7 +851,7 @@ export const SlidesViewer: React.FC<SlidesViewerProps> = ({
             {isBookMode ? "لا توجد صفحات مطابقة حالياً" : "لا توجد شرائح متوفرة حالياً لهذه المحاضرة"}
           </div>
         </div>
-      ) : isBookMode && bookLayout === "spread" ? (
+      ) : isBookMode && effectiveBookLayout === "spread" ? (
         /* وضع صفحتين متقابلتين (Open Book Spread) */
         <div id="cards" className="book-spread-list">
           {spreadPairs.map(([leftSlide, rightSlide], pairIdx) => {
@@ -895,8 +937,11 @@ export const SlidesViewer: React.FC<SlidesViewerProps> = ({
                   <div className="book-spread-notes">
                     {[leftSlide, rightSlide].filter(Boolean).map((sl) => (
                       <div key={sl!.ref} className="book-spread-note-col">
-                        <div className="book-spread-note-ref">{sl!.ref} — {sl!.title}</div>
-                        {renderPagePanels(sl!, true)}
+                        <div className="book-spread-note-head">
+                          <span className="book-spread-note-ref">{sl!.ref} — {sl!.title}</span>
+                          {renderPanelSegment(sl!.ref)}
+                        </div>
+                        {renderPagePanels(sl!)}
                       </div>
                     ))}
                   </div>
@@ -911,7 +956,7 @@ export const SlidesViewer: React.FC<SlidesViewerProps> = ({
           id="cards"
           className={
             isBookMode
-              ? bookLayout === "split"
+              ? effectiveBookLayout === "split"
                 ? "book-cards-split"
                 : "book-cards-continuous"
               : undefined
@@ -922,7 +967,7 @@ export const SlidesViewer: React.FC<SlidesViewerProps> = ({
             const isSeen = seenSlides.has(slide.ref);
             const showAr = isArShown(slide.ref);
             const showEx = isExShown(slide.ref);
-            const isSplitBook = isBookMode && bookLayout === "split";
+            const isSplitBook = isBookMode && effectiveBookLayout === "split";
             const hasAnyPanel = (!arabicOnly && showAr) || showEx;
 
             return (
@@ -931,7 +976,7 @@ export const SlidesViewer: React.FC<SlidesViewerProps> = ({
                 id={`slide-${slide.ref}`}
                 data-ref={slide.ref}
                 className={`slide-card reveal in ${isSeen ? "seen" : ""} ${isTargeted ? "flash targeted" : ""} ${
-                  isBookMode ? `book-card book-layout-${bookLayout}` : ""
+                  isBookMode ? `book-card book-layout-${effectiveBookLayout}` : ""
                 } ${isSplitBook && !hasAnyPanel ? "book-notes-hidden" : ""}`}
               >
                 {renderCardHeader(slide, idx + 1)}
@@ -1003,9 +1048,9 @@ export const SlidesViewer: React.FC<SlidesViewerProps> = ({
                   </div>
 
                   {/* متن الشريحة/الصفحة: الترجمة والشرح */}
-                  {(!isSplitBook || hasAnyPanel) && (
+                  {hasAnyPanel && (
                     <div className={`sc-body ${isSplitBook ? "book-notes-pane" : ""}`}>
-                      {renderPagePanels(slide, isSplitBook)}
+                      {renderPagePanels(slide)}
                     </div>
                   )}
                 </div>

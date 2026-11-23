@@ -35,7 +35,7 @@ export const LightboxModal: React.FC<LightboxModalProps> = ({
   const [scale, setScale] = useState(1);
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const [isDragging, setIsDragging] = useState(false);
-  const [fitMode, setFitMode] = useState<"page" | "width">(() => (isBookMode ? "page" : "page"));
+  const [fitMode, setFitMode] = useState<"page" | "width">("page");
   const [showDrawer, setShowDrawer] = useState(true);
 
   const dragStart = useRef({ x: 0, y: 0 });
@@ -93,8 +93,9 @@ export const LightboxModal: React.FC<LightboxModalProps> = ({
     });
   }, []);
 
-  // عند تبديل الصفحة في وضع ملاءمة العرض نعود لأعلى الصفحة الجديدة
+  // عند تبديل الصفحة نعيد توسيط الإزاحة ونعود لأعلى الصفحة في وضع ملاءمة العرض
   useEffect(() => {
+    setPan({ x: 0, y: 0 });
     if (fitMode === "width" && stageRef.current) {
       stageRef.current.scrollTop = 0;
     }
@@ -265,19 +266,10 @@ export const LightboxModal: React.FC<LightboxModalProps> = ({
   return (
     <div
       id="lightboxModal"
-      className="lightbox-overlay lb active"
+      className="lightbox-overlay lb lb-overlay-root active"
       role="dialog"
       aria-modal="true"
       aria-label={`تكبير ${unitDefinite}`}
-      style={{
-        position: "fixed",
-        inset: 0,
-        backgroundColor: "rgba(0, 0, 0, 0.94)",
-        zIndex: 9000,
-        display: "flex",
-        flexDirection: "column",
-        overflow: "hidden"
-      }}
       onMouseUp={handleMouseUp}
       onTouchEnd={handleTouchEnd}
     >
@@ -381,76 +373,78 @@ export const LightboxModal: React.FC<LightboxModalProps> = ({
       </div>
 
       {/* منطقة عرض صورة الشريحة/الصفحة */}
-      <div
-        ref={stageRef}
-        className={`lb-stage ${fitMode === "width" ? "is-fit-width" : ""}`}
-        style={{
-          cursor: fitMode === "page" && scale > 1 ? (isDragging ? "grabbing" : "grab") : "default",
-          touchAction: fitMode === "width" ? "pan-y" : "none"
-        }}
-        onMouseDown={handleMouseDown}
-        onMouseMove={handleMouseMove}
-        onWheel={handleWheel}
-        onDoubleClick={handleDoubleTap}
-        onTouchStart={handleTouchStart}
-        onTouchMove={handleTouchMove}
-      >
-        {currentSlide.image_url ? (
-          <img
-            src={resolveAssetUrl(currentSlide.image_url)}
-            alt={currentSlide.title || currentSlide.ref}
-            className={`lb-img ${paperFilterClass} ${fitMode === "width" ? "is-fit-width" : ""}`}
-            style={
-              fitMode === "width"
-                ? undefined
-                : {
-                    transform: `translate(${pan.x}px, ${pan.y}px) scale(${scale})`,
-                    transition: isDragging ? "none" : "transform 0.15s ease-out"
-                  }
-            }
-            draggable={false}
-            onError={(e) => {
-              const target = e.currentTarget;
-              target.onerror = null;
-              target.src =
-                "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='800' height='450' viewBox='0 0 800 450'><rect width='100%' height='100%' fill='%23191c24'/><text x='50%' y='50%' dominant-baseline='middle' text-anchor='middle' fill='%23f5b13d' font-family='sans-serif' font-size='24' font-weight='bold'>" +
-                encodeURIComponent(`${unitLabel} ${currentSlide.ref}`) +
-                "</text></svg>";
-            }}
-          />
-        ) : (
-          <div
-            dir="ltr"
-            style={{
-              maxWidth: "780px",
-              width: "88vw",
-              maxHeight: "74vh",
-              overflowY: "auto",
-              padding: "28px 32px",
-              borderRadius: "16px",
-              background: "var(--sf)",
-              border: "1px solid var(--ln)",
-              color: "var(--ink)",
-              textAlign: "left",
-              transform: `translate(${pan.x}px, ${pan.y}px) scale(${scale})`,
-              transition: isDragging ? "none" : "transform 0.15s ease-out"
-            }}
-          >
-            <div style={{ fontFamily: "var(--fm)", fontSize: "0.85rem", fontWeight: 800, color: "var(--acc)", marginBottom: 8 }}>
-              {currentSlide.ref}
-            </div>
-            <h3 style={{ margin: "0 0 14px", fontSize: "1.2rem", fontWeight: 800, color: "var(--ink)" }}>
-              {currentSlide.title || currentSlide.ref}
-            </h3>
-            {currentSlide.content_en && (
-              <div style={{ fontFamily: "var(--fm)", fontSize: "0.95rem", lineHeight: 1.7, color: "var(--ink-m)", whiteSpace: "pre-wrap" }}>
-                {currentSlide.content_en}
+      <div className="lb-stage-shell">
+        <div
+          ref={stageRef}
+          className={`lb-stage ${fitMode === "width" ? "is-fit-width" : ""}`}
+          style={{
+            cursor: fitMode === "page" && scale > 1 ? (isDragging ? "grabbing" : "grab") : "default",
+            touchAction: fitMode === "width" ? "pan-y" : "none"
+          }}
+          onMouseDown={handleMouseDown}
+          onMouseMove={handleMouseMove}
+          onWheel={handleWheel}
+          onDoubleClick={handleDoubleTap}
+          onTouchStart={handleTouchStart}
+          onTouchMove={handleTouchMove}
+        >
+          {currentSlide.image_url ? (
+            <img
+              src={resolveAssetUrl(currentSlide.image_url)}
+              alt={currentSlide.title || currentSlide.ref}
+              className={`lb-img ${paperFilterClass} ${fitMode === "width" ? "is-fit-width" : ""}`}
+              style={
+                fitMode === "width"
+                  ? undefined
+                  : {
+                      transform: `translate(${pan.x}px, ${pan.y}px) scale(${scale})`,
+                      transition: isDragging ? "none" : "transform 0.15s ease-out"
+                    }
+              }
+              draggable={false}
+              onError={(e) => {
+                const target = e.currentTarget;
+                target.onerror = null;
+                target.src =
+                  "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='800' height='450' viewBox='0 0 800 450'><rect width='100%' height='100%' fill='%23191c24'/><text x='50%' y='50%' dominant-baseline='middle' text-anchor='middle' fill='%23f5b13d' font-family='sans-serif' font-size='24' font-weight='bold'>" +
+                  encodeURIComponent(`${unitLabel} ${currentSlide.ref}`) +
+                  "</text></svg>";
+              }}
+            />
+          ) : (
+            <div
+              dir="ltr"
+              style={{
+                maxWidth: "780px",
+                width: "88vw",
+                maxHeight: "74vh",
+                overflowY: "auto",
+                padding: "28px 32px",
+                borderRadius: "16px",
+                background: "var(--sf)",
+                border: "1px solid var(--ln)",
+                color: "var(--ink)",
+                textAlign: "left",
+                transform: `translate(${pan.x}px, ${pan.y}px) scale(${scale})`,
+                transition: isDragging ? "none" : "transform 0.15s ease-out"
+              }}
+            >
+              <div style={{ fontFamily: "var(--fm)", fontSize: "0.85rem", fontWeight: 800, color: "var(--acc)", marginBottom: 8 }}>
+                {currentSlide.ref}
               </div>
-            )}
-          </div>
-        )}
+              <h3 style={{ margin: "0 0 14px", fontSize: "1.2rem", fontWeight: 800, color: "var(--ink)" }}>
+                {currentSlide.title || currentSlide.ref}
+              </h3>
+              {currentSlide.content_en && (
+                <div style={{ fontFamily: "var(--fm)", fontSize: "0.95rem", lineHeight: 1.7, color: "var(--ink-m)", whiteSpace: "pre-wrap" }}>
+                  {currentSlide.content_en}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
 
-        {/* أزرار التنقل بين الصفحات/الشرائح */}
+        {/* أزرار التنقل بين الصفحات/الشرائح (ثابتة بمنتصف المساحة المرئية حتى مع التمرير) */}
         {currentIndex > 0 && (
           <button
             type="button"
@@ -485,6 +479,19 @@ export const LightboxModal: React.FC<LightboxModalProps> = ({
       {/* شريط الشرح والترجمة السفلي القابل للطي */}
       {showDrawer && hasTextNotes && (
         <div className="lb-drawer">
+          <div className="lb-drawer-bar">
+            <span className="lb-drawer-title">الترجمة والشرح ({currentSlide.ref})</span>
+            <button
+              type="button"
+              className="lb-drawer-close"
+              onClick={() => setShowDrawer(false)}
+              aria-label="طي الشرح لتكبير الصفحة"
+              title="طي الشرح لتكبير الصفحة"
+            >
+              <Icons.ChevronDown size={14} />
+              <span>طي</span>
+            </button>
+          </div>
           {!arabicOnly && currentSlide.content_ar && (
             <div className="lb-drawer-sec">
               <strong style={{ color: "var(--acc)" }}>الترجمة: </strong>
