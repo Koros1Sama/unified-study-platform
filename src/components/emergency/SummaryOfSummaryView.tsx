@@ -4,7 +4,7 @@
 // cards · tf_list · timeline. Search, doctor tips, review marks. Zero Emojis.
 // ==============================================================================
 
-import React, { useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Icons } from "../icons/SvgIcons";
 import { CramInteractiveWidget } from "./CramInteractiveWidget";
 import { useFitTables } from "../../lib/useFitTables";
@@ -66,19 +66,55 @@ export const SummaryOfSummaryView: React.FC<SummaryOfSummaryViewProps> = ({
   onJumpToSlide
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
-  const [selectedSectionFilter, setSelectedSectionFilter] = useState<string>("all");
+  const [activeSectionId, setActiveSectionId] = useState<string>("all");
   const [query, setQuery] = useState("");
   const [showTips, setShowTips] = useState(true);
 
   const sections = data?.sections || [];
 
+  // عرض متواصل لجميع أقسام ملخص الملخص مع تصفية فورية عند البحث فقط
   const filteredSections = useMemo(() => {
-    return sections.filter((section) => {
-      if (selectedSectionFilter !== "all" && section.id !== selectedSectionFilter) return false;
-      if (!query.trim()) return true;
-      return matchesNormalizedTerms(sectionSearchBlob(section), query);
+    if (!query.trim()) return sections;
+    return sections.filter((section) => matchesNormalizedTerms(sectionSearchBlob(section), query));
+  }, [sections, query]);
+
+  const scrollToSection = (sectionId: string) => {
+    setActiveSectionId(sectionId);
+    if (sectionId === "all") {
+      window.scrollTo({ top: 0, behavior: "smooth" });
+      return;
+    }
+    if (query.trim()) setQuery("");
+    window.requestAnimationFrame(() => {
+      const el = document.getElementById(sectionId);
+      if (el) {
+        el.scrollIntoView({ behavior: "smooth", block: "start" });
+        el.classList.remove("focus-glow");
+        void el.offsetWidth;
+        el.classList.add("focus-glow");
+        window.setTimeout(() => el.classList.remove("focus-glow"), 1400);
+      }
     });
-  }, [sections, selectedSectionFilter, query]);
+  };
+
+  useEffect(() => {
+    if (typeof IntersectionObserver === "undefined" || filteredSections.length === 0) return;
+    const nodes = Array.from(containerRef.current?.querySelectorAll<HTMLElement>("section.em-card[id]") || []);
+    if (nodes.length === 0) return;
+    const io = new IntersectionObserver(
+      (entries) => {
+        const visible = entries
+          .filter((e) => e.isIntersecting)
+          .sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top);
+        if (visible[0]?.target?.id) {
+          setActiveSectionId(visible[0].target.id);
+        }
+      },
+      { rootMargin: "-15% 0px -65% 0px", threshold: 0.01 }
+    );
+    nodes.forEach((n) => io.observe(n));
+    return () => io.disconnect();
+  }, [filteredSections]);
 
   useFitTables(containerRef, [filteredSections]);
 
@@ -175,20 +211,20 @@ export const SummaryOfSummaryView: React.FC<SummaryOfSummaryViewProps> = ({
         </span>
       </div>
 
-      <div className="fchips" id="emergencyChips">
+      <div className="fchips summary-jump-strip" id="emergencyChips" aria-label="الانتقال السريع بين أقسام ملخص الملخص">
         <button
           type="button"
-          className={`fchip ${selectedSectionFilter === "all" ? "on" : ""}`}
-          onClick={() => setSelectedSectionFilter("all")}
+          className={`fchip ${activeSectionId === "all" ? "on" : ""}`}
+          onClick={() => scrollToSection("all")}
         >
-          الكل (جميع الأجزاء)
+          البداية ({sections.length})
         </button>
         {sections.map((sec) => (
           <button
             key={sec.id}
             type="button"
-            className={`fchip ${selectedSectionFilter === sec.id ? "on" : ""}`}
-            onClick={() => setSelectedSectionFilter(sec.id)}
+            className={`fchip ${activeSectionId === sec.id ? "on" : ""}`}
+            onClick={() => scrollToSection(sec.id)}
           >
             {sec.nav_title || sec.title}
           </button>

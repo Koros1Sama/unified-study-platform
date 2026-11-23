@@ -351,10 +351,10 @@ export const UnifiedAppHeader: React.FC<UnifiedAppHeaderProps> = ({
               <path d="M9 11h6"/>
             </svg>
           </span>
-          <span>
-            <span id="brandName" style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}>
-              {currentSubject.name_ar}
-              <svg className="svg-ic" style={{ width: 14, height: 14, opacity: 0.7 }} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+          <span className="brand-copy">
+            <span id="brandName" className="brand-name-row">
+              <span className="brand-name-txt">{currentSubject.name_ar}</span>
+              <svg className="svg-ic brand-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                 <polyline points="6 9 12 15 18 9"/>
               </svg>
             </span>

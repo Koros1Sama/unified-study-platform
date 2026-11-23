@@ -118,8 +118,8 @@ export const CompanionNavigation: React.FC<CompanionNavigationProps> = ({
       return [
         {
           id: "all",
-          label: "الكل",
-          title: "كل أجزاء الملخص",
+          label: "البداية",
+          title: "أعلى الملخص المتواصل",
           active: activeLectureId === "all",
           onClick: () => {
             onSelectLecture?.("all");
@@ -134,7 +134,12 @@ export const CompanionNavigation: React.FC<CompanionNavigationProps> = ({
           done: reviewedParts.includes(p.id),
           onClick: () => {
             onSelectLecture?.(p.id);
-            window.scrollTo({ top: 0, behavior: "smooth" });
+            const targetEl = document.getElementById(`part-${p.id}`);
+            if (targetEl) {
+              targetEl.scrollIntoView({ behavior: "smooth", block: "start" });
+            } else {
+              window.scrollTo({ top: 0, behavior: "smooth" });
+            }
           }
         }))
       ];
@@ -475,10 +480,15 @@ export const CompanionNavigation: React.FC<CompanionNavigationProps> = ({
               <button
                 type="button"
                 className={`lec-btn ${activeLectureId === "all" ? "active" : ""}`}
-                onClick={() => onSelectLecture && onSelectLecture("all")}
+                onClick={() => {
+                  onSelectLecture?.("all");
+                  if (activeView === "summary") {
+                    window.scrollTo({ top: 0, behavior: "smooth" });
+                  }
+                }}
               >
                 <span className="lt">
-                  <span>{isBookLayout ? "كل الفصول" : "كل المحاضرات"}</span>
+                  <span>{activeView === "summary" ? "أعلى الملخص المتواصل" : isBookLayout ? "كل الفصول" : "كل المحاضرات"}</span>
                   <span className="cnt">{lectures.length} {isBookLayout ? "فصل" : "محاضرة"}</span>
                 </span>
               </button>
@@ -490,7 +500,15 @@ export const CompanionNavigation: React.FC<CompanionNavigationProps> = ({
                     key={lec.id}
                     type="button"
                     className={`lec-btn ${isActive ? "active" : ""}`}
-                    onClick={() => onSelectLecture && onSelectLecture(lec.id)}
+                    onClick={() => {
+                      onSelectLecture?.(lec.id);
+                      if (activeView === "summary") {
+                        const targetEl = document.getElementById(`part-${lec.id}`);
+                        if (targetEl) {
+                          targetEl.scrollIntoView({ behavior: "smooth", block: "start" });
+                        }
+                      }
+                    }}
                   >
                     <span className="lt">
                       <span>{lec.id}: {lec.title_ar}</span>

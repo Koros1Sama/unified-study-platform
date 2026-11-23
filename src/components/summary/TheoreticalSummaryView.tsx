@@ -78,25 +78,69 @@ export const TheoreticalSummaryView: React.FC<TheoreticalSummaryViewProps> = ({
     activeLectureId && activeLectureId !== "all" ? activeLectureId : "all"
   );
 
-  useEffect(() => {
-    setActivePart(activeLectureId && activeLectureId !== "all" ? activeLectureId : "all");
-  }, [activeLectureId]);
-
   const parts = data?.parts || [];
 
+  // الشرح والملخص النظري متواصل بالكامل (للهاتف والحاسوب) — التصفية تتم فقط عند الكتابة في مربع البحث
   const filteredParts = useMemo(() => {
     const hasQuery = Boolean(query.trim());
+    if (!hasQuery) return parts;
     return parts
-      .filter((part) => activePart === "all" || part.lec === activePart)
       .map((part) => {
-        if (!hasQuery) return part;
         const blocks = part.blocks.filter((block) =>
           matchesNormalizedTerms([part.title, part.lec, blockText(block)].join(" "), query)
         );
         return { ...part, blocks };
       })
-      .filter((part) => !hasQuery || part.blocks.length > 0);
-  }, [parts, query, activePart]);
+      .filter((part) => part.blocks.length > 0);
+  }, [parts, query]);
+
+  const scrollToSummaryPart = (lecId: string) => {
+    setActivePart(lecId);
+    onSelectLecture?.(lecId);
+    if (lecId === "all") {
+      window.scrollTo({ top: 0, behavior: "smooth" });
+      return;
+    }
+    if (query.trim()) setQuery("");
+    window.requestAnimationFrame(() => {
+      const el = document.getElementById(`part-${lecId}`);
+      if (el) {
+        el.scrollIntoView({ behavior: "smooth", block: "start" });
+        el.classList.remove("focus-glow");
+        void el.offsetWidth;
+        el.classList.add("focus-glow");
+        window.setTimeout(() => el.classList.remove("focus-glow"), 1400);
+      }
+    });
+  };
+
+  useEffect(() => {
+    setActivePart(activeLectureId && activeLectureId !== "all" ? activeLectureId : "all");
+  }, [activeLectureId]);
+
+  // تتبع الفصل الظاهر حالياً أثناء التمرير المتواصل (Scroll-Spy)
+  useEffect(() => {
+    if (typeof IntersectionObserver === "undefined" || filteredParts.length === 0) return;
+    const sections = Array.from(
+      containerRef.current?.querySelectorAll<HTMLElement>("section.part[id^='part-']") || []
+    );
+    if (sections.length === 0) return;
+
+    const io = new IntersectionObserver(
+      (entries) => {
+        const visible = entries
+          .filter((e) => e.isIntersecting)
+          .sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top);
+        if (visible[0]?.target?.id) {
+          const lec = visible[0].target.id.replace(/^part-/, "");
+          if (lec) setActivePart(lec);
+        }
+      },
+      { rootMargin: "-15% 0px -65% 0px", threshold: 0.01 }
+    );
+    sections.forEach((sec) => io.observe(sec));
+    return () => io.disconnect();
+  }, [filteredParts]);
 
   useFitTables(containerRef, [filteredParts]);
 
@@ -242,26 +286,21 @@ export const TheoreticalSummaryView: React.FC<TheoreticalSummaryViewProps> = ({
         </span>
       </div>
 
-      <div className="fchips summary-chips">
+      <div className="fchips summary-chips summary-jump-strip" aria-label="الانتقال السريع بين الفصول">
         <button
           type="button"
           className={`fchip ${activePart === "all" ? "on" : ""}`}
-          onClick={() => {
-            setActivePart("all");
-            onSelectLecture?.("all");
-          }}
+          onClick={() => scrollToSummaryPart("all")}
         >
-          كل المحاضرات
+          البداية ({parts.length})
         </button>
         {parts.map((part) => (
           <button
             key={part.lec}
             type="button"
             className={`fchip ${activePart === part.lec ? "on" : ""}`}
-            onClick={() => {
-              setActivePart(part.lec);
-              onSelectLecture?.(part.lec);
-            }}
+            onClick={() => scrollToSummaryPart(part.lec)}
+            title={part.title}
           >
             {part.lec} {reviewedParts.includes(part.lec) ? "· تمت" : ""}
           </button>

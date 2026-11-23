@@ -252,16 +252,22 @@
   align-items: center;
   gap: 10px;
   flex-wrap: wrap;
+  width: 100%;
+  max-width: 100%;
   margin-bottom: 12px;
 }
 .def-search {
   position: relative;
-  flex: 1;
-  min-width: 260px;
+  flex: 1 1 220px;
+  min-width: 0;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  overflow: hidden;
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 0 16px;
+  padding: 0 14px;
   background: var(--sf);
   border: 1px solid var(--ln);
   border-radius: var(--r-pill);
@@ -275,7 +281,10 @@
 }
 .def-search .svg-ic { color: var(--acc); flex: none; }
 .def-search input {
-  flex: 1;
+  flex: 1 1 0;
+  min-width: 0;
+  width: 100%;
+  max-width: 100%;
   padding: 10px 0;
   background: transparent;
   border: none;
@@ -3031,8 +3040,73 @@ body.header-hidden .book-card.book-layout-split .book-page-wrap {
 /* ==============================================================================
    تحسينات تجربة الجوال الشاملة (ترويسة، إعدادات، بطاقات، بحث حي، نوافذ، ومنع زوم iOS)
    ============================================================================== */
-.unified-search-box input {
+.unified-search-box {
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+.unified-search-box input,
+.bank-search input,
+.manual-q-input input {
   min-width: 0;
+  width: 100%;
+  max-width: 100%;
+}
+
+/* شريط قفز متواصل بسطر واحد للملخص وملخص الملخص (بدون تكديس 3 صفوف أو تكرار مع الشريط السفلي على الجوال) */
+.summary-jump-strip {
+  display: flex;
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  gap: 6px;
+  padding-bottom: 6px;
+  margin-bottom: 14px;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+}
+
+.summary-jump-strip::-webkit-scrollbar {
+  display: none;
+}
+
+.summary-jump-strip .fchip {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
+/* تنسيق اسم المادة في الهيدر العلوي بقطع نظيف دون تشويه الحروف العربية */
+.brand-copy {
+  min-width: 0;
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.brand-name-row {
+  display: inline-flex !important;
+  align-items: center;
+  gap: 5px;
+  max-width: 100%;
+  min-width: 0;
+  overflow: visible !important;
+  text-overflow: clip !important;
+}
+
+.brand-name-txt {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.brand-chevron {
+  flex: 0 0 auto;
+  width: 14px;
+  height: 14px;
+  opacity: 0.72;
 }
 
 .slide-search-scope {
@@ -3065,6 +3139,9 @@ body.header-hidden .book-card.book-layout-split .book-page-wrap {
 }
 
 @media (max-width: 900px) {
+  .summary-jump-strip {
+    display: none;
+  }
   .brand {
     max-width: 100% !important;
   }
@@ -3120,6 +3197,35 @@ body.header-hidden .book-card.book-layout-split .book-page-wrap {
 }
 
 @media (max-width: 680px) {
+  .headline {
+    margin-bottom: 12px !important;
+    padding-bottom: 10px !important;
+  }
+  .headline h1 {
+    font-size: 1.1rem !important;
+    line-height: 1.35 !important;
+    margin: 4px 0 !important;
+  }
+  .headline .sub {
+    font-size: 0.8rem !important;
+    line-height: 1.55 !important;
+    margin-top: 2px !important;
+  }
+  .em-progress {
+    padding: 8px 12px !important;
+    margin-bottom: 10px !important;
+  }
+  .def-toolbar {
+    gap: 7px !important;
+    margin-bottom: 10px !important;
+  }
+  .def-search {
+    padding: 0 12px;
+    gap: 8px;
+  }
+  .def-search input {
+    padding: 8px 0;
+  }
   .book-studio-bar {
     padding: 10px;
     gap: 8px;
