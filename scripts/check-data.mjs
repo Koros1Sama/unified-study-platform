@@ -16,8 +16,26 @@ const SUBJECTS_PATH = path.join(PUBLIC_DIR, "data", "subjects.json");
 const errors = [];
 const stats = [];
 
+const UNSAFE_HTML_CHECKS = [
+  { label: "<script>", re: /<\s*script\b/i },
+  { label: "<iframe>", re: /<\s*iframe\b/i },
+  { label: "<object>", re: /<\s*object\b/i },
+  { label: "<embed>", re: /<\s*embed\b/i },
+  { label: "<style>", re: /<\s*style\b/i },
+  { label: "<link>", re: /<\s*link\b/i },
+  { label: "<meta>", re: /<\s*meta\b/i },
+  { label: "<base>", re: /<\s*base\b/i },
+  { label: "<form>", re: /<\s*form\b/i },
+  { label: "<svg>", re: /<\s*svg\b/i },
+  { label: "inline event handler (on*=)", re: /<[^<>]*(?:\s|\/)on[a-z]+\s*=/i },
+  { label: "javascript: URI", re: /\bjavascript\s*:/i },
+  { label: "vbscript: URI", re: /\bvbscript\s*:/i },
+  { label: "data:text/html URI", re: /data\s*:\s*text\/html/i }
+];
+
 function checkImageExists(relUrl, label) {
   if (!relUrl) return;
+  if (/^(https?:|\/\/|data:|blob:)/i.test(String(relUrl))) return;
   const cleaned = String(relUrl).replace(/^\/+/, "");
   const fullPath = path.join(PUBLIC_DIR, cleaned);
   if (!fs.existsSync(fullPath)) {
@@ -66,8 +84,10 @@ function main() {
     }
 
     const rawText = fs.readFileSync(bundlePath, "utf-8");
-    if (/<script\b/i.test(rawText)) {
-      errors.push(`[${subj.code}] Unsafe <script> tag detected in bundle.json`);
+    for (const check of UNSAFE_HTML_CHECKS) {
+      if (check.re.test(rawText)) {
+        errors.push(`[${subj.code}] Unsafe HTML (${check.label}) detected in bundle.json`);
+      }
     }
 
     let bundle;
@@ -87,9 +107,42 @@ function main() {
       );
     }
 
-    // 1. Validate questions
-    const seenQIds = new Set();
+    const lectures = Array.isArray(bundle.lectures) ? bundle.lectures : [];
+    const tables = Array.isArray(bundle.tables) ? bundle.tables : [];
+    const models = Array.isArray(bundle.question_models) ? bundle.question_models : [];
     const questions = Array.isArray(bundle.questions) ? bundle.questions : [];
+
+    // 0. Validate subjects.json metadata count parity
+    if (typeof subj.lectures_count === "number" && subj.lectures_count !== lectures.length) {
+      errors.push(
+        `[${subj.code}] lectures_count mismatch: subjects.json=${subj.lectures_count} vs bundle.json=${lectures.length}`
+      );
+    }
+    if (typeof subj.questions_count === "number" && subj.questions_count !== questions.length) {
+      errors.push(
+        `[${subj.code}] questions_count mismatch: subjects.json=${subj.questions_count} vs bundle.json=${questions.length}`
+      );
+    }
+    if (typeof subj.tables_count === "number" && subj.tables_count !== tables.length) {
+      errors.push(
+        `[${subj.code}] tables_count mismatch: subjects.json=${subj.tables_count} vs bundle.json=${tables.length}`
+      );
+    }
+
+    // 1. Validate question_models and questions
+    const modelIds = new Set();
+    for (const m of models) {
+      if (!m?.id) {
+        errors.push(`[${subj.code}] Question model missing id`);
+        continue;
+      }
+      if (modelIds.has(m.id)) {
+        errors.push(`[${subj.code}] Duplicate question model id: ${m.id}`);
+      }
+      modelIds.add(m.id);
+    }
+
+    const seenQIds = new Set();
     for (const q of questions) {
       if (!q.id) {
         errors.push(`[${subj.code}] Question missing id`);
@@ -99,6 +152,16 @@ function main() {
         errors.push(`[${subj.code}] Duplicate question id: ${q.id}`);
       }
       seenQIds.add(q.id);
+
+      if (!q.model_id || (modelIds.size > 0 && !modelIds.has(q.model_id))) {
+        errors.push(
+          `[${subj.code}] Question ${q.id} references unknown model_id="${q.model_id}"`
+        );
+      }
+
+      if (q.image_url) {
+        checkImageExists(q.image_url, `${subj.code} question ${q.id}`);
+      }
 
       if (q.type !== "essay") {
         const opts = Array.isArray(q.options_en) ? q.options_en : [];
@@ -117,13 +180,32 @@ function main() {
       }
     }
 
-    // 2. Validate slide images
+    // 2. Validate explanatory tables (imps alignment & bounds)
+    for (const tbl of tables) {
+      const rows = Array.isArray(tbl.rows) ? tbl.rows : [];
+      if (!Array.isArray(tbl.imps) || tbl.imps.length !== rows.length) {
+        errors.push(
+          `[${subj.code}] Table ${tbl.id || "(no id)"} imps length mismatch: imps=${Array.isArray(tbl.imps) ? tbl.imps.length : "missing"} vs rows=${rows.length}`
+        );
+      } else {
+        const invalidImp = tbl.imps.find(
+          (val) => typeof val !== "number" || !Number.isFinite(val) || val < 1 || val > 5
+        );
+        if (invalidImp !== undefined) {
+          errors.push(
+            `[${subj.code}] Table ${tbl.id || "(no id)"} has out-of-range imp value: ${invalidImp}`
+          );
+        }
+      }
+    }
+
+    // 3. Validate slide images
     const slides = Array.isArray(bundle.slides) ? bundle.slides : [];
     for (const s of slides) {
       checkImageExists(s.image_url, `${subj.code} slide ${s.ref}`);
     }
 
-    // 3. Validate lab slide images
+    // 4. Validate lab slide images
     const labSlides = Array.isArray(bundle.lab?.slides) ? bundle.lab.slides : [];
     for (const ls of labSlides) {
       checkImageExists(ls.image_url, `${subj.code} lab ${ls.ref}`);

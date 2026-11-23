@@ -54,21 +54,52 @@ export function useFitTables(
   disabled = false
 ): void {
   useEffect(() => {
-    const run = () => fitTablesInElement(containerRef.current, disabled);
-    const rafId = window.requestAnimationFrame(run);
-    const timer = window.setTimeout(run, 140);
+    let pendingRaf = 0;
+    let lastWidth = -1;
 
-    window.addEventListener("resize", run);
+    const scheduleFit = (force = false) => {
+      const el = containerRef.current;
+      if (!el) return;
+      const nextWidth = Math.round(el.clientWidth);
+      if (!force && nextWidth === lastWidth) return;
+
+      if (pendingRaf) {
+        window.cancelAnimationFrame(pendingRaf);
+      }
+      pendingRaf = window.requestAnimationFrame(() => {
+        pendingRaf = 0;
+        const currentEl = containerRef.current;
+        if (!currentEl) return;
+        lastWidth = Math.round(currentEl.clientWidth);
+        fitTablesInElement(currentEl, disabled);
+      });
+    };
+
+    const handleResize = () => scheduleFit(false);
+
+    scheduleFit(true);
+    const timer = window.setTimeout(() => scheduleFit(true), 140);
+
+    window.addEventListener("resize", handleResize);
     let ro: ResizeObserver | null = null;
     if (typeof ResizeObserver !== "undefined" && containerRef.current) {
-      ro = new ResizeObserver(() => run());
+      ro = new ResizeObserver((entries) => {
+        const entryWidth = entries[0]?.contentRect?.width;
+        const nextWidth =
+          typeof entryWidth === "number"
+            ? Math.round(entryWidth)
+            : Math.round(containerRef.current?.clientWidth ?? -1);
+        if (nextWidth !== lastWidth) {
+          scheduleFit(false);
+        }
+      });
       ro.observe(containerRef.current);
     }
 
     return () => {
-      window.cancelAnimationFrame(rafId);
+      if (pendingRaf) window.cancelAnimationFrame(pendingRaf);
       window.clearTimeout(timer);
-      window.removeEventListener("resize", run);
+      window.removeEventListener("resize", handleResize);
       ro?.disconnect();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps

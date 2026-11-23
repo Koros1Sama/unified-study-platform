@@ -62,22 +62,128 @@ export function highlightSearchText(text: string, query: string): React.ReactNod
   );
 }
 
+const ALLOWED_STUDY_HTML_TAGS = new Set([
+  "b",
+  "strong",
+  "i",
+  "em",
+  "u",
+  "s",
+  "sub",
+  "sup",
+  "br",
+  "code",
+  "pre",
+  "span",
+  "p",
+  "div",
+  "ul",
+  "ol",
+  "li",
+  "small",
+  "mark",
+  "hr",
+  "kbd"
+]);
+
+const VOID_STUDY_HTML_TAGS = new Set(["br", "hr"]);
+const SAFE_CLASS_VALUE_RE = /^[a-zA-Z0-9_\-\s]+$/;
+const SAFE_DIR_VALUES = new Set(["ltr", "rtl", "auto"]);
+const HTML_ATTR_RE =
+  /([a-zA-Z][a-zA-Z0-9-]*)\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'=<>`]+))/g;
+
+function extractSafeTagAttributes(rawAttrs: string | undefined): string {
+  if (!rawAttrs) return "";
+  let safeClass = "";
+  let safeDir = "";
+  HTML_ATTR_RE.lastIndex = 0;
+
+  let match: RegExpExecArray | null;
+  while ((match = HTML_ATTR_RE.exec(rawAttrs)) !== null) {
+    const name = match[1].toLowerCase();
+    const val = (match[2] ?? match[3] ?? match[4] ?? "").trim();
+    if (!val) continue;
+
+    if (name === "class") {
+      if (SAFE_CLASS_VALUE_RE.test(val)) {
+        safeClass = val.replace(/\s+/g, " ");
+      }
+    } else if (name === "dir") {
+      const lower = val.toLowerCase();
+      if (SAFE_DIR_VALUES.has(lower)) {
+        safeDir = lower;
+      }
+    }
+  }
+
+  let out = "";
+  if (safeClass) out += ` class="${safeClass}"`;
+  if (safeDir) out += ` dir="${safeDir}"`;
+  return out;
+}
+
 /**
- * تعقيم خفيف للـ HTML المولّد من الحزم لمنع أي حقن XSS مع الإبقاء على وسوم التنسيق الآمنة.
+ * تعقيم صارم بقائمة بيضاء للوسوم الآمنة فقط (Allowlist Sanitizer):
+ * يحمي من ثغرات XSS ويعالج تعابير ديراك الكمية (مثل <u|v> و<u|rho|u> و<A>)
+ * بتهريب أي وسم غير مسموح إلى &lt; مع اشتراط حدود دقيقة للوسم (?:/?>|\s).
  */
 export function sanitizeStudyHtml(raw: string): string {
   if (!raw) return "";
-  return String(raw)
-    .replace(/<\s*(script|iframe|object|embed|style|link|meta|base|form)[^>]*>[\s\S]*?<\s*\/\s*\1\s*>/gi, "")
-    .replace(/<\s*(script|iframe|object|embed|style|link|meta|base|form)[^>]*\/?>/gi, "")
-    .replace(/\son[a-z]+\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+)/gi, "")
-    .replace(/(href|src)\s*=\s*(["'])\s*(?:javascript|vbscript|data:text\/html):[^"']*\2/gi, '$1="#"');
+  const input = String(raw);
+  const closeTagRe = /<\/([a-zA-Z]+)\s*>/y;
+  const openTagRe = /<([a-zA-Z]+)(?=\/?>|\s)(\s[^<>]*?)?\s*(\/?)>/y;
+
+  let out = "";
+  let pos = 0;
+
+  while (pos < input.length) {
+    const ltIdx = input.indexOf("<", pos);
+    if (ltIdx === -1) {
+      out += input.slice(pos);
+      break;
+    }
+
+    if (ltIdx > pos) {
+      out += input.slice(pos, ltIdx);
+    }
+
+    closeTagRe.lastIndex = ltIdx;
+    const closeMatch = closeTagRe.exec(input);
+    if (closeMatch) {
+      const tag = closeMatch[1].toLowerCase();
+      if (ALLOWED_STUDY_HTML_TAGS.has(tag) && !VOID_STUDY_HTML_TAGS.has(tag)) {
+        out += `</${tag}>`;
+        pos = closeTagRe.lastIndex;
+        continue;
+      }
+    }
+
+    openTagRe.lastIndex = ltIdx;
+    const openMatch = openTagRe.exec(input);
+    if (openMatch) {
+      const tag = openMatch[1].toLowerCase();
+      if (ALLOWED_STUDY_HTML_TAGS.has(tag)) {
+        const safeAttrs = extractSafeTagAttributes(openMatch[2]);
+        out += `<${tag}${safeAttrs}>`;
+        pos = openTagRe.lastIndex;
+        continue;
+      }
+    }
+
+    out += "&lt;";
+    pos = ltIdx + 1;
+  }
+
+  return out;
 }
+
+const STRIP_ALLOWED_TAG_RE =
+  /<\/?(?:b|strong|i|em|u|s|sub|sup|br|code|pre|span|p|div|ul|ol|li|small|mark|hr|kbd)(?=\/?>|\s)(?:\s[^<>]*?)?\/?>/gi;
 
 export function stripHtmlTags(raw: string): string {
   return String(raw || "")
     .replace(/<br\s*\/?>/gi, " ")
-    .replace(/<[^>]+>/g, "")
+    .replace(STRIP_ALLOWED_TAG_RE, "")
     .replace(/\s+/g, " ")
     .trim();
 }

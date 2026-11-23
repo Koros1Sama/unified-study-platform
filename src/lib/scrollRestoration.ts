@@ -9,6 +9,114 @@ import type { ActiveView, SlideItem } from "../types";
 
 const DELAYS = [0, 25, 75, 180, 400, 750, 1200];
 
+let activeScrollTimers: ReturnType<typeof setTimeout>[] = [];
+let detachUserInterruptListeners: (() => void) | null = null;
+let programmaticScrollUntil = 0;
+
+function markProgrammaticScroll(): void {
+  const now = typeof performance !== "undefined" ? performance.now() : Date.now();
+  programmaticScrollUntil = now + 60;
+}
+
+function escapeCssValue(val: string): string {
+  if (typeof CSS !== "undefined" && typeof CSS.escape === "function") {
+    return CSS.escape(val);
+  }
+  return val.replace(/["\\]/g, "\\$&");
+}
+
+function resolveTargetElement(selectorOrEl: string | HTMLElement): Element | null {
+  if (typeof selectorOrEl !== "string") return selectorOrEl;
+  if (typeof document === "undefined") return null;
+
+  const trimmed = selectorOrEl.trim();
+  if (!trimmed) return null;
+
+  // دعم مباشر لصيغة [id="..."] لتفادي CSS DOMException مع معرّفات تحتوي رموزاً خاصة
+  if (trimmed.startsWith('[id="') && trimmed.endsWith('"]')) {
+    const rawId = trimmed.slice(5, -2);
+    return document.getElementById(rawId);
+  }
+
+  // دعم مباشر لصيغة #id بدون مركّبات CSS
+  if (trimmed.startsWith("#") && !/[\s>+~[\](),:]/.test(trimmed.slice(1))) {
+    const rawId = trimmed.slice(1);
+    const byId = document.getElementById(rawId);
+    if (byId) return byId;
+    try {
+      return document.querySelector(`#${escapeCssValue(rawId)}`);
+    } catch {
+      return null;
+    }
+  }
+
+  try {
+    return document.querySelector(trimmed);
+  } catch {
+    return null;
+  }
+}
+
+export function cancelPendingScrollRestoration(): void {
+  if (activeScrollTimers.length > 0) {
+    for (const timer of activeScrollTimers) {
+      clearTimeout(timer);
+    }
+    activeScrollTimers = [];
+  }
+  if (detachUserInterruptListeners) {
+    detachUserInterruptListeners();
+    detachUserInterruptListeners = null;
+  }
+}
+
+function attachUserInterruptListeners(): void {
+  if (typeof window === "undefined") return;
+  if (detachUserInterruptListeners) {
+    detachUserInterruptListeners();
+    detachUserInterruptListeners = null;
+  }
+
+  const onDirectUserInput = () => {
+    cancelPendingScrollRestoration();
+  };
+
+  const onKeyDown = (e: KeyboardEvent) => {
+    if (e.metaKey || e.ctrlKey || e.altKey) return;
+    if (
+      e.key === "Shift" ||
+      e.key === "Control" ||
+      e.key === "Alt" ||
+      e.key === "Meta" ||
+      e.key === "Escape"
+    ) {
+      return;
+    }
+    cancelPendingScrollRestoration();
+  };
+
+  const onScroll = () => {
+    const now = typeof performance !== "undefined" ? performance.now() : Date.now();
+    if (now > programmaticScrollUntil) {
+      cancelPendingScrollRestoration();
+    }
+  };
+
+  window.addEventListener("wheel", onDirectUserInput, { passive: true });
+  window.addEventListener("touchstart", onDirectUserInput, { passive: true });
+  window.addEventListener("touchmove", onDirectUserInput, { passive: true });
+  window.addEventListener("keydown", onKeyDown, { passive: true });
+  window.addEventListener("scroll", onScroll, { passive: true });
+
+  detachUserInterruptListeners = () => {
+    window.removeEventListener("wheel", onDirectUserInput);
+    window.removeEventListener("touchstart", onDirectUserInput);
+    window.removeEventListener("touchmove", onDirectUserInput);
+    window.removeEventListener("keydown", onKeyDown);
+    window.removeEventListener("scroll", onScroll);
+  };
+}
+
 // تعطيل استعادة المتصفح التلقائية لمنع القفز والتضارب مع رندرة الـ SPA
 if (typeof window !== "undefined" && "scrollRestoration" in window.history) {
   window.history.scrollRestoration = "manual";
@@ -16,16 +124,22 @@ if (typeof window !== "undefined" && "scrollRestoration" in window.history) {
 
 export function restoreScrollPosition(targetY: number, onComplete?: () => void): void {
   if (typeof targetY !== "number" || isNaN(targetY) || targetY < 0) return;
+  cancelPendingScrollRestoration();
+  attachUserInterruptListeners();
+
   DELAYS.forEach((delay, idx) => {
-    setTimeout(() => {
+    const timer = setTimeout(() => {
+      markProgrammaticScroll();
       window.scrollTo({
         top: targetY,
         behavior: delay === 0 ? "instant" : "auto"
       });
-      if (idx === DELAYS.length - 1 && onComplete) {
-        onComplete();
+      if (idx === DELAYS.length - 1) {
+        cancelPendingScrollRestoration();
+        if (onComplete) onComplete();
       }
     }, delay);
+    activeScrollTimers.push(timer);
   });
 }
 
@@ -34,21 +148,27 @@ export function restoreScrollToElement(
   offset: number = 80,
   onComplete?: () => void
 ): void {
+  cancelPendingScrollRestoration();
+  attachUserInterruptListeners();
+
   DELAYS.forEach((delay, idx) => {
-    setTimeout(() => {
-      const el = typeof selectorOrEl === "string" ? document.querySelector(selectorOrEl) : selectorOrEl;
+    const timer = setTimeout(() => {
+      const el = resolveTargetElement(selectorOrEl);
       if (el) {
         const rect = el.getBoundingClientRect();
         const absoluteTop = rect.top + window.scrollY - offset;
+        markProgrammaticScroll();
         window.scrollTo({
           top: Math.max(0, absoluteTop),
           behavior: delay === 0 ? "instant" : "auto"
         });
       }
-      if (idx === DELAYS.length - 1 && onComplete) {
-        onComplete();
+      if (idx === DELAYS.length - 1) {
+        cancelPendingScrollRestoration();
+        if (onComplete) onComplete();
       }
     }, delay);
+    activeScrollTimers.push(timer);
   });
 }
 
@@ -105,11 +225,18 @@ export function resolveSlideReference(
  * لا يتأثر بطول أو فتح لوحة الترجمة أو الشرح، وبدون حركة ترانزيشن من أعلى الصفحة.
  */
 export function instantCenterOnSlide(ref: string, onComplete?: () => void, triggerFlash: boolean = true): boolean {
-  if (typeof document === "undefined") return false;
-  const card =
-    document.getElementById(`slide-${ref}`) ||
-    document.querySelector(`[data-ref="${ref}"]`) ||
-    document.querySelector(`.slide-card[data-ref="${ref}"]`);
+  if (typeof document === "undefined" || !ref) return false;
+  let card: Element | null = document.getElementById(`slide-${ref}`);
+  if (!card) {
+    const escapedRef = escapeCssValue(ref);
+    try {
+      card =
+        document.querySelector(`[data-ref="${escapedRef}"]`) ||
+        document.querySelector(`.slide-card[data-ref="${escapedRef}"]`);
+    } catch {
+      card = null;
+    }
+  }
 
   if (!card) return false;
 
@@ -134,6 +261,7 @@ export function instantCenterOnSlide(ref: string, onComplete?: () => void, trigg
   const prevScrollBehavior = docEl.style.scrollBehavior;
   docEl.style.scrollBehavior = "auto";
 
+  markProgrammaticScroll();
   window.scrollTo({
     top: targetY,
     behavior: "instant" as ScrollBehavior
@@ -161,16 +289,25 @@ export function instantCenterOnSlide(ref: string, onComplete?: () => void, trigg
  * محرك قفز متزامن متعدد الإطارات للوصول للشريحة وإحكام التمركز مع تمدد الصور والمعادلات
  */
 export function jumpDirectlyToSlide(ref: string, onComplete?: () => void): void {
+  if (!ref) return;
+  cancelPendingScrollRestoration();
+  attachUserInterruptListeners();
+
   const attempts = [0, 35, 100, 220, 450, 800];
   let hasFlashed = false;
   attempts.forEach((delay, idx) => {
-    setTimeout(() => {
+    const timer = setTimeout(() => {
       const isLast = idx === attempts.length - 1;
-      const centered = instantCenterOnSlide(ref, isLast ? onComplete : undefined, !hasFlashed);
+      const centered = instantCenterOnSlide(ref, undefined, !hasFlashed);
       if (centered) {
         hasFlashed = true;
       }
+      if (isLast) {
+        cancelPendingScrollRestoration();
+        if (onComplete) onComplete();
+      }
     }, delay);
+    activeScrollTimers.push(timer);
   });
 }
 

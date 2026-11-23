@@ -50,6 +50,101 @@ function normalizeOptText(text?: string): string {
   return String(text || "").trim().toLowerCase().replace(/\s+/g, " ");
 }
 
+function isPlainObject(val: unknown): val is Record<string, unknown> {
+  return Boolean(val) && typeof val === "object" && !Array.isArray(val);
+}
+
+function sanitizeStringList(val: unknown): string[] {
+  if (!Array.isArray(val)) return [];
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const item of val) {
+    if (typeof item === "string" && item.trim().length > 0 && !seen.has(item)) {
+      seen.add(item);
+      out.push(item);
+    }
+  }
+  return out;
+}
+
+function extractLectureNumber(lectureId?: string): number {
+  const match = String(lectureId || "").match(/L(\d+)/i);
+  return match ? Number(match[1]) : Number.MAX_SAFE_INTEGER;
+}
+
+function sortSlidesInOrder(slides: SlideItem[], lectures: Lecture[]): SlideItem[] {
+  if (slides.length <= 1) return slides;
+  const lectureOrderMap = new Map<string, number>();
+  lectures.forEach((lec, idx) => {
+    lectureOrderMap.set(lec.id, typeof lec.sort_order === "number" ? lec.sort_order : idx);
+  });
+
+  return [...slides].sort((a, b) => {
+    const aHas = typeof a.sort_order === "number";
+    const bHas = typeof b.sort_order === "number";
+    if (aHas && bHas && a.sort_order !== b.sort_order) {
+      return (a.sort_order as number) - (b.sort_order as number);
+    }
+    const la = lectureOrderMap.get(a.lecture_id) ?? extractLectureNumber(a.lecture_id);
+    const lb = lectureOrderMap.get(b.lecture_id) ?? extractLectureNumber(b.lecture_id);
+    if (la !== lb) return la - lb;
+    if (a.slide_num !== b.slide_num) return (a.slide_num || 0) - (b.slide_num || 0);
+    return a.ref.localeCompare(b.ref, undefined, { numeric: true });
+  });
+}
+
+function sortModelsInOrder(models: QuestionModelInfo[]): QuestionModelInfo[] {
+  if (models.length <= 1) return models;
+  return [...models].sort((a, b) => {
+    const aHas = typeof a.sort_order === "number";
+    const bHas = typeof b.sort_order === "number";
+    if (aHas && bHas && a.sort_order !== b.sort_order) {
+      return (a.sort_order as number) - (b.sort_order as number);
+    }
+    if (aHas !== bHas) return aHas ? -1 : 1;
+    return a.id.localeCompare(b.id, undefined, { numeric: true });
+  });
+}
+
+function sortQuestionsInOrder(
+  questions: UnifiedQuestion[],
+  sortedModels: QuestionModelInfo[]
+): UnifiedQuestion[] {
+  if (questions.length <= 1) return questions;
+  const modelOrderMap = new Map<string, number>();
+  sortedModels.forEach((m, idx) => {
+    modelOrderMap.set(m.id, idx);
+  });
+
+  return [...questions].sort((a, b) => {
+    const aHas = typeof a.sort_order === "number";
+    const bHas = typeof b.sort_order === "number";
+    if (aHas && bHas && a.sort_order !== b.sort_order) {
+      return (a.sort_order as number) - (b.sort_order as number);
+    }
+    const ma = modelOrderMap.get(a.model_id) ?? Number.MAX_SAFE_INTEGER;
+    const mb = modelOrderMap.get(b.model_id) ?? Number.MAX_SAFE_INTEGER;
+    if (ma !== mb) return ma - mb;
+    if (a.model_id !== b.model_id) {
+      return a.model_id.localeCompare(b.model_id, undefined, { numeric: true });
+    }
+    if (a.orig_q_num !== b.orig_q_num) return (a.orig_q_num || 0) - (b.orig_q_num || 0);
+    return a.id.localeCompare(b.id, undefined, { numeric: true });
+  });
+}
+
+function hasMissingLegacySortOrder(
+  slides: SlideItem[],
+  models: QuestionModelInfo[],
+  questions: UnifiedQuestion[]
+): boolean {
+  const slidesMissing = slides.length > 0 && slides.every((s) => typeof s.sort_order !== "number");
+  const modelsMissing = models.length > 0 && models.every((m) => typeof m.sort_order !== "number");
+  const questionsMissing =
+    questions.length > 0 && questions.every((q) => typeof q.sort_order !== "number");
+  return slidesMissing || modelsMissing || questionsMissing;
+}
+
 function getCustomSubjects(): SubjectMeta[] {
   return safeJsonParse<SubjectMeta[]>(localStorage.getItem(CUSTOM_SUBJECTS_KEY), []);
 }
@@ -199,15 +294,17 @@ async function toggleProgressListItem(
   field: ProgressListField,
   itemId: string
 ): Promise<UserStudyProgress> {
-  const progress = await DataService.getUserProgress(subjectCode);
-  const current = progress[field] ? [...progress[field]!] : [];
-  const idx = current.indexOf(itemId);
-  if (idx >= 0) current.splice(idx, 1);
-  else current.push(itemId);
-  progress[field] = current;
-  progress.updated_at = new Date().toISOString();
-  await db.user_study_progress.put(progress);
-  return progress;
+  return db.transaction("rw", [db.user_study_progress, db.questions], async () => {
+    const progress = await DataService.getUserProgress(subjectCode);
+    const current = Array.isArray(progress[field]) ? [...progress[field]!] : [];
+    const idx = current.indexOf(itemId);
+    if (idx >= 0) current.splice(idx, 1);
+    else current.push(itemId);
+    progress[field] = current;
+    progress.updated_at = new Date().toISOString();
+    await db.user_study_progress.put(progress);
+    return progress;
+  });
 }
 
 export const DataService = {
@@ -270,26 +367,38 @@ export const DataService = {
     const cachedVersion = Number(localStorage.getItem(`${BUNDLE_VERSION_KEY}${code}`) || 0);
     const hasCachedContent = cachedLectures.length > 0 || cachedQuestions.length > 0;
 
+    let cachedSubjectRecord: SubjectMeta | undefined;
+    let cachedSlides: SlideItem[] | null = null;
+
     if (hasCachedContent && cachedVersion === expectedVersion) {
-      const [subjectRecord, cachedSlides] = await Promise.all([
+      const [subjectRec, slidesList] = await Promise.all([
         db.subjects.get(code),
         db.slides.where("subject_code").equals(code).toArray()
       ]);
+      cachedSubjectRecord = subjectRec;
+      cachedSlides = slidesList;
 
-      this.syncDeltaFromSupabase(code)
-        .then((count) => {
-          if (count > 0 && onDeltaSynced) onDeltaSynced(count);
-        })
-        .catch((e) => console.debug("Delta sync skipped:", e));
+      // إذا كان التخزين المؤقت من نسخة سابقة تفتقد sort_order نحدّثه من الحزمة عند توفر الشبكة
+      if (!hasMissingLegacySortOrder(slidesList, cachedModels, cachedQuestions)) {
+        const sortedModels = sortModelsInOrder(cachedModels);
+        const sortedSlides = sortSlidesInOrder(slidesList, cachedLectures);
+        const sortedQuestions = sortQuestionsInOrder(cachedQuestions, sortedModels);
 
-      return {
-        meta: subjectRecord || fallbackSubjectMeta(code),
-        lectures: cachedLectures,
-        slides: cachedSlides,
-        ...modules,
-        question_models: cachedModels,
-        questions: cachedQuestions
-      };
+        this.syncDeltaFromSupabase(code)
+          .then((count) => {
+            if (count > 0 && onDeltaSynced) onDeltaSynced(count);
+          })
+          .catch((e) => console.debug("Delta sync skipped:", e));
+
+        return {
+          meta: subjectRec || fallbackSubjectMeta(code),
+          lectures: cachedLectures,
+          slides: sortedSlides,
+          ...modules,
+          question_models: sortedModels,
+          questions: sortedQuestions
+        };
+      }
     }
 
     try {
@@ -310,17 +419,27 @@ export const DataService = {
     }
 
     if (hasCachedContent) {
-      const [subjectRecord, cachedSlides] = await Promise.all([
-        db.subjects.get(code),
-        db.slides.where("subject_code").equals(code).toArray()
-      ]);
+      let slidesList: SlideItem[];
+      if (cachedSlides === null) {
+        const [subjectRec, loadedSlides] = await Promise.all([
+          db.subjects.get(code),
+          db.slides.where("subject_code").equals(code).toArray()
+        ]);
+        cachedSubjectRecord = subjectRec;
+        slidesList = loadedSlides;
+      } else {
+        slidesList = cachedSlides;
+      }
+      const sortedModels = sortModelsInOrder(cachedModels);
+      const sortedSlides = sortSlidesInOrder(slidesList, cachedLectures);
+      const sortedQuestions = sortQuestionsInOrder(cachedQuestions, sortedModels);
       return {
-        meta: subjectRecord || fallbackSubjectMeta(code),
+        meta: cachedSubjectRecord || fallbackSubjectMeta(code),
         lectures: cachedLectures,
-        slides: cachedSlides,
+        slides: sortedSlides,
         ...modules,
-        question_models: cachedModels,
-        questions: cachedQuestions
+        question_models: sortedModels,
+        questions: sortedQuestions
       };
     }
 
@@ -379,13 +498,35 @@ export const DataService = {
         ]);
 
         await db.subjects.put(meta);
-        if (lectures?.length) await db.lectures.bulkPut(lectures);
-        if (slides?.length) await db.slides.bulkPut(slides);
+        if (lectures?.length) {
+          const orderedLectures = lectures.map((lec, idx) => ({
+            ...lec,
+            sort_order: typeof lec.sort_order === "number" ? lec.sort_order : idx + 1
+          }));
+          await db.lectures.bulkPut(orderedLectures);
+        }
+        if (slides?.length) {
+          const orderedSlides = slides.map((s, idx) => ({
+            ...s,
+            sort_order: typeof s.sort_order === "number" ? s.sort_order : idx
+          }));
+          await db.slides.bulkPut(orderedSlides);
+        }
         if (question_models?.length) {
-          const modelsWithCode = question_models.map((m) => ({ ...m, subject_code: code }));
+          const modelsWithCode = question_models.map((m, idx) => ({
+            ...m,
+            subject_code: code,
+            sort_order: typeof m.sort_order === "number" ? m.sort_order : idx
+          }));
           await db.question_models.bulkPut(modelsWithCode);
         }
-        if (questions?.length) await db.questions.bulkPut(questions);
+        if (questions?.length) {
+          const orderedQuestions = questions.map((q, idx) => ({
+            ...q,
+            sort_order: typeof q.sort_order === "number" ? q.sort_order : idx
+          }));
+          await db.questions.bulkPut(orderedQuestions);
+        }
 
         const now = new Date().toISOString();
         const moduleEntries: Array<{
@@ -422,6 +563,12 @@ export const DataService = {
         }
       }
     );
+
+    try {
+      localStorage.removeItem(`${SYNC_KEY_PREFIX}${code}`);
+    } catch {
+      // تجاهل أخطاء التخزين في أوضاع التصفح المقيدة
+    }
   },
 
   async syncDeltaFromSupabase(subjectCode: string): Promise<number> {
@@ -475,7 +622,13 @@ export const DataService = {
 
   async getUserProgress(subjectCode: string): Promise<UserStudyProgress> {
     const saved = await db.user_study_progress.get(subjectCode);
-    if (saved) return saved;
+    if (saved) {
+      if (!isPlainObject(saved.answered_questions)) saved.answered_questions = {};
+      if (!isPlainObject(saved.bookmarks)) saved.bookmarks = {};
+      if (!Array.isArray(saved.memorized_tables)) saved.memorized_tables = [];
+      if (!Array.isArray(saved.exam_history)) saved.exam_history = [];
+      return saved;
+    }
 
     const initial: UserStudyProgress = {
       subject_code: subjectCode,
@@ -496,65 +649,67 @@ export const DataService = {
     isCorrect: boolean,
     twinGroupId?: string
   ): Promise<UserStudyProgress> {
-    const progress = await this.getUserProgress(subjectCode);
-    const now = new Date().toISOString();
+    return db.transaction("rw", [db.user_study_progress, db.questions], async () => {
+      const progress = await this.getUserProgress(subjectCode);
+      const now = new Date().toISOString();
 
-    if (selectedAnswer < 0) {
-      delete progress.answered_questions[questionId];
-      if (twinGroupId) {
-        const twins = await db.questions
-          .where("twin_group_id")
-          .equals(twinGroupId)
-          .filter((q) => q.subject_code === subjectCode)
-          .toArray();
-        for (const t of twins) {
-          delete progress.answered_questions[t.id];
+      if (selectedAnswer < 0) {
+        delete progress.answered_questions[questionId];
+        if (twinGroupId) {
+          const twins = await db.questions
+            .where("twin_group_id")
+            .equals(twinGroupId)
+            .filter((q) => q.subject_code === subjectCode)
+            .toArray();
+          for (const t of twins) {
+            delete progress.answered_questions[t.id];
+          }
         }
-      }
-    } else {
-      progress.answered_questions[questionId] = {
-        selected_answer: selectedAnswer,
-        is_correct: isCorrect,
-        answered_at: now
-      };
+      } else {
+        progress.answered_questions[questionId] = {
+          selected_answer: selectedAnswer,
+          is_correct: isCorrect,
+          answered_at: now
+        };
 
-      // مزامنة التوائم دلالياً (حسب نص الخيار / الإجابة الصحيحة الخاصة بالتوأم لا بنسخ رقم الفهرس الأعمى)
-      if (twinGroupId) {
-        const twins = await db.questions
-          .where("twin_group_id")
-          .equals(twinGroupId)
-          .filter((q) => q.subject_code === subjectCode)
-          .toArray();
-        const sourceQ = twins.find((q) => q.id === questionId);
-        const pickedText = normalizeOptText(sourceQ?.options_en?.[selectedAnswer]);
+        // مزامنة التوائم دلالياً (حسب نص الخيار / الإجابة الصحيحة الخاصة بالتوأم لا بنسخ رقم الفهرس الأعمى)
+        if (twinGroupId) {
+          const twins = await db.questions
+            .where("twin_group_id")
+            .equals(twinGroupId)
+            .filter((q) => q.subject_code === subjectCode)
+            .toArray();
+          const sourceQ = twins.find((q) => q.id === questionId);
+          const pickedText = normalizeOptText(sourceQ?.options_en?.[selectedAnswer]);
 
-        for (const t of twins) {
-          if (t.id === questionId || t.type === "essay") continue;
-          if (isCorrect && t.correct_answer >= 0 && t.correct_answer < t.options_en.length) {
-            progress.answered_questions[t.id] = {
-              selected_answer: t.correct_answer,
-              is_correct: true,
-              answered_at: now
-            };
-          } else if (pickedText) {
-            const matchedIdx = (t.options_en || []).findIndex(
-              (opt) => normalizeOptText(opt) === pickedText
-            );
-            if (matchedIdx >= 0) {
+          for (const t of twins) {
+            if (t.id === questionId || t.type === "essay") continue;
+            if (isCorrect && t.correct_answer >= 0 && t.correct_answer < t.options_en.length) {
               progress.answered_questions[t.id] = {
-                selected_answer: matchedIdx,
-                is_correct: matchedIdx === t.correct_answer,
+                selected_answer: t.correct_answer,
+                is_correct: true,
                 answered_at: now
               };
+            } else if (pickedText) {
+              const matchedIdx = (t.options_en || []).findIndex(
+                (opt) => normalizeOptText(opt) === pickedText
+              );
+              if (matchedIdx >= 0) {
+                progress.answered_questions[t.id] = {
+                  selected_answer: matchedIdx,
+                  is_correct: matchedIdx === t.correct_answer,
+                  answered_at: now
+                };
+              }
             }
           }
         }
       }
-    }
 
-    progress.updated_at = now;
-    await db.user_study_progress.put(progress);
-    return progress;
+      progress.updated_at = now;
+      await db.user_study_progress.put(progress);
+      return progress;
+    });
   },
 
   toggleMemorizedTable(subjectCode: string, tableId: string): Promise<UserStudyProgress> {
@@ -581,14 +736,18 @@ export const DataService = {
     subjectCode: string,
     result: { total: number; score: number; timeSpentSec: number; mode: string }
   ): Promise<UserStudyProgress> {
-    const progress = await this.getUserProgress(subjectCode);
-    progress.exam_history.unshift({
-      date: new Date().toISOString(),
-      ...result
+    return db.transaction("rw", [db.user_study_progress, db.questions], async () => {
+      const progress = await this.getUserProgress(subjectCode);
+      const now = new Date().toISOString();
+      if (!Array.isArray(progress.exam_history)) progress.exam_history = [];
+      progress.exam_history.unshift({
+        date: now,
+        ...result
+      });
+      progress.updated_at = now;
+      await db.user_study_progress.put(progress);
+      return progress;
     });
-    progress.updated_at = new Date().toISOString();
-    await db.user_study_progress.put(progress);
-    return progress;
   },
 
   async toggleBookmark(
@@ -597,49 +756,55 @@ export const DataService = {
     color: string,
     twinGroupId?: string
   ): Promise<UserStudyProgress> {
-    const progress = await this.getUserProgress(subjectCode);
-    if (!progress.bookmarks) progress.bookmarks = {};
+    return db.transaction("rw", [db.user_study_progress, db.questions], async () => {
+      const progress = await this.getUserProgress(subjectCode);
+      if (!isPlainObject(progress.bookmarks)) progress.bookmarks = {};
 
-    const cur = progress.bookmarks[questionId] || [];
-    const next = cur.includes(color) ? cur.filter((c) => c !== color) : [...cur, color];
+      const cur = Array.isArray(progress.bookmarks[questionId])
+        ? progress.bookmarks[questionId]
+        : [];
+      const next = cur.includes(color) ? cur.filter((c) => c !== color) : [...cur, color];
 
-    if (next.length === 0) delete progress.bookmarks[questionId];
-    else progress.bookmarks[questionId] = next;
+      if (next.length === 0) delete progress.bookmarks[questionId];
+      else progress.bookmarks[questionId] = next;
 
-    if (twinGroupId) {
-      const twins = await db.questions
-        .where("twin_group_id")
-        .equals(twinGroupId)
-        .filter((q) => q.subject_code === subjectCode)
-        .toArray();
-      for (const t of twins) {
-        if (next.length === 0) delete progress.bookmarks[t.id];
-        else progress.bookmarks[t.id] = [...next];
+      if (twinGroupId) {
+        const twins = await db.questions
+          .where("twin_group_id")
+          .equals(twinGroupId)
+          .filter((q) => q.subject_code === subjectCode)
+          .toArray();
+        for (const t of twins) {
+          if (next.length === 0) delete progress.bookmarks[t.id];
+          else progress.bookmarks[t.id] = [...next];
+        }
       }
-    }
 
-    progress.updated_at = new Date().toISOString();
-    await db.user_study_progress.put(progress);
-    return progress;
+      progress.updated_at = new Date().toISOString();
+      await db.user_study_progress.put(progress);
+      return progress;
+    });
   },
 
   async resetModelAnswers(subjectCode: string, modelId: string): Promise<UserStudyProgress> {
-    const progress = await this.getUserProgress(subjectCode);
-    if (modelId === "all") {
-      progress.answered_questions = {};
-    } else {
-      const qs = await db.questions
-        .where("subject_code")
-        .equals(subjectCode)
-        .filter((q) => q.model_id === modelId)
-        .toArray();
-      for (const q of qs) {
-        delete progress.answered_questions[q.id];
+    return db.transaction("rw", [db.user_study_progress, db.questions], async () => {
+      const progress = await this.getUserProgress(subjectCode);
+      if (modelId === "all") {
+        progress.answered_questions = {};
+      } else {
+        const qs = await db.questions
+          .where("subject_code")
+          .equals(subjectCode)
+          .filter((q) => q.model_id === modelId)
+          .toArray();
+        for (const q of qs) {
+          delete progress.answered_questions[q.id];
+        }
       }
-    }
-    progress.updated_at = new Date().toISOString();
-    await db.user_study_progress.put(progress);
-    return progress;
+      progress.updated_at = new Date().toISOString();
+      await db.user_study_progress.put(progress);
+      return progress;
+    });
   },
 
   async resetSubjectProgress(subjectCode: string): Promise<UserStudyProgress> {
@@ -677,34 +842,40 @@ export const DataService = {
     raw: unknown,
     fallbackSubjectCode: string
   ): Promise<{ importedSubjects: string[]; activeProgress: UserStudyProgress }> {
-    if (!raw || typeof raw !== "object") {
+    if (!isPlainObject(raw)) {
       throw new Error("ملف النسخة الاحتياطية غير صالح.");
     }
-    const obj = raw as Record<string, unknown>;
+    const obj = raw;
     const records: UserStudyProgress[] = [];
 
-    if (obj.subjects && typeof obj.subjects === "object" && !Array.isArray(obj.subjects)) {
-      for (const [code, val] of Object.entries(obj.subjects as Record<string, unknown>)) {
-        if (val && typeof val === "object") {
-          records.push(normalizeImportedProgress(val as Partial<UserStudyProgress>, code));
+    if (isPlainObject(obj.subjects)) {
+      for (const [code, val] of Object.entries(obj.subjects)) {
+        const cleanCode = code.trim();
+        if (cleanCode && isPlainObject(val)) {
+          records.push(normalizeImportedProgress(val, cleanCode));
         }
       }
     } else if (
-      typeof obj.subject_code === "string" ||
-      typeof obj.answered_questions === "object"
+      (typeof obj.subject_code === "string" && obj.subject_code.trim().length > 0) ||
+      isPlainObject(obj.answered_questions) ||
+      isPlainObject(obj.bookmarks) ||
+      Array.isArray(obj.exam_history) ||
+      Array.isArray(obj.memorized_tables)
     ) {
       const code =
         typeof obj.subject_code === "string" && obj.subject_code.trim()
           ? obj.subject_code.trim()
           : fallbackSubjectCode;
-      records.push(normalizeImportedProgress(obj as Partial<UserStudyProgress>, code));
+      records.push(normalizeImportedProgress(obj, code));
     }
 
     if (records.length === 0) {
       throw new Error("لم يتم العثور على بيانات تقدم صالحة داخل الملف.");
     }
 
-    await db.user_study_progress.bulkPut(records);
+    await db.transaction("rw", [db.user_study_progress], async () => {
+      await db.user_study_progress.bulkPut(records);
+    });
     const activeProgress = await this.getUserProgress(fallbackSubjectCode);
     return {
       importedSubjects: records.map((r) => r.subject_code),
@@ -714,28 +885,88 @@ export const DataService = {
 };
 
 function normalizeImportedProgress(
-  partial: Partial<UserStudyProgress>,
+  partial: Record<string, unknown>,
   subjectCode: string
 ): UserStudyProgress {
+  const now = new Date().toISOString();
+
+  const answeredQuestions: UserStudyProgress["answered_questions"] = {};
+  if (isPlainObject(partial.answered_questions)) {
+    for (const [qId, entry] of Object.entries(partial.answered_questions)) {
+      if (!qId.trim() || !isPlainObject(entry)) continue;
+      if (
+        typeof entry.selected_answer !== "number" ||
+        !Number.isFinite(entry.selected_answer) ||
+        !Number.isInteger(entry.selected_answer) ||
+        entry.selected_answer < 0 ||
+        typeof entry.is_correct !== "boolean"
+      ) {
+        continue;
+      }
+      answeredQuestions[qId] = {
+        selected_answer: entry.selected_answer,
+        is_correct: entry.is_correct,
+        answered_at:
+          typeof entry.answered_at === "string" && entry.answered_at.trim()
+            ? entry.answered_at
+            : now
+      };
+    }
+  }
+
+  const bookmarks: Record<string, string[]> = {};
+  if (isPlainObject(partial.bookmarks)) {
+    for (const [qId, colors] of Object.entries(partial.bookmarks)) {
+      if (!qId.trim() || !Array.isArray(colors)) continue;
+      const validColors = sanitizeStringList(colors);
+      if (validColors.length > 0) {
+        bookmarks[qId] = validColors;
+      }
+    }
+  }
+
+  const examHistory: UserStudyProgress["exam_history"] = [];
+  if (Array.isArray(partial.exam_history)) {
+    for (const item of partial.exam_history) {
+      if (!isPlainObject(item)) continue;
+      if (
+        typeof item.total !== "number" ||
+        !Number.isFinite(item.total) ||
+        item.total < 0 ||
+        typeof item.score !== "number" ||
+        !Number.isFinite(item.score) ||
+        item.score < 0 ||
+        typeof item.timeSpentSec !== "number" ||
+        !Number.isFinite(item.timeSpentSec) ||
+        item.timeSpentSec < 0
+      ) {
+        continue;
+      }
+      examHistory.push({
+        date: typeof item.date === "string" && item.date.trim() ? item.date : now,
+        total: item.total,
+        score: item.score,
+        timeSpentSec: item.timeSpentSec,
+        mode: typeof item.mode === "string" && item.mode.trim() ? item.mode : "practice"
+      });
+    }
+  }
+
   return {
     subject_code: subjectCode,
-    memorized_tables: Array.isArray(partial.memorized_tables) ? partial.memorized_tables : [],
-    answered_questions:
-      partial.answered_questions && typeof partial.answered_questions === "object"
-        ? partial.answered_questions
-        : {},
-    bookmarks:
-      partial.bookmarks && typeof partial.bookmarks === "object" ? partial.bookmarks : {},
-    exam_history: Array.isArray(partial.exam_history) ? partial.exam_history : [],
-    reviewed_sections: Array.isArray(partial.reviewed_sections) ? partial.reviewed_sections : [],
-    reviewed_parts: Array.isArray(partial.reviewed_parts) ? partial.reviewed_parts : [],
-    reviewed_capsules: Array.isArray(partial.reviewed_capsules) ? partial.reviewed_capsules : [],
-    mastered_definitions: Array.isArray(partial.mastered_definitions)
-      ? partial.mastered_definitions
-      : [],
-    flagged_questions: Array.isArray(partial.flagged_questions) ? partial.flagged_questions : [],
-    last_visited_view: partial.last_visited_view,
-    last_visited_slide: partial.last_visited_slide,
-    updated_at: new Date().toISOString()
+    memorized_tables: sanitizeStringList(partial.memorized_tables),
+    answered_questions: answeredQuestions,
+    bookmarks,
+    exam_history: examHistory,
+    reviewed_sections: sanitizeStringList(partial.reviewed_sections),
+    reviewed_parts: sanitizeStringList(partial.reviewed_parts),
+    reviewed_capsules: sanitizeStringList(partial.reviewed_capsules),
+    mastered_definitions: sanitizeStringList(partial.mastered_definitions),
+    flagged_questions: sanitizeStringList(partial.flagged_questions),
+    last_visited_view:
+      typeof partial.last_visited_view === "string" ? partial.last_visited_view : undefined,
+    last_visited_slide:
+      typeof partial.last_visited_slide === "string" ? partial.last_visited_slide : undefined,
+    updated_at: now
   };
 }

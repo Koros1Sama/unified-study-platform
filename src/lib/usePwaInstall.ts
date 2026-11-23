@@ -8,6 +8,7 @@ import { useState, useEffect, useCallback } from "react";
 
 export interface PwaInstallState {
   canInstall: boolean;
+  hasNativePrompt: boolean;
   isInstalled: boolean;
   isIos: boolean;
   isDesktop: boolean;
@@ -25,12 +26,20 @@ export function usePwaInstall(): PwaInstallState {
   const [showFirstOpenBanner, setShowFirstOpenBanner] = useState(false);
   const [showGuideModal, setShowGuideModal] = useState(false);
 
-  // فحص نوع الجهاز (iOS / Desktop / Android)
-  const isIos = typeof window !== "undefined" &&
-    /iphone|ipad|ipod/i.test(window.navigator.userAgent) &&
-    !(window as any).MSStream;
+  // فحص نوع الجهاز (iOS بما فيها iPadOS 13+ / Desktop / Android)
+  const isIpadOs13Plus =
+    typeof window !== "undefined" &&
+    window.navigator.platform === "MacIntel" &&
+    window.navigator.maxTouchPoints > 1;
 
-  const isDesktop = typeof window !== "undefined" &&
+  const isIos =
+    typeof window !== "undefined" &&
+    ((/iphone|ipad|ipod/i.test(window.navigator.userAgent) && !(window as any).MSStream) ||
+      isIpadOs13Plus);
+
+  const isDesktop =
+    typeof window !== "undefined" &&
+    !isIos &&
     !/iphone|ipad|ipod|android/i.test(window.navigator.userAgent);
 
   useEffect(() => {
@@ -87,18 +96,25 @@ export function usePwaInstall(): PwaInstallState {
   const promptInstall = useCallback(async (): Promise<boolean> => {
     if (deferredPrompt) {
       try {
-        deferredPrompt.prompt();
+        await deferredPrompt.prompt();
         const choice = await deferredPrompt.userChoice;
         if (choice.outcome === "accepted") {
           setIsInstalled(true);
-          setDeferredPrompt(null);
           setShowFirstOpenBanner(false);
           setShowGuideModal(false);
-          localStorage.setItem("unified_pwa_banner_dismissed", "true");
+          try {
+            localStorage.setItem("unified_pwa_banner_dismissed", "true");
+          } catch {
+            // تجاهل أخطاء التخزين في أوضاع التصفح المقيدة
+          }
           return true;
         }
+        return false;
       } catch (err) {
         console.warn("PWA install error:", err);
+        return false;
+      } finally {
+        setDeferredPrompt(null);
       }
     }
     setShowGuideModal(true);
@@ -112,6 +128,7 @@ export function usePwaInstall(): PwaInstallState {
 
   return {
     canInstall: !isInstalled,
+    hasNativePrompt: Boolean(deferredPrompt),
     isInstalled,
     isIos,
     isDesktop,

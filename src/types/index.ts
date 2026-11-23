@@ -40,6 +40,7 @@ export interface SlideItem {
   lecture_id: string;
   slide_num: number;
   ref: string; // e.g. "L1-S001"
+  sort_order?: number;
   title?: string;
   image_url: string; // e.g. "/slides/toc/L1/slide_1.png"
   content_ar?: string;
@@ -277,6 +278,7 @@ export interface QuestionModelInfo {
   id: string; // "m1", "b1"
   title_ar: string;
   kind: string; // "رسمي", "عملي", "تنبؤي AI"
+  sort_order?: number;
   short_label?: string;
   origin_ar?: string;
   origin_tag?: string;
@@ -290,6 +292,7 @@ export interface UnifiedQuestion {
   subject_code: string;
   model_id: string;
   orig_q_num: number;
+  sort_order?: number;
   type: "mcq" | "tf" | "essay";
   lecture_id?: string;
   slide_ref?: string;
