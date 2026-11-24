@@ -1,12 +1,12 @@
 // ==============================================================================
 // المنصة التعليمية الموحدة — عامل الخدمة للأوفلاين وتفريغ الكاش (PWA Service Worker)
-// Two-Tier + Protected Offline Pack Caches · Same-Origin Safe · Query-Agnostic
+// Two-Tier + Protected Offline Pack Caches · Same-Origin + Cloudflare R2 CORS Safe
 // ==============================================================================
 
 const RUNTIME_PREFIX = "usp-runtime-";
 const OFFLINE_PREFIX = "usp-offline-";
-const CORE = "usp-core-v25";
-const RUNTIME = "usp-runtime-v25";
+const CORE = "usp-core-v26";
+const RUNTIME = "usp-runtime-v26";
 
 const CORE_ASSETS = [
   "./",
@@ -23,6 +23,14 @@ const CORE_ASSETS = [
 function isHtmlResponse(res) {
   const ct = (res.headers.get("content-type") || "").toLowerCase();
   return ct.includes("text/html");
+}
+
+function isAllowedR2SlideUrl(url) {
+  return (
+    url.protocol === "https:" &&
+    url.hostname.endsWith(".r2.dev") &&
+    url.pathname.includes("/slides/")
+  );
 }
 
 function getScopedIndexUrl() {
@@ -45,7 +53,7 @@ self.addEventListener("activate", (e) => {
       const keys = await caches.keys();
       const targetRuntime = await caches.open(RUNTIME);
 
-      // ترحيل الشرائح والأيقونات من كاش التشغيل السابق دون المساس بحزم الأوفلاين (usp-offline-*)
+      // ترحيل الشرائح (المحلية و R2) والأيقونات من كاش التشغيل السابق دون المساس بحزم الأوفلاين
       for (const k of keys) {
         if (k.startsWith(RUNTIME_PREFIX) && k !== RUNTIME) {
           try {
@@ -104,8 +112,47 @@ self.addEventListener("fetch", (e) => {
   if (req.method !== "GET") return;
 
   const url = new URL(req.url);
-  // عدم اعتراض الطلبات الخارجية (مثل Supabase API أو الخطوط الخارجية أو إضافات المتصفح)
-  if (url.origin !== self.location.origin) return;
+  const isR2Slide = isAllowedR2SlideUrl(url);
+
+  // عدم اعتراض الطلبات الخارجية عدا سلايدات Cloudflare R2 المعتمدة
+  if (url.origin !== self.location.origin && !isR2Slide) return;
+
+  // 0. طلبات Cloudflare R2 (السلايدات الأصلية والمترجمة + manifest الترجمة)
+  if (isR2Slide) {
+    if (url.pathname.endsWith("/translation-manifest.json")) {
+      e.respondWith(
+        fetch(new Request(req.url, { mode: "cors", credentials: "omit" }))
+          .then((res) => {
+            if (res.ok && res.type !== "opaque" && !isHtmlResponse(res)) {
+              const copy = res.clone();
+              caches.open(RUNTIME).then((c) => c.put(req.url, copy));
+            }
+            return res;
+          })
+          .catch(async () => {
+            const cached = await matchAnyCache(req.url, true);
+            return cached || new Response("{}", { status: 503, headers: { "Content-Type": "application/json" } });
+          })
+      );
+      return;
+    }
+
+    e.respondWith(
+      matchAnyCache(req.url, true).then((cached) => {
+        if (cached) return cached;
+        return fetch(new Request(req.url, { mode: "cors", credentials: "omit" }))
+          .then((res) => {
+            if (res.ok && res.type !== "opaque" && !isHtmlResponse(res)) {
+              const copy = res.clone();
+              caches.open(RUNTIME).then((c) => c.put(req.url, copy));
+            }
+            return res;
+          })
+          .catch(() => new Response("", { status: 503, statusText: "Offline" }));
+      })
+    );
+    return;
+  }
 
   // 1. طلبات التنقل (صفحات الـ SPA)
   if (req.mode === "navigate") {

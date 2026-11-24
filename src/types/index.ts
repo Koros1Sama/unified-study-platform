@@ -23,6 +23,7 @@ export interface SubjectMeta {
   lab_title?: string;
   data_status?: "full" | "theory-only" | "pending";
   arabic_only?: boolean;
+  source_language?: "ar" | "en" | "mixed";
   page_layout?: "slides" | "book";
 }
 
@@ -530,6 +531,8 @@ export type BookmarkColor = "red" | "yellow" | "green" | "blue";
 export type BookmarkLabels = Record<BookmarkColor, string>;
 export type BookLayoutMode = "split" | "continuous" | "spread";
 export type BookPaperFilter = "original" | "warm" | "night";
+export type SlideImageMode = "en" | "ar" | "hover";
+export type OfflineSlideLangMode = "en" | "ar" | "both";
 
 export interface ShuffleSettings {
   shuffleChoices: boolean;

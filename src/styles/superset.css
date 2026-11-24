@@ -3526,3 +3526,275 @@ body:has(#pwaInstallBanner):has(#jumpReturnBar) .usp-toast-stack {
 
 
 
+
+
+/* ------------------------------------------------------------------------------
+   Slide Image 3-Mode Translation (EN / AR / Hover 20dvh Band) & Offline Selector
+   ------------------------------------------------------------------------------ */
+
+.tsl-mode-bar {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 3px 4px;
+  background: var(--sf2);
+  border: 1px solid var(--ln);
+  border-radius: var(--r-pill);
+}
+
+.tsl-mode-bar.is-lb {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.16);
+}
+
+.tsl-mode-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0 7px 0 4px;
+  font-size: 0.74rem;
+  font-weight: 700;
+  color: var(--ink-m);
+  white-space: nowrap;
+}
+
+.tsl-mode-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 4px 10px;
+  border: 1px solid transparent;
+  border-radius: var(--r-pill);
+  background: transparent;
+  color: var(--ink-m);
+  font-family: inherit;
+  font-size: 0.76rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.14s ease, color 0.14s ease, border-color 0.14s ease;
+  white-space: nowrap;
+}
+
+.tsl-mode-btn:hover {
+  color: var(--ink);
+  background: var(--sf);
+}
+
+.tsl-mode-btn.active {
+  background: var(--acc);
+  color: var(--bg);
+  border-color: var(--acc);
+}
+
+.tsl-mode-bar.is-lb .tsl-mode-btn {
+  color: #d6dbe6;
+  padding: 4px 8px;
+}
+
+.tsl-mode-bar.is-lb .tsl-mode-btn.active {
+  background: var(--acc);
+  color: #111319;
+}
+
+.tsl-stage {
+  position: relative;
+  display: block;
+  width: 100%;
+  overflow: hidden;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.tsl-stage.is-lightbox {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: auto;
+  max-width: 100%;
+  max-height: 100%;
+}
+
+.tsl-stage.is-hover-mode {
+  cursor: ns-resize;
+}
+
+.tsl-hover-overlay {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: inherit;
+  pointer-events: none;
+  transition: opacity 0.1s ease;
+  will-change: clip-path, opacity;
+}
+
+.tsl-hover-frame {
+  position: absolute;
+  left: 0;
+  right: 0;
+  pointer-events: none;
+  border-top: 2px solid var(--acc);
+  border-bottom: 2px solid var(--acc);
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.25), 0 6px 22px rgba(0, 0, 0, 0.28);
+  z-index: 3;
+}
+
+.tsl-flip-btn {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  z-index: 5;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 10px;
+  border-radius: var(--r-pill);
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  background: rgba(15, 18, 25, 0.82);
+  color: #f4f6fb;
+  font-family: inherit;
+  font-size: 0.74rem;
+  font-weight: 800;
+  cursor: pointer;
+  backdrop-filter: blur(6px);
+  transition: transform 0.12s ease, background 0.14s ease, border-color 0.14s ease;
+}
+
+.tsl-flip-btn:hover {
+  background: rgba(15, 18, 25, 0.94);
+  border-color: var(--acc);
+  transform: translateY(-1px);
+}
+
+.tsl-flip-btn.is-flipped {
+  background: var(--acc);
+  color: #111319;
+  border-color: var(--acc);
+}
+
+.tsl-touch-rail {
+  display: none;
+}
+
+@media (pointer: coarse), (max-width: 768px) {
+  .tsl-touch-rail {
+    position: absolute;
+    top: 50%;
+    left: 8px;
+    transform: translateY(-50%);
+    z-index: 6;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 30px;
+    height: 68px;
+    border-radius: var(--r-pill);
+    background: rgba(15, 18, 25, 0.78);
+    border: 1px solid var(--acc);
+    color: var(--acc);
+    touch-action: none;
+    backdrop-filter: blur(4px);
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
+  }
+
+  .tsl-touch-rail.active {
+    background: var(--acc);
+    color: #111319;
+  }
+}
+
+.tsl-dismiss-band {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  z-index: 7;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  border-radius: var(--r-pill);
+  border: 1px solid var(--acc);
+  background: rgba(15, 18, 25, 0.88);
+  color: #f4f6fb;
+  font-family: inherit;
+  font-size: 0.72rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+/* Offline Language Selector inside OfflineManagerModal */
+.offline-lang-box {
+  background: var(--sf2);
+  border: 1px solid var(--ln);
+  border-radius: var(--r-m);
+  padding: 12px 14px;
+  margin-bottom: 14px;
+}
+
+.offline-lang-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.82rem;
+  font-weight: 800;
+  color: var(--ink);
+  margin-bottom: 10px;
+}
+
+.offline-lang-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+@media (max-width: 520px) {
+  .offline-lang-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.offline-lang-opt {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  padding: 9px 11px;
+  border-radius: var(--r-s);
+  border: 1px solid var(--ln);
+  background: var(--sf);
+  color: var(--ink);
+  font-family: inherit;
+  text-align: right;
+  cursor: pointer;
+  transition: border-color 0.14s ease, background 0.14s ease;
+}
+
+.offline-lang-opt strong {
+  font-size: 0.84rem;
+  font-weight: 800;
+}
+
+.offline-lang-opt small {
+  font-size: 0.71rem;
+  color: var(--ink-m);
+}
+
+.offline-lang-opt:hover:not(:disabled) {
+  border-color: var(--acc);
+}
+
+.offline-lang-opt.active {
+  border-color: var(--acc);
+  background: color-mix(in srgb, var(--acc) 14%, var(--sf));
+}
+
+.offline-lang-opt.active strong {
+  color: var(--acc);
+}
+
+.offline-lang-opt:disabled {
+  opacity: 0.48;
+  cursor: not-allowed;
+}

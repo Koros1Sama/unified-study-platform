@@ -30,15 +30,30 @@ jobs:
       - name: Typecheck & build platform
         env:
           VITE_BASE_PATH: "/"
+          VITE_SLIDES_CDN_URL: ${{ secrets.R2_PUBLIC_URL }}
           VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
           VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
-        run: npm run build
+        run: |
+          if [ -n "${VITE_SLIDES_CDN_URL:-}" ] && [ -d "public/slides" ]; then
+            SAMPLE_SLIDE=$(find public/slides -type f -name '*.webp' ! -name '*.ar.webp' | head -n 1 || true)
+            if [ -n "$SAMPLE_SLIDE" ]; then
+              REL_PATH="${SAMPLE_SLIDE#public/}"
+              if curl -fsI "${VITE_SLIDES_CDN_URL%/}/${REL_PATH}" >/dev/null 2>&1; then
+                echo "Verified R2 CDN serves ${REL_PATH} — pruning public/slides from CI runner to keep Vercel deploy <5MB"
+                rm -rf public/slides
+              else
+                echo "R2 CDN not yet populated for ${REL_PATH} — keeping local public/slides for this deploy"
+              fi
+            fi
+          fi
+          npm run build
 
       - name: Deploy prebuilt dist to Vercel
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VITE_BASE_PATH: "/"
+          VITE_SLIDES_CDN_URL: ${{ secrets.R2_PUBLIC_URL }}
           VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
           VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
         run: |

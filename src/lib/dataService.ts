@@ -29,11 +29,19 @@ const CUSTOM_SUBJECTS_KEY = "unified_custom_subjects";
 let subjectsCache: SubjectMeta[] = [];
 
 const BASE_URL = (import.meta.env.BASE_URL || "/").replace(/\/+$/, "") + "/";
+const SLIDES_CDN_URL = String(import.meta.env.VITE_SLIDES_CDN_URL || "").trim().replace(/\/+$/, "");
+
+export function getSlidesCdnUrl(): string {
+  return SLIDES_CDN_URL;
+}
 
 export function resolveAssetUrl(url?: string): string {
   if (!url) return "";
   if (/^(https?:|\/\/|data:|blob:)/i.test(url)) return url;
   const cleanPath = url.replace(/^\/+/, "");
+  if (SLIDES_CDN_URL && cleanPath.startsWith("slides/")) {
+    return `${SLIDES_CDN_URL}/${cleanPath}`;
+  }
   return `${BASE_URL}${cleanPath}`;
 }
 

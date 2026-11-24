@@ -6,8 +6,8 @@
 
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { Icons } from "../icons/SvgIcons";
-import { resolveAssetUrl } from "../../lib/dataService";
-import type { BookPaperFilter, SlideItem } from "../../types";
+import { TranslatableSlideImage } from "./TranslatableSlideImage";
+import type { BookPaperFilter, SlideImageMode, SlideItem } from "../../types";
 
 interface LightboxModalProps {
   isOpen: boolean;
@@ -19,6 +19,11 @@ interface LightboxModalProps {
   paperFilter?: BookPaperFilter;
   onChangePaperFilter?: (filter: BookPaperFilter) => void;
   arabicOnly?: boolean;
+  slideImageMode?: SlideImageMode;
+  onChangeSlideImageMode?: (mode: SlideImageMode) => void;
+  canTranslateSlide?: (slide: SlideItem) => boolean;
+  isSlideFlipped?: (ref: string) => boolean;
+  onToggleSlideFlip?: (ref: string) => void;
 }
 
 export const LightboxModal: React.FC<LightboxModalProps> = ({
@@ -30,7 +35,12 @@ export const LightboxModal: React.FC<LightboxModalProps> = ({
   isBookMode = false,
   paperFilter = "original",
   onChangePaperFilter,
-  arabicOnly = false
+  arabicOnly = false,
+  slideImageMode = "en",
+  onChangeSlideImageMode,
+  canTranslateSlide,
+  isSlideFlipped,
+  onToggleSlideFlip
 }) => {
   const [scale, setScale] = useState(1);
   const [pan, setPan] = useState({ x: 0, y: 0 });
@@ -342,8 +352,40 @@ export const LightboxModal: React.FC<LightboxModalProps> = ({
           </span>
         </div>
 
-        {/* أزرار التحكم بالزوم والورق وملاءمة العرض */}
+        {/* أزرار التحكم بالزوم والورق وملاءمة العرض ولغة الصورة */}
         <div className="lb-top-controls">
+          {!arabicOnly && canTranslateSlide?.(currentSlide) && onChangeSlideImageMode && (
+            <div className="tsl-mode-bar is-lb" role="group" aria-label="وضع ترجمة الصورة">
+              {(
+                [
+                  { id: "en", label: "EN" },
+                  { id: "ar", label: "عربي" },
+                  { id: "hover", label: "Hover" }
+                ] as const
+              ).map((opt) => (
+                <button
+                  key={opt.id}
+                  type="button"
+                  className={`tsl-mode-btn ${slideImageMode === opt.id ? "active" : ""}`}
+                  aria-pressed={slideImageMode === opt.id}
+                  onClick={() => onChangeSlideImageMode(opt.id)}
+                >
+                  {opt.label}
+                </button>
+              ))}
+              {slideImageMode !== "hover" && onToggleSlideFlip && (
+                <button
+                  type="button"
+                  className={`tsl-mode-btn ${isSlideFlipped?.(currentSlide.ref) ? "active" : ""}`}
+                  onClick={() => onToggleSlideFlip(currentSlide.ref)}
+                  title="عكس لغة هذه الشريحة فقط"
+                >
+                  <Icons.Translate size={12} />
+                </button>
+              )}
+            </div>
+          )}
+
           {isBookMode && (
             <button
               type="button"
@@ -448,11 +490,14 @@ export const LightboxModal: React.FC<LightboxModalProps> = ({
           onTouchMove={handleTouchMove}
         >
           {currentSlide.image_url ? (
-            <img
-              src={resolveAssetUrl(currentSlide.image_url)}
+            <TranslatableSlideImage
+              imageUrl={currentSlide.image_url}
               alt={currentSlide.title || currentSlide.ref}
-              className={`lb-img ${paperFilterClass} ${fitMode === "width" ? "is-fit-width" : ""}`}
-              style={
+              mode={slideImageMode}
+              isFlipped={Boolean(isSlideFlipped?.(currentSlide.ref))}
+              canTranslate={Boolean(!arabicOnly && canTranslateSlide?.(currentSlide))}
+              imgClassName={`lb-img ${paperFilterClass} ${fitMode === "width" ? "is-fit-width" : ""}`}
+              imgStyle={
                 fitMode === "width"
                   ? undefined
                   : {
@@ -461,7 +506,9 @@ export const LightboxModal: React.FC<LightboxModalProps> = ({
                     }
               }
               draggable={false}
-              onError={(e) => {
+              loading="eager"
+              isLightbox
+              onErrorFallback={(e) => {
                 const target = e.currentTarget;
                 target.onerror = null;
                 target.src =

@@ -7,11 +7,16 @@
 
 import React, { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { LightboxModal } from "./LightboxModal";
+import { TranslatableSlideImage } from "./TranslatableSlideImage";
 import { Icons } from "../icons/SvgIcons";
 import { resolveSlideReference, jumpDirectlyToSlide } from "../../lib/scrollRestoration";
-import { resolveAssetUrl } from "../../lib/dataService";
+import {
+  isSlideTranslationAvailable,
+  loadTranslationManifest,
+  type SlideTranslationManifest
+} from "../../lib/slideTranslation";
 import { matchesNormalizedTerms } from "../../lib/textUtils";
-import type { BookLayoutMode, BookPaperFilter, Lecture, SlideItem } from "../../types";
+import type { BookLayoutMode, BookPaperFilter, Lecture, SlideImageMode, SlideItem } from "../../types";
 
 interface SlidesViewerProps {
   subjectCode?: string;
@@ -90,6 +95,13 @@ export const SlidesViewer: React.FC<SlidesViewerProps> = ({
   const [currentSlideIndex, setCurrentSlideIndex] = useState(0);
   const [localAr, setLocalAr] = useState<Record<string, boolean>>({});
   const [localEx, setLocalEx] = useState<Record<string, boolean>>({});
+  const [slideImageMode, setSlideImageMode] = useState<SlideImageMode>(() => {
+    const saved = localStorage.getItem("unified_slide_img_mode") as SlideImageMode | null;
+    if (saved === "en" || saved === "ar" || saved === "hover") return saved;
+    return "en";
+  });
+  const [flippedSlides, setFlippedSlides] = useState<Record<string, boolean>>({});
+  const [translationManifest, setTranslationManifest] = useState<SlideTranslationManifest | null>(null);
   const [seenFilter, setSeenFilter] = useState<"all" | "unseen" | "seen">("all");
   const [slideSearchQuery, setSlideSearchQuery] = useState<string>("");
   const [slideSearchScope, setSlideSearchScope] = useState<"all" | "lecture">("all");
@@ -105,6 +117,41 @@ export const SlidesViewer: React.FC<SlidesViewerProps> = ({
   useEffect(() => {
     setLastReadRef(localStorage.getItem(`unified_last_page_${subjectCode}`));
   }, [subjectCode, seenSlides]);
+
+  useEffect(() => {
+    if (arabicOnly) return;
+    let active = true;
+    loadTranslationManifest().then((m) => {
+      if (active && m) setTranslationManifest(m);
+    });
+    return () => {
+      active = false;
+    };
+  }, [arabicOnly, subjectCode]);
+
+  const handleSlideImageModeChange = useCallback((next: SlideImageMode) => {
+    setSlideImageMode(next);
+    setFlippedSlides({});
+    try {
+      localStorage.setItem("unified_slide_img_mode", next);
+    } catch {
+      // ignore storage quota errors
+    }
+  }, []);
+
+  const toggleSlideImageFlip = useCallback((ref: string) => {
+    setFlippedSlides((prev) => ({ ...prev, [ref]: !prev[ref] }));
+  }, []);
+
+  const canTranslateSlideItem = useCallback(
+    (slide: SlideItem) => isSlideTranslationAvailable(translationManifest, slide.image_url, arabicOnly),
+    [translationManifest, arabicOnly]
+  );
+
+  const hasAnyTranslatedSlide = useMemo(() => {
+    if (arabicOnly) return false;
+    return slides.some((s) => isSlideTranslationAvailable(translationManifest, s.image_url, arabicOnly));
+  }, [slides, translationManifest, arabicOnly]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -773,6 +820,33 @@ export const SlidesViewer: React.FC<SlidesViewerProps> = ({
           {slideSearchQuery && <span style={{ opacity: 0.85, marginInlineStart: 4 }}>({currentSlides.length})</span>}
         </button>
 
+        {!arabicOnly && hasAnyTranslatedSlide && (
+          <div className="tsl-mode-bar" role="group" aria-label="وضع عرض صور السلايدات">
+            <span className="tsl-mode-label">
+              <Icons.Translate size={12} />
+              <span>لغة الصورة:</span>
+            </span>
+            {(
+              [
+                { id: "en", label: "إنجليزي", title: "عرض جميع السلايدات بالإنجليزية مع زر ترجمة لكل شريحة على حدة" },
+                { id: "ar", label: "عربي", title: "عرض جميع السلايدات مترجمة للعربية مع زر عكس للإنجليزية لكل شريحة" },
+                { id: "hover", label: "Hover", title: "كشف ترجمة شريط أفقي بعرض الشريحة وارتفاع خُمس الشاشة عند التمرير أو اللمس" }
+              ] as const
+            ).map((opt) => (
+              <button
+                key={opt.id}
+                type="button"
+                className={`tsl-mode-btn ${slideImageMode === opt.id ? "active" : ""}`}
+                aria-pressed={slideImageMode === opt.id}
+                title={opt.title}
+                onClick={() => handleSlideImageModeChange(opt.id)}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
+        )}
+
         {!arabicOnly && onToggleAutoTranslate && (
           <button
             type="button"
@@ -933,13 +1007,16 @@ export const SlidesViewer: React.FC<SlidesViewerProps> = ({
                             </button>
                           )}
                         </div>
-                        <div className="sc-imgwrap book-page-wrap" onClick={() => handleOpenSlide(sl)}>
-                          <img
-                            src={resolveAssetUrl(sl.image_url)}
+                        <div className="sc-imgwrap book-page-wrap">
+                          <TranslatableSlideImage
+                            imageUrl={sl.image_url}
                             alt={sl.ref}
-                            className={paperFilterClass}
-                            loading="lazy"
-                            decoding="async"
+                            mode={slideImageMode}
+                            isFlipped={Boolean(flippedSlides[sl.ref])}
+                            canTranslate={canTranslateSlideItem(sl)}
+                            onToggleFlip={() => toggleSlideImageFlip(sl.ref)}
+                            imgClassName={paperFilterClass}
+                            onOpenLightbox={() => handleOpenSlide(sl)}
                           />
                           <button
                             type="button"
@@ -1027,19 +1104,22 @@ export const SlidesViewer: React.FC<SlidesViewerProps> = ({
                 <div className={isSplitBook ? "book-split-grid" : undefined}>
                   <div
                     className={`sc-imgwrap ${isBookMode ? "book-page-wrap" : ""}`}
-                    onClick={() => handleOpenSlide(slide)}
+                    onClick={slide.image_url ? undefined : () => handleOpenSlide(slide)}
                   >
                     {slide.image_url ? (
-                      <img
-                        src={resolveAssetUrl(slide.image_url)}
+                      <TranslatableSlideImage
+                        imageUrl={slide.image_url}
                         alt={slide.ref}
-                        className={isBookMode ? paperFilterClass : undefined}
-                        loading="lazy"
-                        decoding="async"
+                        mode={slideImageMode}
+                        isFlipped={Boolean(flippedSlides[slide.ref])}
+                        canTranslate={canTranslateSlideItem(slide)}
+                        onToggleFlip={() => toggleSlideImageFlip(slide.ref)}
+                        imgClassName={isBookMode ? paperFilterClass : undefined}
                         onLoad={handleImgLoad}
-                        onError={(e) => {
+                        onErrorFallback={(e) => {
                           (e.currentTarget as HTMLImageElement).style.display = "none";
                         }}
+                        onOpenLightbox={() => handleOpenSlide(slide)}
                       />
                     ) : (
                       <div
@@ -1140,6 +1220,11 @@ export const SlidesViewer: React.FC<SlidesViewerProps> = ({
         paperFilter={paperFilter}
         onChangePaperFilter={handlePaperFilterChange}
         arabicOnly={arabicOnly}
+        slideImageMode={slideImageMode}
+        onChangeSlideImageMode={handleSlideImageModeChange}
+        canTranslateSlide={canTranslateSlideItem}
+        isSlideFlipped={(ref) => Boolean(flippedSlides[ref])}
+        onToggleSlideFlip={toggleSlideImageFlip}
       />
     </div>
   );
