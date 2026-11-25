@@ -820,33 +820,6 @@ export const SlidesViewer: React.FC<SlidesViewerProps> = ({
           {slideSearchQuery && <span style={{ opacity: 0.85, marginInlineStart: 4 }}>({currentSlides.length})</span>}
         </button>
 
-        {!arabicOnly && hasAnyTranslatedSlide && (
-          <div className="tsl-mode-bar" role="group" aria-label="وضع عرض صور السلايدات">
-            <span className="tsl-mode-label">
-              <Icons.Translate size={12} />
-              <span>لغة الصورة:</span>
-            </span>
-            {(
-              [
-                { id: "en", label: "إنجليزي", title: "عرض جميع السلايدات بالإنجليزية مع زر ترجمة لكل شريحة على حدة" },
-                { id: "ar", label: "عربي", title: "عرض جميع السلايدات مترجمة للعربية مع زر عكس للإنجليزية لكل شريحة" },
-                { id: "hover", label: "Hover", title: "كشف ترجمة شريط أفقي بعرض الشريحة وارتفاع خُمس الشاشة عند التمرير أو اللمس" }
-              ] as const
-            ).map((opt) => (
-              <button
-                key={opt.id}
-                type="button"
-                className={`tsl-mode-btn ${slideImageMode === opt.id ? "active" : ""}`}
-                aria-pressed={slideImageMode === opt.id}
-                title={opt.title}
-                onClick={() => handleSlideImageModeChange(opt.id)}
-              >
-                {opt.label}
-              </button>
-            ))}
-          </div>
-        )}
-
         {!arabicOnly && onToggleAutoTranslate && (
           <button
             type="button"
@@ -958,6 +931,39 @@ export const SlidesViewer: React.FC<SlidesViewerProps> = ({
           </button>
         ))}
       </div>
+
+      {/* شريط وضع لغة صور السلايدات المثبّت (Sticky) ليبقى متاحاً أثناء التمرير في كل الصفحات */}
+      {!arabicOnly && hasAnyTranslatedSlide && (
+        <div className="tsl-sticky-dock">
+          <div className="tsl-mode-bar is-sticky-bar" role="group" aria-label="وضع عرض صور السلايدات">
+            <span className="tsl-mode-label">
+              <Icons.Translate size={13} />
+              <span>لغة الصورة:</span>
+            </span>
+            {(
+              [
+                { id: "en", label: "إنجليزي", title: "عرض جميع السلايدات بالإنجليزية مع زر ترجمة لكل شريحة على حدة" },
+                { id: "ar", label: "عربي", title: "عرض جميع السلايدات مترجمة للعربية مع زر عكس للإنجليزية لكل شريحة" },
+                { id: "hover", label: "Hover", title: "كشف ترجمة شريط أفقي بعرض الشريحة وارتفاع خُمس الشاشة عند التمرير أو اللمس" }
+              ] as const
+            ).map((opt) => (
+              <button
+                key={opt.id}
+                type="button"
+                className={`tsl-mode-btn ${slideImageMode === opt.id ? "active" : ""}`}
+                aria-pressed={slideImageMode === opt.id}
+                title={opt.title}
+                onClick={() => handleSlideImageModeChange(opt.id)}
+              >
+                {opt.label}
+              </button>
+            ))}
+            {slideImageMode === "hover" && (
+              <span className="tsl-hover-hint">مرّر المؤشر أو المس الشريحة</span>
+            )}
+          </div>
+        </div>
+      )}
 
       {currentSlides.length === 0 ? (
         <div className="pending-box">

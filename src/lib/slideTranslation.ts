@@ -14,6 +14,7 @@ export interface SlideTranslationEntry {
 
 export interface SlideTranslationManifest {
   version: number;
+  render_version?: number;
   updated_at?: string;
   r2_public_url?: string;
   slides: Record<string, SlideTranslationEntry>;
@@ -37,15 +38,19 @@ export function normalizeSlideKey(imageUrl?: string): string {
 /**
  * Derives the translated Arabic slide image URL (*.ar.webp) from an original image_url.
  */
-export function resolveTranslatedSlideUrl(imageUrl?: string): string {
+export function resolveTranslatedSlideUrl(imageUrl?: string, renderVersion?: number): string {
   if (!imageUrl) return "";
   const resolved = resolveAssetUrl(imageUrl);
   if (!resolved || /^(data:|blob:)/i.test(resolved)) return "";
   const [base, suffix = ""] = resolved.split(/(?=[?#])/);
-  if (base.endsWith(".ar.webp")) return resolved;
-  const dotIdx = base.lastIndexOf(".");
-  const arBase = dotIdx > base.lastIndexOf("/") ? `${base.slice(0, dotIdx)}.ar.webp` : `${base}.ar.webp`;
-  return `${arBase}${suffix}`;
+  const arBase = base.endsWith(".ar.webp")
+    ? base
+    : base.lastIndexOf(".") > base.lastIndexOf("/")
+      ? `${base.slice(0, base.lastIndexOf("."))}.ar.webp`
+      : `${base}.ar.webp`;
+  const rv = renderVersion ?? cachedManifest?.render_version ?? 2;
+  if (suffix) return `${arBase}${suffix}`;
+  return `${arBase}?rv=${rv}`;
 }
 
 export function getTranslationManifestUrl(): string {

@@ -32,27 +32,25 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
-import boto3
-from botocore.config import Config as BotoConfig
-from botocore.exceptions import ClientError
 from PIL import Image, ImageDraw, ImageStat
 
 ROOT = Path(__file__).resolve().parent.parent
 SLIDES_DIR = ROOT / "public" / "slides"
 SUBJECTS_JSON = ROOT / "public" / "data" / "subjects.json"
 MANIFEST_KEY = "slides/translation-manifest.json"
+RENDER_VERSION = 2
 IMAGE_EXTS = {".webp", ".png", ".jpg", ".jpeg"}
 
 # ------------------------------------------------------------------------------
-# Linux / Cross-Platform Arabic Font Discovery (Cairo / Noto Sans Arabic)
+# Linux / Cross-Platform Arabic Font Discovery (IBM Plex Sans Arabic / Cairo)
 # ------------------------------------------------------------------------------
 FONT_CANDIDATES = [
+    "/usr/share/fonts/truetype/ibm-plex/IBMPlexSansArabic-Medium.ttf",
+    "/usr/share/fonts/truetype/tajawal/Tajawal-Medium.ttf",
     "/usr/share/fonts/truetype/cairo/Cairo-SemiBold.ttf",
     "/usr/share/fonts/truetype/cairo/Cairo-Regular.ttf",
-    "/usr/share/fonts/truetype/noto/NotoSansArabic-SemiBold.ttf",
+    "/usr/share/fonts/truetype/noto/NotoSansArabic-Medium.ttf",
     "/usr/share/fonts/truetype/noto/NotoSansArabic-Regular.ttf",
-    "/usr/share/fonts/truetype/noto/NotoNaskhArabic-Regular.ttf",
-    "/usr/share/fonts/opentype/noto/NotoSansArabic-Regular.ttf",
     "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
     "C:/Windows/Fonts/tahoma.ttf",
 ]
@@ -70,15 +68,18 @@ def find_arabic_font() -> Optional[str]:
 
 # ------------------------------------------------------------------------------
 # Clean Google Lens Renderer Patches (Online Only — Zero Offline Fallback)
-# Adapted from Smart-Screen-Translator-PC/translator_service.py
+# Adapted from Smart-Screen-Translator-PC/translator_service.py + Book/Slide Polish
 # ------------------------------------------------------------------------------
+# Only match UNAMBIGUOUS programming code — NEVER plain English prose like "for some n..."
 _CODE_LINE_RE = re.compile(
-    r"(^\s*(def|class|import|from|return|public|private|static|void|int|float|const|let|var|for|while|if|elif|else|struct|include|#include|SELECT|CREATE)\b)"
-    r"|(\b[a-zA-Z_][a-zA-Z0-9_]*\([^)]*\)\s*[{;:])"
-    r"|(::|=>|!==|===|&&|\|\||->|\b0x[0-9a-fA-F]+\b)",
+    r"(^\s*(def\s+[A-Za-z_]\w*\s*\(|class\s+[A-Za-z_]\w*\s*[\(:{]|#include\s*[<\"']|import\s+[A-Za-z_][\w.]*|from\s+[A-Za-z_][\w.]*\s+import\b|public\s+(?:static\s+)?(?:void|int|class|String)\b|SELECT\s+.+\s+FROM\b|CREATE\s+TABLE\b))"
+    r"|(\b[a-zA-Z_][a-zA-Z0-9_]*\([^)]{0,40}\)\s*[{;])"
+    r"|(::|=>|!==|===|&&|\|\||\b0x[0-9a-fA-F]+\b)",
     re.MULTILINE,
 )
-_MATH_SYMBOL_RE = re.compile(r"[∑∫∏√∞≈≠≤≥∈∉⊂⊃∪∩∀∃⇒⇔→←↔⊗⊕⟨⟩|ψφλδΣΓΩ]|\\(frac|sum|int|alpha|beta|ket|bra)")
+_MATH_SYMBOL_RE = re.compile(r"[∑∫∏√∞≈≠≤≥∈∉⊂⊃∪∩∀∃⇒⇔→←↔⊗⊕⟨⟩ψφλδΣΓΩ]|\\(frac|sum|int|alpha|beta|ket|bra)")
+# Strip invisible Unicode BiDi/format control marks that render as tofu boxes (□) in FreeType
+_BIDI_CTRL_RE = re.compile(r"[\u200b-\u200f\u202a-\u202e\u2060-\u2069\ufeff]")
 
 
 def _sample_canvas_colors(canvas: Image.Image, x1: int, y1: int, x2: int, y2: int):
@@ -207,13 +208,47 @@ def apply_clean_renderer_patches():
         tr._paste_rotated(canvas, fill, cx, cy, deg)
         return False
 
+    orig_shape_for_display = tr.shape_for_display
+
+    def clean_shape_for_display(text: str, is_rtl: bool) -> str:
+        # Remove invisible BiDi control characters (LRM/RLM/LRE/PDF/etc.) before shaping
+        # so Pillow/FreeType never paints ugly tofu boxes (□) around numbers or dashes.
+        cleaned = _BIDI_CTRL_RE.sub("", text or "")
+        cleaned = cleaned.replace("\u00a0", " ")
+        shaped = orig_shape_for_display(cleaned, is_rtl)
+        return _BIDI_CTRL_RE.sub("", shaped)
+
+    def visual_fit_font_size(text: str, font, box_width: float, box_height: float):
+        """
+        Fits Arabic/Latin fonts by visual ink height rather than oversized Arabic em-box
+        (ascent + descent on Noto/IBM Plex is ~1.7x-2.1x visual glyph height), keeping
+        translated Arabic typography the same comfortable reading size as original English.
+        """
+        plan = tr._as_plan(font)
+        low, high = tr.RENDER_MIN_FONT_SIZE, tr.RENDER_MAX_FONT_SIZE
+        # Effective vertical capacity: match visual glyph height to source line box
+        # while compensating slightly for IBM Plex/Noto Arabic metrics without touching adjacent lines.
+        max_em_h = max(box_height * 1.24, box_height + 2.0)
+        max_w = max(4.0, box_width * 0.995)
+        while low <= high:
+            mid = (low + high) // 2
+            sized = plan.at(mid)
+            ascent, descent = sized.getmetrics()
+            if sized.getlength(text) >= max_w or (ascent + descent) >= max_em_h:
+                high = mid - 1
+            else:
+                low = mid + 1
+        size = max(tr.RENDER_MIN_FONT_SIZE, min(low - 1, tr.RENDER_MAX_FONT_SIZE))
+        return plan.at(size), size
+
     def layout_preserving_alignment(scene, data, is_rtl: bool) -> str:
         if scene.text_align != "auto":
             return scene.text_align
         align = tr._ALIGNMENT.get(data.alignment, "left")
-        src_lang = (getattr(data, "source_language", "") or "").split("-")[0].lower()
-        if src_lang in tr.RTL_LANGUAGES and align == "left":
-            align = "right"
+        # For Arabic/RTL translations, naturally right-align body paragraphs instead of
+        # pinning them to the left margin (keeps centered titles centered).
+        if is_rtl and align == "left":
+            return "right"
         return align
 
     def safe_render_text_block(lines, font, box_w, box_h, fill, outline, outline_color, align, grow=False):
@@ -315,8 +350,8 @@ def apply_clean_renderer_patches():
         if _MATH_SYMBOL_RE.search(src_text) and len(latin_words) <= 2:
             return True
 
-        # 4. Code snippets
-        if _CODE_LINE_RE.search(src_text) and len(src_text) <= 240:
+        # 4. Unambiguous code snippets (only when short/code-dense, never normal English prose)
+        if _CODE_LINE_RE.search(src_text) and len(latin_words) <= 14:
             return True
 
         # 5. Filenames / URLs
@@ -375,16 +410,35 @@ def apply_clean_renderer_patches():
             non_empty_indices = [li for li, lt in enumerate(line_texts) if lt.strip()]
             use_para_block_rtl = (
                 is_rtl
-                and align == "left"
+                and align == "right"
                 and len(non_empty_indices) > 1
                 and paragraph.HasField("geometry")
             )
 
-            block_right_x = None
+            p_left_x = None
+            p_right_x = None
             uniform_sizes = {}
             if use_para_block_rtl:
                 pbox = paragraph.geometry.bounding_box
+                p_left_x = (pbox.center_x - pbox.width / 2.0) * scene.width
                 p_right_x = (pbox.center_x + pbox.width / 2.0) * scene.width
+                para_w = max(12.0, p_right_x - p_left_x)
+
+                # Compute median line height capped by actual vertical line pitch so lines never touch
+                heights = sorted(
+                    paragraph.lines[li].geometry.bounding_box.height * scene.height
+                    for li in non_empty_indices
+                    if paragraph.lines[li].geometry.bounding_box.height > 0
+                )
+                med_bh = heights[len(heights) // 2] if heights else 20.0
+                cys = sorted(
+                    paragraph.lines[li].geometry.bounding_box.center_y * scene.height
+                    for li in non_empty_indices
+                )
+                pitches = [cys[i + 1] - cys[i] for i in range(len(cys) - 1) if cys[i + 1] - cys[i] > 4.0]
+                max_safe_bh = min(pitches) * 0.88 if pitches else med_bh
+                eff_bh = min(med_bh, max_safe_bh)
+
                 line_infos = []
                 for li in non_empty_indices:
                     box = paragraph.lines[li].geometry.bounding_box
@@ -392,22 +446,22 @@ def apply_clean_renderer_patches():
                     deg = -math.degrees(box.rotation_z)
                     if bw < 1 or bh < 1 or abs(deg) >= 1.5:
                         continue
-                    lx1 = box.center_x * scene.width - bw / 2.0
-                    full_w = max(bw, p_right_x - lx1)
                     shaped = tr.shape_for_display(line_texts[li], is_rtl)
                     plan = tr.FontPlan.resolve(shaped, scene.font_path)
-                    _, fsz = tr.fit_font_size(shaped, plan, full_w, bh)
+                    # Fit against the FULL paragraph width and pitch-safe line height
+                    _, fsz = tr.fit_font_size(shaped, plan, para_w, min(max(bh, eff_bh), max_safe_bh))
                     fsz = max(scene.floor, fsz)
-                    line_infos.append((li, lx1, full_w, bh, shaped, plan, fsz))
+                    line_infos.append((li, shaped, plan, fsz))
+
                 if line_infos:
-                    common_fsz = max(scene.floor, min(info[6] for info in line_infos))
-                    p_left_x = min(info[1] for info in line_infos)
-                    widest_w = 0.0
-                    for li, lx1, full_w, bh, shaped, plan, _ in line_infos:
-                        sized = plan.at(common_fsz)
-                        widest_w = max(widest_w, sized.getlength(shaped))
-                        uniform_sizes[li] = (sized, common_fsz, shaped)
-                    block_right_x = min(p_right_x, p_left_x + widest_w)
+                    # Target uniform paragraph font size = median (not min!) so one long line
+                    # doesn't drag an entire 9-line book paragraph down to microscopic text.
+                    sorted_fsz = sorted(info[3] for info in line_infos)
+                    target_fsz = max(scene.floor, sorted_fsz[len(sorted_fsz) // 2])
+                    for li, shaped, plan, line_max_fsz in line_infos:
+                        # Shrink ONLY lines that genuinely overflow full paragraph width
+                        fsz_i = min(target_fsz, line_max_fsz)
+                        uniform_sizes[li] = (plan.at(fsz_i), fsz_i, shaped)
 
             drawn = 0
             for li in range(len(data.line)):
@@ -427,17 +481,16 @@ def apply_clean_renderer_patches():
                 cy = box.center_y * scene.height
                 deg = -math.degrees(box.rotation_z)
 
-                if use_para_block_rtl and abs(deg) < 1.5 and block_right_x is not None and li in uniform_sizes:
+                if use_para_block_rtl and abs(deg) < 1.5 and p_left_x is not None and p_right_x is not None and li in uniform_sizes:
                     sized, fsz, shaped_u = uniform_sizes[li]
-                    line_left_x = cx - box_w / 2.0
-                    avail_w = max(1.0, block_right_x - line_left_x)
-                    cx = line_left_x + avail_w / 2.0
+                    avail_w = max(12.0, p_right_x - p_left_x)
+                    cx = p_left_x + avail_w / 2.0
                     outline_w = tr.outline_px(fsz, scene.outline_scale) if outline_color else 0
                     tile = tr._render_line_tile(
                         shaped_u,
                         sized,
                         avail_w,
-                        box_h,
+                        max(box_h, fsz * 1.35),
                         text_color,
                         outline_w,
                         outline_color,
@@ -490,6 +543,8 @@ def apply_clean_renderer_patches():
             return tr._render_reflow_paragraph(scene, paragraph, data, align, is_rtl, use_hull=True)
         return 0
 
+    tr.shape_for_display = clean_shape_for_display
+    tr.fit_font_size = visual_fit_font_size
     tr._paragraph_alignment = layout_preserving_alignment
     tr._draw_background = clean_draw_background
     tr._render_text_block = safe_render_text_block
@@ -502,6 +557,9 @@ def apply_clean_renderer_patches():
 # Cloudflare R2 S3 Client Helpers
 # ------------------------------------------------------------------------------
 def make_r2_client() -> Tuple[Any, str, str]:
+    import boto3
+    from botocore.config import Config as BotoConfig
+
     account_id = os.environ["R2_ACCOUNT_ID"].strip()
     access_key = os.environ["R2_ACCESS_KEY_ID"].strip()
     secret_key = os.environ["R2_SECRET_ACCESS_KEY"].strip()
@@ -529,6 +587,8 @@ def list_r2_etags(client: Any, bucket: str, prefix: str = "slides/") -> Dict[str
 
 
 def load_manifest(client: Any, bucket: str, public_url: str) -> Dict[str, Any]:
+    from botocore.exceptions import ClientError
+
     try:
         resp = client.get_object(Bucket=bucket, Key=MANIFEST_KEY)
         data = json.loads(resp["Body"].read().decode("utf-8"))
@@ -551,6 +611,7 @@ def load_manifest(client: Any, bucket: str, public_url: str) -> Dict[str, Any]:
 
 
 def save_manifest(client: Any, bucket: str, manifest: Dict[str, Any]) -> None:
+    manifest["render_version"] = RENDER_VERSION
     manifest["updated_at"] = datetime.now(timezone.utc).isoformat()
     payload = json.dumps(manifest, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
     client.put_object(

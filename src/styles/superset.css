@@ -3532,6 +3532,48 @@ body:has(#pwaInstallBanner):has(#jumpReturnBar) .usp-toast-stack {
    Slide Image 3-Mode Translation (EN / AR / Hover 20dvh Band) & Offline Selector
    ------------------------------------------------------------------------------ */
 
+.tsl-sticky-dock {
+  position: sticky;
+  top: calc(var(--topbar-h, 58px) + 8px);
+  z-index: 45;
+  display: flex;
+  justify-content: center;
+  margin-bottom: 14px;
+  pointer-events: none;
+}
+
+.tsl-mode-bar.is-sticky-bar {
+  pointer-events: auto;
+  background: color-mix(in srgb, var(--sf) 90%, transparent);
+  border: 1px solid color-mix(in srgb, var(--acc) 35%, var(--ln));
+  box-shadow: 0 8px 26px rgba(0, 0, 0, 0.28);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  padding: 4px 6px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.tsl-hover-hint {
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--acc);
+  padding: 0 8px 0 4px;
+  white-space: nowrap;
+}
+
+@media (max-width: 680px) {
+  .tsl-sticky-dock {
+    top: calc(var(--topbar-h, 54px) + 6px);
+  }
+  .tsl-mode-label span {
+    display: none;
+  }
+  .tsl-hover-hint {
+    display: none;
+  }
+}
+
 .tsl-mode-bar {
   display: inline-flex;
   align-items: center;

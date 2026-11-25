@@ -26,3 +26,6 @@ dist-ssr
 scratch/
 .vercel
 .env*
+
+__pycache__/
+*.pyc

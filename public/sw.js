@@ -5,8 +5,8 @@
 
 const RUNTIME_PREFIX = "usp-runtime-";
 const OFFLINE_PREFIX = "usp-offline-";
-const CORE = "usp-core-v26";
-const RUNTIME = "usp-runtime-v26";
+const CORE = "usp-core-v27";
+const RUNTIME = "usp-runtime-v27";
 
 const CORE_ASSETS = [
   "./",
@@ -137,8 +137,9 @@ self.addEventListener("fetch", (e) => {
       return;
     }
 
+    const isVersionedTranslated = url.pathname.endsWith(".ar.webp") && url.searchParams.has("rv");
     e.respondWith(
-      matchAnyCache(req.url, true).then((cached) => {
+      caches.match(req.url, { ignoreSearch: !isVersionedTranslated }).then((cached) => {
         if (cached) return cached;
         return fetch(new Request(req.url, { mode: "cors", credentials: "omit" }))
           .then((res) => {
@@ -148,7 +149,11 @@ self.addEventListener("fetch", (e) => {
             }
             return res;
           })
-          .catch(() => new Response("", { status: 503, statusText: "Offline" }));
+          .catch(async () => {
+            // إذا انقطع الإنترنت ولم تتطابق نسخة rv بالضبط، نرجع لأي نسخة مخزنة مسبقاً
+            const fallback = await matchAnyCache(req.url, true);
+            return fallback || new Response("", { status: 503, statusText: "Offline" });
+          });
       })
     );
     return;

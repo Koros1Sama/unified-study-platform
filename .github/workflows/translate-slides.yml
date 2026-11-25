@@ -50,9 +50,10 @@ jobs:
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y -qq libraqm0 libfribidi0 libharfbuzz0b fonts-noto-core curl
-          mkdir -p /usr/share/fonts/truetype/cairo || sudo mkdir -p /usr/share/fonts/truetype/cairo
-          sudo curl -fsSL "https://github.com/google/fonts/raw/main/ofl/cairo/static/Cairo-SemiBold.ttf" \
-            -o /usr/share/fonts/truetype/cairo/Cairo-SemiBold.ttf || true
+          sudo mkdir -p /usr/share/fonts/truetype/ibm-plex
+          sudo curl -fsSL "https://raw.githubusercontent.com/google/fonts/main/ofl/ibmplexsansarabic/IBMPlexSansArabic-Medium.ttf" \
+            -o /usr/share/fonts/truetype/ibm-plex/IBMPlexSansArabic-Medium.ttf
+          ls -lh /usr/share/fonts/truetype/ibm-plex/IBMPlexSansArabic-Medium.ttf
 
       - name: Install Python dependencies (Online Lens + R2 S3)
         run: |
