@@ -48,7 +48,7 @@ export function resolveTranslatedSlideUrl(imageUrl?: string, renderVersion?: num
     : base.lastIndexOf(".") > base.lastIndexOf("/")
       ? `${base.slice(0, base.lastIndexOf("."))}.ar.webp`
       : `${base}.ar.webp`;
-  const rv = renderVersion ?? cachedManifest?.render_version ?? 2;
+  const rv = renderVersion ?? cachedManifest?.render_version ?? 3;
   if (suffix) return `${arBase}${suffix}`;
   return `${arBase}?rv=${rv}`;
 }

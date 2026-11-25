@@ -3534,12 +3534,18 @@ body:has(#pwaInstallBanner):has(#jumpReturnBar) .usp-toast-stack {
 
 .tsl-sticky-dock {
   position: sticky;
-  top: calc(var(--topbar-h, 58px) + 8px);
+  top: calc(var(--topbar-h, 58px) + 6px);
   z-index: 45;
   display: flex;
-  justify-content: center;
-  margin-bottom: 14px;
+  justify-content: flex-end;
+  padding-inline: 4px;
+  margin-bottom: 12px;
   pointer-events: none;
+  transition: top 0.25s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+body.header-hidden .tsl-sticky-dock {
+  top: 8px;
 }
 
 .tsl-mode-bar.is-sticky-bar {

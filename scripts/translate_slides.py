@@ -38,7 +38,7 @@ ROOT = Path(__file__).resolve().parent.parent
 SLIDES_DIR = ROOT / "public" / "slides"
 SUBJECTS_JSON = ROOT / "public" / "data" / "subjects.json"
 MANIFEST_KEY = "slides/translation-manifest.json"
-RENDER_VERSION = 2
+RENDER_VERSION = 3
 IMAGE_EXTS = {".webp", ".png", ".jpg", ".jpeg"}
 
 # ------------------------------------------------------------------------------
@@ -78,8 +78,85 @@ _CODE_LINE_RE = re.compile(
     re.MULTILINE,
 )
 _MATH_SYMBOL_RE = re.compile(r"[∑∫∏√∞≈≠≤≥∈∉⊂⊃∪∩∀∃⇒⇔→←↔⊗⊕⟨⟩ψφλδΣΓΩ]|\\(frac|sum|int|alpha|beta|ket|bra)")
+_MATH_FUNC_WORDS = {
+    "log", "ln", "sin", "cos", "tan", "sec", "csc", "cot", "exp", "lim",
+    "max", "min", "mod", "det", "dim", "ker", "sup", "inf", "gcd", "lcm",
+    "arg", "sgn", "var", "cov", "prob", "abs", "deg", "tr", "pr",
+}
+_MATH_OP_RE = re.compile(r"[=+\-*/÷×^∑∫∏√∞≈≠≤≥<>|()]")
 # Strip invisible Unicode BiDi/format control marks that render as tofu boxes (□) in FreeType
 _BIDI_CTRL_RE = re.compile(r"[\u200b-\u200f\u202a-\u202e\u2060-\u2069\ufeff]")
+
+
+def _is_pure_math_row(src_text: str, src_lines: List[Any]) -> bool:
+    """Returns True if a visual row is a displayed equation/formula/number that must stay untouched."""
+    cleaned = (src_text or "").strip()
+    if not cleaned:
+        return False
+    # Check Lens FORMULA word tag
+    total_w = 0
+    formula_w = 0
+    for ln in src_lines:
+        for w in ln.words:
+            total_w += 1
+            if getattr(w, "type", 0) == 2:
+                formula_w += 1
+    if total_w > 0 and (formula_w / total_w) >= 0.45:
+        return True
+
+    # Count genuine non-math English words (length >= 3)
+    words3 = [w for w in re.findall(r"[A-Za-z]{3,}", cleaned) if w.lower() not in _MATH_FUNC_WORDS]
+    if len(words3) >= 2:
+        return False
+    # Single word like "Decimal" or "Binary" without math operators is NOT an equation
+    has_math_struct = bool(
+        _MATH_SYMBOL_RE.search(cleaned)
+        or "=" in cleaned
+        or (len(re.findall(r"\d+", cleaned)) >= 1 and bool(_MATH_OP_RE.search(cleaned)))
+        or re.fullmatch(r"[\d\s.,+\-*/=^()\[\]{}|<>:;%]+", cleaned)
+    )
+    if len(words3) == 0 and has_math_struct:
+        return True
+    if len(words3) == 1 and ("=" in cleaned or _MATH_SYMBOL_RE.search(cleaned)) and len(cleaned) <= 55:
+        return True
+    return False
+
+
+def _extract_arabic_prose_from_math_dst(dst_text: str) -> str:
+    """If Lens shifted the start of the next prose sentence onto a math row's translation, salvage the Arabic prose."""
+    cleaned = _BIDI_CTRL_RE.sub("", dst_text or "").strip()
+    if not cleaned:
+        return ""
+    # Find the first Arabic word (2+ Arabic letters)
+    m = re.search(r"[\u0600-\u06FF]{2,}", cleaned)
+    if not m:
+        return ""
+    return cleaned[m.start():].strip()
+
+
+def _wrap_text_to_n_lines(text: str, n_lines: int) -> List[str]:
+    """Splits a paragraph string into up to n_lines balanced word-wrapped lines."""
+    words = text.split()
+    if not words or n_lines <= 1:
+        return [text.strip()] if text.strip() else []
+    total_chars = sum(len(w) for w in words) + max(0, len(words) - 1)
+    target_per_line = max(12, math.ceil(total_chars / n_lines))
+    lines: List[str] = []
+    cur: List[str] = []
+    cur_len = 0
+    for idx, w in enumerate(words):
+        add_len = len(w) + (1 if cur else 0)
+        remaining_slots = n_lines - len(lines) - 1
+        if cur and remaining_slots > 0 and (cur_len + add_len) > target_per_line * 1.06:
+            lines.append(" ".join(cur))
+            cur = [w]
+            cur_len = len(w)
+        else:
+            cur.append(w)
+            cur_len += add_len
+    if cur:
+        lines.append(" ".join(cur))
+    return lines
 
 
 def _sample_canvas_colors(canvas: Image.Image, x1: int, y1: int, x2: int, y2: int):
@@ -387,121 +464,182 @@ def apply_clean_renderer_patches():
             )
             align = tr._paragraph_alignment(scene, data, is_rtl)
 
+            # Collect source & translated lines and group horizontally-split fragments into visual rows.
+            # This eliminates same-row overlapping text (e.g. "The" + "Shannon entropy...") and allows
+            # per-row math protection when Google Lens merges a displayed equation with a prose paragraph.
             line_texts = []
             for li in range(len(data.line)):
                 tline = data.line[li]
                 next_line = data.line[li + 1] if li + 1 < len(data.line) else None
                 line_texts.append(tr.build_line_text(data.translation, tline, next_line))
 
-            inpainted = []
+            rows: List[Dict[str, Any]] = []
             for li in range(len(data.line)):
-                tline = data.line[li]
-                box = paragraph.lines[li].geometry.bounding_box
-                box_w, box_h = box.width * scene.width, box.height * scene.height
-                if box_w < 1 or box_h < 1:
-                    inpainted.append(False)
+                sline = paragraph.lines[li]
+                box = sline.geometry.bounding_box
+                bw, bh = box.width * scene.width, box.height * scene.height
+                if bw < 1 or bh < 1:
                     continue
                 deg = -math.degrees(box.rotation_z)
                 cx, cy = box.center_x * scene.width, box.center_y * scene.height
-                inpainted.append(
-                    tr._draw_background(scene.canvas, tline, box_w, box_h, cx, cy, deg, scene.aspect)
-                )
+                x1, y1 = cx - bw / 2.0, cy - bh / 2.0
+                x2, y2 = cx + bw / 2.0, cy + bh / 2.0
+                src_ltxt = "".join(w.plain_text + w.text_separator for w in sline.words).strip()
+                dst_ltxt = line_texts[li].strip()
 
-            non_empty_indices = [li for li, lt in enumerate(line_texts) if lt.strip()]
+                # Merge with previous visual row only if horizontal, same vertical band, AND small
+                # horizontal gap (prevents merging two table columns or two sides of an arrow =>)
+                horiz_gap = max(0.0, x1 - rows[-1]["x2"]) if rows else 9999.0
+                if (
+                    rows
+                    and abs(deg) < 1.5
+                    and abs(rows[-1]["deg"]) < 1.5
+                    and abs(cy - rows[-1]["cy"]) <= max(bh, rows[-1]["bh"]) * 0.72
+                    and horiz_gap <= max(bh, rows[-1]["bh"]) * 1.45
+                ):
+                    r = rows[-1]
+                    r["indices"].append(li)
+                    r["src_lines"].append(sline)
+                    r["tlines"].append(data.line[li])
+                    r["x1"] = min(r["x1"], x1)
+                    r["y1"] = min(r["y1"], y1)
+                    r["x2"] = max(r["x2"], x2)
+                    r["y2"] = max(r["y2"], y2)
+                    r["bw"] = r["x2"] - r["x1"]
+                    r["bh"] = r["y2"] - r["y1"]
+                    r["cx"] = (r["x1"] + r["x2"]) / 2.0
+                    r["cy"] = (r["y1"] + r["y2"]) / 2.0
+                    if src_ltxt:
+                        r["src_text"] = (r["src_text"] + " " + src_ltxt).strip()
+                    if dst_ltxt:
+                        r["dst_text"] = (r["dst_text"] + " " + dst_ltxt).strip()
+                else:
+                    rows.append({
+                        "indices": [li],
+                        "src_lines": [sline],
+                        "tlines": [data.line[li]],
+                        "x1": x1, "y1": y1, "x2": x2, "y2": y2,
+                        "bw": bw, "bh": bh, "cx": cx, "cy": cy, "deg": deg,
+                        "src_text": src_ltxt,
+                        "dst_text": dst_ltxt,
+                        "is_math": False,
+                    })
+
+            # Detect pure-math rows (e.g., displayed equations accidentally merged into a prose paragraph)
+            salvaged_prefix: List[str] = []
+            for r in rows:
+                if _is_pure_math_row(r["src_text"], r["src_lines"]):
+                    r["is_math"] = True
+                    extra_ar = _extract_arabic_prose_from_math_dst(r["dst_text"])
+                    if extra_ar:
+                        salvaged_prefix.append(extra_ar)
+
+            prose_rows = [r for r in rows if not r["is_math"]]
+            if not prose_rows:
+                return 0
+
+            # If we salvaged Arabic prose that Lens shifted onto an equation row, re-wrap the
+            # complete Arabic prose cleanly across the prose rows so nothing is lost or duplicated.
+            if salvaged_prefix:
+                combined_prose = " ".join(
+                    salvaged_prefix + [r["dst_text"] for r in prose_rows if r["dst_text"]]
+                ).strip()
+                wrapped = _wrap_text_to_n_lines(combined_prose, len(prose_rows))
+                for idx_r, r in enumerate(prose_rows):
+                    r["dst_text"] = wrapped[idx_r] if idx_r < len(wrapped) else ""
+
+            # Pass 1: Erase ONLY non-math prose rows (keeps displayed equations 100% crisp & intact!)
+            for r in prose_rows:
+                r["inpainted"] = False
+                for li in r["indices"]:
+                    tline = data.line[li]
+                    box = paragraph.lines[li].geometry.bounding_box
+                    bw_i, bh_i = box.width * scene.width, box.height * scene.height
+                    if bw_i < 1 or bh_i < 1:
+                        continue
+                    deg_i = -math.degrees(box.rotation_z)
+                    cx_i, cy_i = box.center_x * scene.width, box.center_y * scene.height
+                    if tr._draw_background(scene.canvas, tline, bw_i, bh_i, cx_i, cy_i, deg_i, scene.aspect):
+                        r["inpainted"] = True
+
+            active_rows = [r for r in prose_rows if r["dst_text"].strip()]
+            if not active_rows:
+                return 0
+
+            has_multi_col = any(
+                abs(prose_rows[i]["cy"] - prose_rows[j]["cy"]) <= max(prose_rows[i]["bh"], prose_rows[j]["bh"]) * 0.72
+                for i in range(len(prose_rows))
+                for j in range(i + 1, len(prose_rows))
+            )
+
             use_para_block_rtl = (
                 is_rtl
                 and align == "right"
-                and len(non_empty_indices) > 1
-                and paragraph.HasField("geometry")
+                and len(active_rows) >= 1
+                and not has_multi_col
+                and all(abs(r["deg"]) < 1.5 for r in active_rows)
             )
 
-            p_left_x = None
-            p_right_x = None
-            uniform_sizes = {}
+            p_left_x = min(r["x1"] for r in prose_rows)
+            p_right_x = max(r["x2"] for r in prose_rows)
+            para_w = max(12.0, p_right_x - p_left_x)
+            uniform_sizes: Dict[int, Any] = {}
+
             if use_para_block_rtl:
-                pbox = paragraph.geometry.bounding_box
-                p_left_x = (pbox.center_x - pbox.width / 2.0) * scene.width
-                p_right_x = (pbox.center_x + pbox.width / 2.0) * scene.width
-                para_w = max(12.0, p_right_x - p_left_x)
-
-                # Compute median line height capped by actual vertical line pitch so lines never touch
-                heights = sorted(
-                    paragraph.lines[li].geometry.bounding_box.height * scene.height
-                    for li in non_empty_indices
-                    if paragraph.lines[li].geometry.bounding_box.height > 0
-                )
+                # Compute median row height and pitch strictly across distinct vertical rows
+                heights = sorted(r["bh"] for r in prose_rows if r["bh"] > 0)
                 med_bh = heights[len(heights) // 2] if heights else 20.0
-                cys = sorted(
-                    paragraph.lines[li].geometry.bounding_box.center_y * scene.height
-                    for li in non_empty_indices
-                )
-                pitches = [cys[i + 1] - cys[i] for i in range(len(cys) - 1) if cys[i + 1] - cys[i] > 4.0]
-                max_safe_bh = min(pitches) * 0.88 if pitches else med_bh
-                eff_bh = min(med_bh, max_safe_bh)
+                cys = sorted(r["cy"] for r in prose_rows)
+                pitches = [cys[i + 1] - cys[i] for i in range(len(cys) - 1) if (cys[i + 1] - cys[i]) >= med_bh * 0.72]
+                # Never let an outlier pitch crush typography below 88% of median line height
+                max_safe_bh = max(med_bh * 0.88, min(pitches) * 0.90) if pitches else med_bh
 
-                line_infos = []
-                for li in non_empty_indices:
-                    box = paragraph.lines[li].geometry.bounding_box
-                    bw, bh = box.width * scene.width, box.height * scene.height
-                    deg = -math.degrees(box.rotation_z)
-                    if bw < 1 or bh < 1 or abs(deg) >= 1.5:
-                        continue
-                    shaped = tr.shape_for_display(line_texts[li], is_rtl)
+                row_infos = []
+                for r_idx, r in enumerate(active_rows):
+                    shaped = tr.shape_for_display(r["dst_text"], is_rtl)
                     plan = tr.FontPlan.resolve(shaped, scene.font_path)
-                    # Fit against the FULL paragraph width and pitch-safe line height
-                    _, fsz = tr.fit_font_size(shaped, plan, para_w, min(max(bh, eff_bh), max_safe_bh))
+                    row_w = para_w if len(prose_rows) > 1 else max(r["bw"], para_w)
+                    fit_h = min(max(r["bh"], med_bh), max_safe_bh)
+                    _, fsz = tr.fit_font_size(shaped, plan, row_w, fit_h)
                     fsz = max(scene.floor, fsz)
-                    line_infos.append((li, shaped, plan, fsz))
+                    row_infos.append((r_idx, shaped, plan, fsz))
 
-                if line_infos:
-                    # Target uniform paragraph font size = median (not min!) so one long line
-                    # doesn't drag an entire 9-line book paragraph down to microscopic text.
-                    sorted_fsz = sorted(info[3] for info in line_infos)
+                if row_infos:
+                    sorted_fsz = sorted(info[3] for info in row_infos)
                     target_fsz = max(scene.floor, sorted_fsz[len(sorted_fsz) // 2])
-                    for li, shaped, plan, line_max_fsz in line_infos:
-                        # Shrink ONLY lines that genuinely overflow full paragraph width
-                        fsz_i = min(target_fsz, line_max_fsz)
-                        uniform_sizes[li] = (plan.at(fsz_i), fsz_i, shaped)
+                    for r_idx, shaped, plan, row_max_fsz in row_infos:
+                        fsz_i = min(target_fsz, row_max_fsz)
+                        uniform_sizes[r_idx] = (plan.at(fsz_i), fsz_i, shaped)
 
+            # Pass 2: Draw each non-math prose row cleanly without any same-row collision
             drawn = 0
-            for li in range(len(data.line)):
-                tline = data.line[li]
-                box = paragraph.lines[li].geometry.bounding_box
-                box_w, box_h = box.width * scene.width, box.height * scene.height
-                if box_w < 1 or box_h < 1:
-                    continue
-                text = line_texts[li]
-                if not text.strip():
-                    continue
-                text = tr.shape_for_display(text, is_rtl)
+            for r_idx, r in enumerate(active_rows):
+                tline = r["tlines"][0]
                 text_color = tr._argb_to_rgba(tline.style.text_color)
-                outline_color = tr._argb_to_rgba(tline.style.background_primary_color) if inpainted[li] else None
+                outline_color = tr._argb_to_rgba(tline.style.background_primary_color) if r["inpainted"] else None
 
-                cx = box.center_x * scene.width
-                cy = box.center_y * scene.height
-                deg = -math.degrees(box.rotation_z)
-
-                if use_para_block_rtl and abs(deg) < 1.5 and p_left_x is not None and p_right_x is not None and li in uniform_sizes:
-                    sized, fsz, shaped_u = uniform_sizes[li]
-                    avail_w = max(12.0, p_right_x - p_left_x)
-                    cx = p_left_x + avail_w / 2.0
+                if use_para_block_rtl and r_idx in uniform_sizes:
+                    sized, fsz, shaped_u = uniform_sizes[r_idx]
+                    avail_w = para_w if len(prose_rows) > 1 else max(r["bw"], para_w)
+                    cx_draw = (p_left_x + avail_w / 2.0) if len(prose_rows) > 1 else r["cx"]
                     outline_w = tr.outline_px(fsz, scene.outline_scale) if outline_color else 0
                     tile = tr._render_line_tile(
                         shaped_u,
                         sized,
                         avail_w,
-                        max(box_h, fsz * 1.35),
+                        max(r["bh"], fsz * 1.32),
                         text_color,
                         outline_w,
                         outline_color,
                         "right",
                         grow=(sized.getlength(shaped_u) > avail_w),
                     )
+                    tr._paste_rotated(scene.canvas, tile, cx_draw, r["cy"], r["deg"])
                 else:
+                    text = tr.shape_for_display(r["dst_text"], is_rtl)
                     plan = tr.FontPlan.resolve(text, scene.font_path)
-                    tile = tr._render_horizontal(scene, text, plan, box_w, box_h, text_color, outline_color, align)
-
-                tr._paste_rotated(scene.canvas, tile, cx, cy, deg)
+                    tile = tr._render_horizontal(scene, text, plan, r["bw"], r["bh"], text_color, outline_color, align)
+                    tr._paste_rotated(scene.canvas, tile, r["cx"], r["cy"], r["deg"])
                 drawn += 1
             return drawn
 
