@@ -96,11 +96,12 @@ export const SlidesViewer: React.FC<SlidesViewerProps> = ({
   const [localAr, setLocalAr] = useState<Record<string, boolean>>({});
   const [localEx, setLocalEx] = useState<Record<string, boolean>>({});
   const [slideImageMode, setSlideImageMode] = useState<SlideImageMode>(() => {
-    const saved = localStorage.getItem("unified_slide_img_mode") as SlideImageMode | null;
+    const saved = localStorage.getItem("unified_slide_img_mode_v2") as SlideImageMode | null;
     if (saved === "en" || saved === "ar" || saved === "hover") return saved;
-    return "en";
+    return "hover";
   });
   const [flippedSlides, setFlippedSlides] = useState<Record<string, boolean>>({});
+  const [smartBandPaused, setSmartBandPaused] = useState(false);
   const [translationManifest, setTranslationManifest] = useState<SlideTranslationManifest | null>(null);
   const [seenFilter, setSeenFilter] = useState<"all" | "unseen" | "seen">("all");
   const [slideSearchQuery, setSlideSearchQuery] = useState<string>("");
@@ -132,12 +133,43 @@ export const SlidesViewer: React.FC<SlidesViewerProps> = ({
   const handleSlideImageModeChange = useCallback((next: SlideImageMode) => {
     setSlideImageMode(next);
     setFlippedSlides({});
+    setSmartBandPaused(false);
     try {
-      localStorage.setItem("unified_slide_img_mode", next);
+      localStorage.setItem("unified_slide_img_mode_v2", next);
     } catch {
       // ignore storage quota errors
     }
   }, []);
+
+  // ضغطة خارج صورة السلايد (بدون احتساب التمرير) تلغي شريط الترجمة الذكي مؤقتاً حتى تعود للضغط على صورة
+  useEffect(() => {
+    if (slideImageMode !== "hover" || smartBandPaused) return;
+    let downPos: { x: number; y: number } | null = null;
+
+    const onDown = (e: PointerEvent) => {
+      downPos = { x: e.clientX, y: e.clientY };
+    };
+    const onUp = (e: PointerEvent) => {
+      if (!downPos) return;
+      const dist = Math.hypot(e.clientX - downPos.x, e.clientY - downPos.y);
+      downPos = null;
+      // التمرير أو السحب لا يُحتسب ضغطة إلغاء أبداً
+      if (dist >= 10) return;
+
+      const target = e.target as HTMLElement | null;
+      if (!target) return;
+      if (target.closest("[data-tsl-stage='true']")) return;
+      if (target.closest("button, a, input, select, textarea, .tsl-mode-bar, #lightboxModal")) return;
+      setSmartBandPaused(true);
+    };
+
+    document.addEventListener("pointerdown", onDown, { passive: true });
+    document.addEventListener("pointerup", onUp, { passive: true });
+    return () => {
+      document.removeEventListener("pointerdown", onDown);
+      document.removeEventListener("pointerup", onUp);
+    };
+  }, [slideImageMode, smartBandPaused]);
 
   const toggleSlideImageFlip = useCallback((ref: string) => {
     setFlippedSlides((prev) => ({ ...prev, [ref]: !prev[ref] }));
@@ -489,16 +521,18 @@ export const SlidesViewer: React.FC<SlidesViewerProps> = ({
     return pairs;
   }, [isBookMode, effectiveBookLayout, renderedSlides]);
 
-  const renderPanelSegment = (ref: string) => {
-    if (arabicOnly) {
-      const showEx = isExShown(ref);
+  const renderPanelSegment = (slide: SlideItem) => {
+    const usesLensTranslation = canTranslateSlideItem(slide);
+    // عندما تكون ترجمة جوجل لينس متوفرة على الصورة نلغي لوحة الترجمة النصية المكررة ونبقي زر الشرح متوازناً وهادئاً
+    if (arabicOnly || usesLensTranslation) {
+      const showEx = isExShown(slide.ref);
       return (
         <button
           type="button"
           className={`mini ex-btn ${showEx ? "on" : ""}`}
           onClick={(e) => {
             e.stopPropagation();
-            toggleCardEx(ref);
+            toggleCardEx(slide.ref);
           }}
           title="إظهار أو طي الشرح التعليمي"
         >
@@ -508,7 +542,7 @@ export const SlidesViewer: React.FC<SlidesViewerProps> = ({
       );
     }
 
-    const activeMode = getCardPanelMode(ref);
+    const activeMode = getCardPanelMode(slide.ref);
     return (
       <div
         className="sc-panel-seg"
@@ -530,7 +564,7 @@ export const SlidesViewer: React.FC<SlidesViewerProps> = ({
             className={`sc-seg-btn ${activeMode === item.id ? "active" : ""} ${item.id === "none" ? "is-hide" : ""}`}
             aria-pressed={activeMode === item.id}
             title={item.title}
-            onClick={() => setCardPanelMode(ref, item.id)}
+            onClick={() => setCardPanelMode(slide.ref, item.id)}
           >
             {item.label}
           </button>
@@ -540,7 +574,8 @@ export const SlidesViewer: React.FC<SlidesViewerProps> = ({
   };
 
   const renderPagePanels = (slide: SlideItem) => {
-    const visibleAr = !arabicOnly && isArShown(slide.ref);
+    const usesLensTranslation = canTranslateSlideItem(slide);
+    const visibleAr = !arabicOnly && !usesLensTranslation && isArShown(slide.ref);
     const visibleEx = isExShown(slide.ref);
 
     if (!visibleAr && !visibleEx) {
@@ -613,7 +648,7 @@ export const SlidesViewer: React.FC<SlidesViewerProps> = ({
           {slide.title || slide.content_en || `${unitLabel} ${slide.slide_num}`}
         </span>
         <div className="sc-actions">
-          {renderPanelSegment(slide.ref)}
+          {renderPanelSegment(slide)}
           {onToggleSeenSlide && (
             <button
               type="button"
@@ -820,16 +855,43 @@ export const SlidesViewer: React.FC<SlidesViewerProps> = ({
           {slideSearchQuery && <span style={{ opacity: 0.85, marginInlineStart: 4 }}>({currentSlides.length})</span>}
         </button>
 
-        {!arabicOnly && onToggleAutoTranslate && (
-          <button
-            type="button"
-            className={`fchip ${autoTranslate ? "on" : ""}`}
-            onClick={onToggleAutoTranslate}
-            title="تبديل إظهار الترجمة العربية"
-          >
-            <Icons.Translate size={12} />
-            <span>ترجمة الكل</span>
-          </button>
+        {!arabicOnly && hasAnyTranslatedSlide ? (
+          <div className="tsl-mode-bar" role="group" aria-label="وضع ترجمة السلايدات">
+            <span className="tsl-mode-label">
+              <Icons.Translate size={12} />
+            </span>
+            {(
+              [
+                { id: "hover", label: "ترجمة ذكية", title: "شريط ترجمة أفقي موازٍ للتمرير أو المؤشر (الافتراضي)" },
+                { id: "ar", label: "عربي", title: "عرض جميع السلايدات مترجمة للعربية مع زر عكس فردي للإنجليزية" },
+                { id: "en", label: "إنجليزي", title: "عرض جميع السلايدات بالإنجليزية مع زر ترجمة فردي للعربية" }
+              ] as const
+            ).map((opt) => (
+              <button
+                key={opt.id}
+                type="button"
+                className={`tsl-mode-btn ${slideImageMode === opt.id ? "active" : ""}`}
+                aria-pressed={slideImageMode === opt.id}
+                title={opt.title}
+                onClick={() => handleSlideImageModeChange(opt.id)}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
+        ) : (
+          !arabicOnly &&
+          onToggleAutoTranslate && (
+            <button
+              type="button"
+              className={`fchip ${autoTranslate ? "on" : ""}`}
+              onClick={onToggleAutoTranslate}
+              title="تبديل إظهار الترجمة العربية"
+            >
+              <Icons.Translate size={12} />
+              <span>ترجمة الكل</span>
+            </button>
+          )
         )}
 
         {onToggleAutoExplain && (
@@ -932,39 +994,6 @@ export const SlidesViewer: React.FC<SlidesViewerProps> = ({
         ))}
       </div>
 
-      {/* شريط وضع لغة صور السلايدات المثبّت (Sticky) ليبقى متاحاً أثناء التمرير في كل الصفحات */}
-      {!arabicOnly && hasAnyTranslatedSlide && (
-        <div className="tsl-sticky-dock">
-          <div className="tsl-mode-bar is-sticky-bar" role="group" aria-label="وضع عرض صور السلايدات">
-            <span className="tsl-mode-label">
-              <Icons.Translate size={13} />
-              <span>لغة الصورة:</span>
-            </span>
-            {(
-              [
-                { id: "en", label: "إنجليزي", title: "عرض جميع السلايدات بالإنجليزية مع زر ترجمة لكل شريحة على حدة" },
-                { id: "ar", label: "عربي", title: "عرض جميع السلايدات مترجمة للعربية مع زر عكس للإنجليزية لكل شريحة" },
-                { id: "hover", label: "Hover", title: "كشف ترجمة شريط أفقي بعرض الشريحة وارتفاع خُمس الشاشة عند التمرير أو اللمس" }
-              ] as const
-            ).map((opt) => (
-              <button
-                key={opt.id}
-                type="button"
-                className={`tsl-mode-btn ${slideImageMode === opt.id ? "active" : ""}`}
-                aria-pressed={slideImageMode === opt.id}
-                title={opt.title}
-                onClick={() => handleSlideImageModeChange(opt.id)}
-              >
-                {opt.label}
-              </button>
-            ))}
-            {slideImageMode === "hover" && (
-              <span className="tsl-hover-hint">مرّر المؤشر أو المس الشريحة</span>
-            )}
-          </div>
-        </div>
-      )}
-
       {currentSlides.length === 0 ? (
         <div className="pending-box">
           <div className="pb-ic">
@@ -1020,6 +1049,8 @@ export const SlidesViewer: React.FC<SlidesViewerProps> = ({
                             mode={slideImageMode}
                             isFlipped={Boolean(flippedSlides[sl.ref])}
                             canTranslate={canTranslateSlideItem(sl)}
+                            smartPaused={smartBandPaused}
+                            onResumeSmart={() => setSmartBandPaused(false)}
                             onToggleFlip={() => toggleSlideImageFlip(sl.ref)}
                             imgClassName={paperFilterClass}
                             onOpenLightbox={() => handleOpenSlide(sl)}
@@ -1065,7 +1096,7 @@ export const SlidesViewer: React.FC<SlidesViewerProps> = ({
                       <div key={sl!.ref} className="book-spread-note-col">
                         <div className="book-spread-note-head">
                           <span className="book-spread-note-ref">{sl!.ref} — {sl!.title}</span>
-                          {renderPanelSegment(sl!.ref)}
+                          {renderPanelSegment(sl!)}
                         </div>
                         {renderPagePanels(sl!)}
                       </div>
@@ -1093,8 +1124,9 @@ export const SlidesViewer: React.FC<SlidesViewerProps> = ({
             const isSeen = seenSlides.has(slide.ref);
             const showAr = isArShown(slide.ref);
             const showEx = isExShown(slide.ref);
+            const usesLens = canTranslateSlideItem(slide);
             const isSplitBook = isBookMode && effectiveBookLayout === "split";
-            const hasAnyPanel = (!arabicOnly && showAr) || showEx;
+            const hasAnyPanel = (!arabicOnly && !usesLens && showAr) || showEx;
 
             return (
               <article
@@ -1119,6 +1151,8 @@ export const SlidesViewer: React.FC<SlidesViewerProps> = ({
                         mode={slideImageMode}
                         isFlipped={Boolean(flippedSlides[slide.ref])}
                         canTranslate={canTranslateSlideItem(slide)}
+                        smartPaused={smartBandPaused}
+                        onResumeSmart={() => setSmartBandPaused(false)}
                         onToggleFlip={() => toggleSlideImageFlip(slide.ref)}
                         imgClassName={isBookMode ? paperFilterClass : undefined}
                         onLoad={handleImgLoad}

@@ -1,7 +1,7 @@
 // ==============================================================================
-// المنصة التعليمية الموحدة — عارض صورة السلايد ثلاثي الأوضاع (EN / AR / Hover Lens)
-// 1/5-Screen (20dvh) Full-Width Horizontal Hover Reveal · Mobile Touch Friendly
-// Pure GPU clip-path · Graceful Fallback · Zero Emojis
+// المنصة التعليمية الموحدة — عارض صورة السلايد بالترجمة الذكية (Smart / AR / EN)
+// Center-Screen Scroll-Synced 20dvh Reading Band (Mobile) + Cursor-Tracked Band (Desktop)
+// Tap-Outside Dismiss (Scroll-Safe) · Pure GPU clip-path · Zero Clutter · Zero Emojis
 // ==============================================================================
 
 import React, { useState, useRef, useCallback, useEffect } from "react";
@@ -16,6 +16,8 @@ export interface TranslatableSlideImageProps {
   mode: SlideImageMode;
   isFlipped: boolean;
   canTranslate: boolean;
+  smartPaused?: boolean;
+  onResumeSmart?: () => void;
   onToggleFlip?: () => void;
   imgClassName?: string;
   imgStyle?: React.CSSProperties;
@@ -36,12 +38,46 @@ interface BandState {
 
 const INACTIVE_BAND: BandState = { active: false, topPx: 0, bottomPx: 0, heightPx: 0 };
 
+// متتبع مشترك خفيف لموضع المؤشر وحالة الشاشة لتحديث شريط القراءة أثناء التمرير بـ 60fps
+const sharedPointer = { x: -1, y: -1, insideViewport: false };
+let globalPointerAttached = false;
+
+function ensureGlobalPointerTracker() {
+  if (globalPointerAttached || typeof window === "undefined") return;
+  globalPointerAttached = true;
+  window.addEventListener(
+    "pointermove",
+    (e) => {
+      if (e.pointerType === "mouse") {
+        sharedPointer.x = e.clientX;
+        sharedPointer.y = e.clientY;
+        sharedPointer.insideViewport = true;
+      }
+    },
+    { passive: true }
+  );
+  document.addEventListener(
+    "mouseleave",
+    () => {
+      sharedPointer.insideViewport = false;
+    },
+    { passive: true }
+  );
+}
+
+function isCoarsePointerDevice(): boolean {
+  if (typeof window === "undefined") return false;
+  return window.matchMedia("(pointer: coarse)").matches;
+}
+
 export const TranslatableSlideImage: React.FC<TranslatableSlideImageProps> = ({
   imageUrl,
   alt,
   mode,
   isFlipped,
   canTranslate,
+  smartPaused = false,
+  onResumeSmart,
   onToggleFlip,
   imgClassName,
   imgStyle,
@@ -53,95 +89,156 @@ export const TranslatableSlideImage: React.FC<TranslatableSlideImageProps> = ({
   isLightbox = false
 }) => {
   const wrapRef = useRef<HTMLDivElement>(null);
+  const tapStartRef = useRef<{ x: number; y: number } | null>(null);
   const [arBroken, setArBroken] = useState(false);
   const [band, setBand] = useState<BandState>(INACTIVE_BAND);
-  const [touchLocked, setTouchLocked] = useState(false);
+  const [customTouchY, setCustomTouchY] = useState<number | null>(null);
+
+  useEffect(() => {
+    ensureGlobalPointerTracker();
+  }, []);
 
   useEffect(() => {
     setArBroken(false);
     setBand(INACTIVE_BAND);
-    setTouchLocked(false);
+    setCustomTouchY(null);
   }, [imageUrl]);
-
-  useEffect(() => {
-    if (mode !== "hover") {
-      setBand(INACTIVE_BAND);
-      setTouchLocked(false);
-    }
-  }, [mode]);
 
   const enSrc = resolveAssetUrl(imageUrl);
   const arSrc = resolveTranslatedSlideUrl(imageUrl);
   const translationReady = canTranslate && Boolean(arSrc) && !arBroken;
 
-  // الوضع الفعلي للصورة في وضعي EN و AR
   const showingFullAr =
     translationReady &&
     ((mode === "ar" && !isFlipped) || (mode === "en" && isFlipped));
 
-  const isHoverMode = translationReady && mode === "hover";
+  const isSmartMode = translationReady && mode === "hover";
 
-  const computeBandFromClientY = useCallback((clientY: number) => {
+  const computeBandAtClientY = useCallback((clientY: number) => {
     const el = wrapRef.current;
     if (!el) return;
     const rect = el.getBoundingClientRect();
-    if (rect.height <= 0) return;
+    if (rect.height <= 0 || rect.width <= 0) {
+      setBand((prev) => (prev.active ? INACTIVE_BAND : prev));
+      return;
+    }
 
-    const relY = clientY - rect.top;
-    // خُمس ارتفاع الشاشة (20dvh): نصف الخُمس فوق المؤشر ونصف الخُمس تحته
     const viewportH = window.visualViewport?.height || window.innerHeight || 720;
+    // خُمس ارتفاع الشاشة (20dvh): نصفه فوق خط القراءة ونصفه تحته
     const halfBand = viewportH * 0.1;
+    const relY = clientY - rect.top;
+
+    // إذا كان الشريط خارج حدود الصورة تماماً لا نفعّل الطبقة
+    if (relY + halfBand <= 0 || relY - halfBand >= rect.height) {
+      setBand((prev) => (prev.active ? INACTIVE_BAND : prev));
+      return;
+    }
 
     const topPx = Math.max(0, Math.min(rect.height, relY - halfBand));
     const botEdge = Math.max(0, Math.min(rect.height, relY + halfBand));
-    const bottomPx = Math.max(0, rect.height - botEdge);
+    const heightPx = Math.max(0, botEdge - topPx);
+    if (heightPx < 6) {
+      setBand((prev) => (prev.active ? INACTIVE_BAND : prev));
+      return;
+    }
 
-    setBand({
-      active: true,
-      topPx,
-      bottomPx,
-      heightPx: Math.max(0, botEdge - topPx)
-    });
+    const bottomPx = Math.max(0, rect.height - botEdge);
+    setBand({ active: true, topPx, bottomPx, heightPx });
   }, []);
 
-  const handlePointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
-    if (!isHoverMode) return;
-    if (e.pointerType === "mouse") {
-      computeBandFromClientY(e.clientY);
+  // تحديث شريط القراءة بوسط الشاشة بشكل متوازٍ مع التمرير (للجوال) أو متابع للمؤشر أثناء التمرير (للحاسوب)
+  useEffect(() => {
+    if (!isSmartMode || smartPaused) {
+      setBand(INACTIVE_BAND);
+      return;
     }
+
+    let rafId = 0;
+
+    const syncBand = () => {
+      rafId = 0;
+      const el = wrapRef.current;
+      if (!el) return;
+      const rect = el.getBoundingClientRect();
+      const viewportH = window.visualViewport?.height || window.innerHeight || 720;
+
+      if (isCoarsePointerDevice()) {
+        // على الجوال: المستطيل يتمركز في وسط الشاشة ويتحرك تلقائياً بالتوازي مع التمرير
+        const targetY = customTouchY !== null ? customTouchY : viewportH * 0.5;
+        computeBandAtClientY(targetY);
+      } else if (
+        sharedPointer.insideViewport &&
+        sharedPointer.x >= rect.left &&
+        sharedPointer.x <= rect.right &&
+        sharedPointer.y >= rect.top &&
+        sharedPointer.y <= rect.bottom
+      ) {
+        computeBandAtClientY(sharedPointer.y);
+      } else {
+        setBand((prev) => (prev.active ? INACTIVE_BAND : prev));
+      }
+    };
+
+    const onScrollOrResize = () => {
+      // بمجرد التمرير على الجوال يعود الشريط بسلاسة لوسط الشاشة ليوازي القراءة
+      if (isCoarsePointerDevice() && customTouchY !== null) {
+        setCustomTouchY(null);
+      }
+      if (!rafId) {
+        rafId = window.requestAnimationFrame(syncBand);
+      }
+    };
+
+    syncBand();
+    window.addEventListener("scroll", onScrollOrResize, { passive: true });
+    window.addEventListener("resize", onScrollOrResize, { passive: true });
+    return () => {
+      if (rafId) window.cancelAnimationFrame(rafId);
+      window.removeEventListener("scroll", onScrollOrResize);
+      window.removeEventListener("resize", onScrollOrResize);
+    };
+  }, [isSmartMode, smartPaused, customTouchY, computeBandAtClientY]);
+
+  const handlePointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (!isSmartMode || e.pointerType !== "mouse") return;
+    if (smartPaused) onResumeSmart?.();
+    computeBandAtClientY(e.clientY);
   };
 
   const handlePointerLeave = (e: React.PointerEvent<HTMLDivElement>) => {
-    if (!isHoverMode) return;
-    if (e.pointerType === "mouse" && !touchLocked) {
-      setBand(INACTIVE_BAND);
+    if (!isSmartMode || e.pointerType !== "mouse") return;
+    setBand(INACTIVE_BAND);
+  };
+
+  const handlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (e.pointerType !== "mouse") {
+      tapStartRef.current = { x: e.clientX, y: e.clientY };
     }
   };
 
-  const handleWrapClick = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (isHoverMode && !isLightbox) {
-      // على الشاشات اللمسية: النقر على السلايد في وضع Hover يضع شريط الترجمة مكان اللمسة (أو يخفيه)
-      const isTouchLike =
-        typeof window !== "undefined" &&
-        (window.matchMedia("(pointer: coarse)").matches || "ontouchstart" in window);
-      if (isTouchLike) {
-        e.stopPropagation();
-        if (touchLocked && band.active) {
-          computeBandFromClientY(e.clientY);
-        } else {
-          setTouchLocked(true);
-          computeBandFromClientY(e.clientY);
-        }
-        return;
+  const handlePointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (e.pointerType === "mouse" || !tapStartRef.current) return;
+    const dx = e.clientX - tapStartRef.current.x;
+    const dy = e.clientY - tapStartRef.current.y;
+    tapStartRef.current = null;
+    // لا نحتسب التمرير كضغطة أبداً
+    if (Math.hypot(dx, dy) >= 10) return;
+
+    if (isSmartMode) {
+      if (smartPaused) {
+        setCustomTouchY(null);
+        onResumeSmart?.();
+      } else {
+        setCustomTouchY(e.clientY);
+        computeBandAtClientY(e.clientY);
       }
     }
-    onOpenLightbox?.();
   };
 
-  const handleTouchBandMove = (e: React.TouchEvent<HTMLDivElement>) => {
-    if (!isHoverMode || e.touches.length !== 1) return;
-    setTouchLocked(true);
-    computeBandFromClientY(e.touches[0].clientY);
+  const handleWrapClick = () => {
+    // على الجوال في وضع الترجمة الذكي، اللمسة مخصصة للشريط والتكبير يتم عبر الزر السفلي الصغير
+    if (isSmartMode && isCoarsePointerDevice()) return;
+    onOpenLightbox?.();
   };
 
   const primarySrc = showingFullAr ? arSrc : enSrc;
@@ -149,9 +246,12 @@ export const TranslatableSlideImage: React.FC<TranslatableSlideImageProps> = ({
   return (
     <div
       ref={wrapRef}
-      className={`tsl-stage ${isHoverMode ? "is-hover-mode" : ""} ${band.active ? "is-band-active" : ""} ${isLightbox ? "is-lightbox" : ""}`}
+      data-tsl-stage="true"
+      className={`tsl-stage ${isSmartMode && !smartPaused ? "is-hover-mode" : ""} ${band.active ? "is-band-active" : ""} ${isLightbox ? "is-lightbox" : ""}`}
       onPointerMove={handlePointerMove}
       onPointerLeave={handlePointerLeave}
+      onPointerDown={handlePointerDown}
+      onPointerUp={handlePointerUp}
       onClick={handleWrapClick}
     >
       <img
@@ -173,8 +273,8 @@ export const TranslatableSlideImage: React.FC<TranslatableSlideImageProps> = ({
         }}
       />
 
-      {/* طبقة شريط Hover الأفقي المترجم (خُمس الشاشة: نصفه فوق المؤشر ونصفه تحته) */}
-      {isHoverMode && (
+      {/* طبقة شريط الترجمة الذكي الأفقي (خُمس الشاشة: نصفه فوق خط القراءة ونصفه تحته) */}
+      {isSmartMode && (
         <>
           <img
             src={arSrc}
@@ -205,45 +305,10 @@ export const TranslatableSlideImage: React.FC<TranslatableSlideImageProps> = ({
               aria-hidden="true"
             />
           )}
-
-          {/* مقبض لمسي جانبي للجوال لتحريك شريط الترجمة بسلاسة دون تعطيل التمرير */}
-          {!isLightbox && (
-            <div
-              className={`tsl-touch-rail ${touchLocked ? "active" : ""}`}
-              onTouchStart={(e) => {
-                e.stopPropagation();
-                handleTouchBandMove(e);
-              }}
-              onTouchMove={(e) => {
-                e.stopPropagation();
-                handleTouchBandMove(e);
-              }}
-              onClick={(e) => e.stopPropagation()}
-              title="اسحب عمودياً لتحريك شريط الترجمة"
-            >
-              <Icons.Translate size={12} />
-            </div>
-          )}
-
-          {touchLocked && band.active && (
-            <button
-              type="button"
-              className="tsl-dismiss-band"
-              onClick={(e) => {
-                e.stopPropagation();
-                setTouchLocked(false);
-                setBand(INACTIVE_BAND);
-              }}
-              title="إخفاء شريط الترجمة"
-            >
-              <Icons.Cross size={11} />
-              <span>إخفاء الشريط</span>
-            </button>
-          )}
         </>
       )}
 
-      {/* زر عكس لغة السلايد الفردي في وضعي EN و AR (لا يظهر في وضع Hover ولا في Lightbox حيث يوجد في الشريط العلوي) */}
+      {/* زر عكس لغة السلايد الفردي (سفلي صغير بوضعي عربي/إنجليزي فقط، مخفي في الوضع الذكي) */}
       {translationReady && mode !== "hover" && !isLightbox && onToggleFlip && (
         <button
           type="button"
@@ -259,7 +324,7 @@ export const TranslatableSlideImage: React.FC<TranslatableSlideImageProps> = ({
           }
           aria-pressed={isFlipped}
         >
-          <Icons.Translate size={13} />
+          <Icons.Translate size={12} />
           <span>{showingFullAr ? "EN" : "عربي"}</span>
         </button>
       )}

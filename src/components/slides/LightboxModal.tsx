@@ -329,7 +329,8 @@ export const LightboxModal: React.FC<LightboxModalProps> = ({
   const paperLabel =
     paperFilter === "warm" ? "ورق دافئ" : paperFilter === "night" ? "ليلي ذكي" : "أصلي";
 
-  const hasTextNotes = Boolean((!arabicOnly && currentSlide.content_ar) || currentSlide.notes_ar);
+  const usesLensTranslation = Boolean(!arabicOnly && canTranslateSlide?.(currentSlide));
+  const hasTextNotes = Boolean((!arabicOnly && !usesLensTranslation && currentSlide.content_ar) || currentSlide.notes_ar);
 
   return (
     <div
@@ -358,9 +359,9 @@ export const LightboxModal: React.FC<LightboxModalProps> = ({
             <div className="tsl-mode-bar is-lb" role="group" aria-label="وضع ترجمة الصورة">
               {(
                 [
-                  { id: "en", label: "EN" },
+                  { id: "hover", label: "ذكي" },
                   { id: "ar", label: "عربي" },
-                  { id: "hover", label: "Hover" }
+                  { id: "en", label: "EN" }
                 ] as const
               ).map((opt) => (
                 <button
@@ -586,7 +587,7 @@ export const LightboxModal: React.FC<LightboxModalProps> = ({
       {showDrawer && hasTextNotes && (
         <div className="lb-drawer">
           <div className="lb-drawer-bar">
-            <span className="lb-drawer-title">الترجمة والشرح</span>
+            <span className="lb-drawer-title">{usesLensTranslation ? "الشرح" : "الترجمة والشرح"}</span>
             <button
               type="button"
               className="lb-drawer-close"
@@ -598,7 +599,7 @@ export const LightboxModal: React.FC<LightboxModalProps> = ({
               <span>طي</span>
             </button>
           </div>
-          {!arabicOnly && currentSlide.content_ar && (
+          {!arabicOnly && !usesLensTranslation && currentSlide.content_ar && (
             <div className="lb-drawer-sec">
               <strong style={{ color: "var(--acc)" }}>الترجمة: </strong>
               <span>{currentSlide.content_ar}</span>

@@ -5,8 +5,8 @@
 
 const RUNTIME_PREFIX = "usp-runtime-";
 const OFFLINE_PREFIX = "usp-offline-";
-const CORE = "usp-core-v28";
-const RUNTIME = "usp-runtime-v28";
+const CORE = "usp-core-v29";
+const RUNTIME = "usp-runtime-v29";
 
 const CORE_ASSETS = [
   "./",
