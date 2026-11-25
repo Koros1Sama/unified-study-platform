@@ -3597,6 +3597,18 @@ body:has(#pwaInstallBanner):has(#jumpReturnBar) .usp-toast-stack {
   color: #111319;
 }
 
+/* منع قص الشرائح (مثل 4:3 في أمن المعلومات) داخل حاوية 16:9 وتطابق طبقة الترجمة 100% */
+.sc-imgwrap {
+  aspect-ratio: auto;
+}
+
+.sc-imgwrap .tsl-stage > img {
+  width: 100%;
+  height: auto;
+  display: block;
+  object-fit: contain;
+}
+
 .tsl-stage {
   position: relative;
   display: block;
@@ -3606,13 +3618,36 @@ body:has(#pwaInstallBanner):has(#jumpReturnBar) .usp-toast-stack {
   -webkit-user-select: none;
 }
 
+/* حاوية اللايت بوكس تعتمد container-type: size ليتم احتواء كامل الصورة بدقة 100% بدون قص حتى مع الزوم والوضع الذكي */
+.lb-stage:not(.is-fit-width) {
+  container-type: size;
+}
+
 .tsl-stage.is-lightbox {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
+  display: inline-block;
   width: auto;
+  height: auto;
   max-width: 100%;
   max-height: 100%;
+  overflow: hidden;
+  transform-origin: center center;
+}
+
+.tsl-stage.is-lightbox > .lb-img:not(.is-fit-width) {
+  display: block;
+  max-width: calc(100cqw - 32px);
+  max-height: calc(100cqh - 24px);
+  width: auto;
+  height: auto;
+  object-fit: contain;
+}
+
+.tsl-stage.is-lightbox > .lb-img.is-fit-width {
+  width: 100%;
+  max-width: 100%;
+  height: auto;
+  max-height: none;
+  display: block;
 }
 
 .tsl-stage.is-hover-mode {
@@ -3622,12 +3657,25 @@ body:has(#pwaInstallBanner):has(#jumpReturnBar) .usp-toast-stack {
 .tsl-hover-overlay {
   position: absolute;
   inset: 0;
-  width: 100%;
-  height: 100%;
-  object-fit: inherit;
+  width: 100% !important;
+  height: 100% !important;
+  max-width: none !important;
+  max-height: none !important;
+  object-fit: fill;
   pointer-events: none;
   transition: opacity 0.1s ease;
   will-change: clip-path, opacity;
+}
+
+/* حركة دوران دائرة الانتظار */
+@keyframes uspSpin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.usp-spin {
+  animation: uspSpin 0.85s linear infinite;
+  transform-origin: center;
 }
 
 .tsl-hover-frame {

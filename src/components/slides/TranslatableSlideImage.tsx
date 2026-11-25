@@ -19,6 +19,7 @@ export interface TranslatableSlideImageProps {
   smartPaused?: boolean;
   onResumeSmart?: () => void;
   onToggleFlip?: () => void;
+  stageStyle?: React.CSSProperties;
   imgClassName?: string;
   imgStyle?: React.CSSProperties;
   draggable?: boolean;
@@ -31,12 +32,12 @@ export interface TranslatableSlideImageProps {
 
 interface BandState {
   active: boolean;
-  topPx: number;
-  bottomPx: number;
-  heightPx: number;
+  topPct: number;
+  bottomPct: number;
+  heightPct: number;
 }
 
-const INACTIVE_BAND: BandState = { active: false, topPx: 0, bottomPx: 0, heightPx: 0 };
+const INACTIVE_BAND: BandState = { active: false, topPct: 50, bottomPct: 50, heightPct: 0 };
 
 // متتبع مشترك خفيف لموضع المؤشر وحالة الشاشة لتحديث شريط القراءة أثناء التمرير بـ 60fps
 const sharedPointer = { x: -1, y: -1, insideViewport: false };
@@ -79,6 +80,7 @@ export const TranslatableSlideImage: React.FC<TranslatableSlideImageProps> = ({
   smartPaused = false,
   onResumeSmart,
   onToggleFlip,
+  stageStyle,
   imgClassName,
   imgStyle,
   draggable,
@@ -142,8 +144,11 @@ export const TranslatableSlideImage: React.FC<TranslatableSlideImageProps> = ({
       return;
     }
 
-    const bottomPx = Math.max(0, rect.height - botEdge);
-    setBand({ active: true, topPx, bottomPx, heightPx });
+    // استخدام النسب المئوية يضمن تطابق الشريط بدقة تامة حتى مع التكبير (100% - 400%) في اللايت بوكس
+    const topPct = (topPx / rect.height) * 100;
+    const bottomPct = Math.max(0, ((rect.height - botEdge) / rect.height) * 100);
+    const heightPct = Math.max(0, 100 - topPct - bottomPct);
+    setBand({ active: true, topPct, bottomPct, heightPct });
   }, []);
 
   // تحديث شريط القراءة بوسط الشاشة بشكل متوازٍ مع التمرير (للجوال) أو متابع للمؤشر أثناء التمرير (للحاسوب)
@@ -190,11 +195,11 @@ export const TranslatableSlideImage: React.FC<TranslatableSlideImageProps> = ({
     };
 
     syncBand();
-    window.addEventListener("scroll", onScrollOrResize, { passive: true });
+    window.addEventListener("scroll", onScrollOrResize, { passive: true, capture: true });
     window.addEventListener("resize", onScrollOrResize, { passive: true });
     return () => {
       if (rafId) window.cancelAnimationFrame(rafId);
-      window.removeEventListener("scroll", onScrollOrResize);
+      window.removeEventListener("scroll", onScrollOrResize, true);
       window.removeEventListener("resize", onScrollOrResize);
     };
   }, [isSmartMode, smartPaused, customTouchY, computeBandAtClientY]);
@@ -248,6 +253,7 @@ export const TranslatableSlideImage: React.FC<TranslatableSlideImageProps> = ({
       ref={wrapRef}
       data-tsl-stage="true"
       className={`tsl-stage ${isSmartMode && !smartPaused ? "is-hover-mode" : ""} ${band.active ? "is-band-active" : ""} ${isLightbox ? "is-lightbox" : ""}`}
+      style={stageStyle}
       onPointerMove={handlePointerMove}
       onPointerLeave={handlePointerLeave}
       onPointerDown={handlePointerDown}
@@ -285,8 +291,8 @@ export const TranslatableSlideImage: React.FC<TranslatableSlideImageProps> = ({
               ...imgStyle,
               opacity: band.active ? 1 : 0,
               clipPath: band.active
-                ? `inset(${band.topPx}px 0px ${band.bottomPx}px 0px)`
-                : "inset(50% 0px 50% 0px)"
+                ? `inset(${band.topPct}% 0% ${band.bottomPct}% 0%)`
+                : "inset(50% 0% 50% 0%)"
             }}
             draggable={false}
             loading="lazy"
@@ -299,8 +305,8 @@ export const TranslatableSlideImage: React.FC<TranslatableSlideImageProps> = ({
             <div
               className="tsl-hover-frame"
               style={{
-                top: `${band.topPx}px`,
-                height: `${band.heightPx}px`
+                top: `${band.topPct}%`,
+                height: `${band.heightPct}%`
               }}
               aria-hidden="true"
             />

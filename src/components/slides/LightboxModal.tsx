@@ -498,9 +498,9 @@ export const LightboxModal: React.FC<LightboxModalProps> = ({
               isFlipped={Boolean(isSlideFlipped?.(currentSlide.ref))}
               canTranslate={Boolean(!arabicOnly && canTranslateSlide?.(currentSlide))}
               imgClassName={`lb-img ${paperFilterClass} ${fitMode === "width" ? "is-fit-width" : ""}`}
-              imgStyle={
+              stageStyle={
                 fitMode === "width"
-                  ? undefined
+                  ? { width: "min(920px, 100%)", margin: "0 auto" }
                   : {
                       transform: `translate(${pan.x}px, ${pan.y}px) scale(${scale})`,
                       transition: isDragging ? "none" : "transform 0.15s ease-out"
