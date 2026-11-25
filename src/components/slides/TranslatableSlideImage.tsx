@@ -126,8 +126,15 @@ export const TranslatableSlideImage: React.FC<TranslatableSlideImageProps> = ({
     }
 
     const viewportH = window.visualViewport?.height || window.innerHeight || 720;
-    // خُمس ارتفاع الشاشة (20dvh): نصفه فوق خط القراءة ونصفه تحته
-    const halfBand = viewportH * 0.1;
+    const viewportW = window.visualViewport?.width || window.innerWidth || 1280;
+    const isCompactMobile = isCoarsePointerDevice() || viewportW <= 768;
+
+    // على الجوال الشريحة الأفقية ارتفاعها صغير (~200-260px)، فـ 20% من طول الشاشة يبتلع 80% من الشريحة!
+    // لذلك نضبط ارتفاع الشريط بذكاء نسبياً لارتفاع الشريحة الفعلي على الجوال، وخُمس الشاشة على الحاسوب.
+    const bandH = isCompactMobile
+      ? Math.max(54, Math.min(rect.height * 0.27, Math.min(112, viewportH * 0.14)))
+      : Math.max(76, Math.min(viewportH * 0.2, rect.height * 0.38));
+    const halfBand = bandH * 0.5;
     const relY = clientY - rect.top;
 
     // إذا كان الشريط خارج حدود الصورة تماماً لا نفعّل الطبقة
