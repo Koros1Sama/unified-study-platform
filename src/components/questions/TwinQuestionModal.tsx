@@ -4,14 +4,17 @@
 // Zero Emojis Standard · 100% Vector SVG Line-Art
 // ==============================================================================
 
-import React, { useEffect } from "react";
+import React, { useEffect, useMemo } from "react";
 import { Icons } from "../icons/SvgIcons";
 import { cleanArabicOnly } from "../../lib/textUtils";
-import type { UnifiedQuestion } from "../../types";
+import type { QuestionModelInfo, UnifiedQuestion } from "../../types";
 
 interface TwinQuestionModalProps {
   question: UnifiedQuestion;
   twinQuestion?: UnifiedQuestion;
+  twinGroup?: UnifiedQuestion[];
+  models?: QuestionModelInfo[];
+  syncTwins?: boolean;
   onClose: () => void;
   onJumpToQuestion?: (questionId: string) => void;
 }
@@ -19,11 +22,44 @@ interface TwinQuestionModalProps {
 export const TwinQuestionModal: React.FC<TwinQuestionModalProps> = ({
   question,
   twinQuestion,
+  twinGroup,
+  models = [],
+  syncTwins = false,
   onClose,
   onJumpToQuestion
 }) => {
+  const allTwins = useMemo(() => {
+    const raw =
+      twinGroup && twinGroup.length > 0
+        ? twinGroup
+        : twinQuestion
+          ? [question, twinQuestion]
+          : [question];
+    const dedup = new Map<string, UnifiedQuestion>();
+    raw.forEach((q) => dedup.set(q.id, q));
+    return Array.from(dedup.values()).sort((a, b) => {
+      if (a.orig_q_num !== b.orig_q_num) return (a.orig_q_num || 0) - (b.orig_q_num || 0);
+      return a.id.localeCompare(b.id, undefined, { numeric: true });
+    });
+  }, [question, twinQuestion, twinGroup]);
+
+  const otherTwins = useMemo(
+    () => allTwins.filter((q) => q.id !== question.id),
+    [allTwins, question.id]
+  );
+
+  const modelLabelMap = useMemo(() => {
+    const map = new Map<string, string>();
+    models.forEach((m) => {
+      map.set(m.id, m.short_label || m.title_ar || m.id.toUpperCase());
+    });
+    return map;
+  }, [models]);
+
   const currNum = question.orig_q_num;
-  const twinNum = twinQuestion ? twinQuestion.orig_q_num : currNum;
+  const twinNums = allTwins.map((t) => t.orig_q_num);
+  const twinNumsJoined = twinNums.map((n) => `س${n}`).join(" ⟷ ");
+  const twinCount = allTwins.length;
 
   // إغلاق عبر زر الهروب Esc
   useEffect(() => {
@@ -35,8 +71,7 @@ export const TwinQuestionModal: React.FC<TwinQuestionModalProps> = ({
   }, [onClose]);
 
   const isQ106_114 =
-    (currNum === 106 && twinNum === 114) ||
-    (currNum === 114 && twinNum === 106) ||
+    (twinNums.includes(106) && twinNums.includes(114)) ||
     (question.question_en.toLowerCase().includes("generalised conclusion") &&
       question.question_en.toLowerCase().includes("sample"));
 
@@ -55,14 +90,18 @@ export const TwinQuestionModal: React.FC<TwinQuestionModalProps> = ({
         className="twin-modal-card"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="twin-modal-header" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "16px", borderBottom: "1px solid var(--ln)", paddingBottom: "12px" }}>
+        <div className="twin-modal-header" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "16px", borderBottom: "1px solid var(--ln)", paddingBottom: "12px", gap: "8px" }}>
           <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
             <span style={{ fontWeight: 800, fontSize: "0.95rem", padding: "4px 10px", background: "var(--sf2)", borderRadius: "8px", border: "1px solid var(--ln)" }}>
-              س{currNum} ⟷ س{twinNum}
+              {twinNumsJoined}
             </span>
             <span style={{ background: "color-mix(in srgb, var(--acc) 12%, transparent)", color: "var(--acc)", border: "1px solid color-mix(in srgb, var(--acc) 35%, transparent)", borderRadius: "8px", padding: "4px 10px", fontWeight: 700, fontSize: "0.82rem", display: "inline-flex", alignItems: "center", gap: "5px" }}>
               <Icons.Twin size={13} />
-              <span>سؤالان متطابقان بنسبة 100% (توأم مدمج)</span>
+              <span>
+                {twinCount <= 2
+                  ? "سؤالان متطابقان بنسبة 100% (توأم مدمج)"
+                  : `${twinCount} نسخ متطابقة بنسبة 100% (مجموعة توائم)`}
+              </span>
             </span>
           </div>
 
@@ -77,21 +116,68 @@ export const TwinQuestionModal: React.FC<TwinQuestionModalProps> = ({
           </button>
         </div>
 
+        {/* قائمة كافة المواضع المتطابقة */}
+        <div style={{ display: "flex", flexWrap: "wrap", gap: "6px", marginBottom: "14px" }}>
+          {allTwins.map((item) => {
+            const isCurrent = item.id === question.id;
+            const mLabel = modelLabelMap.get(item.model_id) || item.model_id.toUpperCase();
+            return (
+              <button
+                key={item.id}
+                type="button"
+                disabled={isCurrent || !onJumpToQuestion}
+                className={`fchip ${isCurrent ? "on" : ""}`}
+                style={{
+                  fontSize: "0.76rem",
+                  padding: "4px 10px",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "5px",
+                  cursor: isCurrent ? "default" : "pointer"
+                }}
+                onClick={() => {
+                  if (!isCurrent && onJumpToQuestion) {
+                    onClose();
+                    onJumpToQuestion(item.id);
+                  }
+                }}
+              >
+                {!isCurrent && <Icons.Jump size={12} />}
+                <span>
+                  س{item.orig_q_num} · {mLabel}
+                  {isCurrent ? " (الحالي)" : ""}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+
         {/* صندوق الشرح التوضيحي المعتمد */}
         <div style={{ background: "color-mix(in srgb, var(--acc) 8%, var(--sf2))", border: "1px solid color-mix(in srgb, var(--acc) 25%, var(--ln))", borderRadius: "12px", padding: "14px 16px", marginBottom: "16px" }}>
           <div style={{ display: "flex", alignItems: "center", gap: "6px", fontWeight: 800, fontSize: "0.92rem", color: "var(--acc)", marginBottom: "8px" }}>
             <Icons.Definitions size={16} />
-            <span>توضيح شامل ومفصل لدمج وتوحيد هذين السؤالين:</span>
+            <span>توضيح توحيد هذه النسخ المتطابقة:</span>
           </div>
           <div style={{ fontSize: "0.86rem", lineHeight: 1.8, color: "var(--ink)" }}>
             <p style={{ margin: "0 0 8px" }}>
-              <strong>1. لماذا يظهر هذا الوسم؟</strong> ورد هذا السؤال مرتين في بنك الأسئلة الرسمي المعتمد من الدكتور؛ الأولى برقم <strong>س{Math.min(currNum, twinNum)}</strong> والثانية برقم <strong>س{Math.max(currNum, twinNum)}</strong> بنفس الصياغة والخيارات حرفياً بنسبة 100% دون أي اختلاف.
+              <strong>1. لماذا يظهر هذا الوسم؟</strong> ورد هذا السؤال{" "}
+              {twinCount === 2 ? "مرتين" : `${twinCount} مرات`} في بنك الأسئلة الرسمي بالأرقام{" "}
+              <strong>{twinNums.map((n) => `س${n}`).join("، ")}</strong> بنفس الصياغة والخيارات حرفياً دون اختلاف.
             </p>
             <p style={{ margin: "0 0 8px" }}>
-              <strong>2. حسم التناقضات السابقة:</strong> في بعض ملخصات ونماذج الطلاب القديمة، كان يتم تأشير خيار مختلف في كل موضع مما يربك الطالب. قمنا بالتدقيق العلمي الأكاديمي المنهجي ومطابقته مع سلايدات المحاضرات لحسم الحل الصحيح وتوحيده بشكل قاطع في كلا الموضعين.
+              <strong>2. توحيد الإجابة النموذجية:</strong> تم تدقيق ومطابقة الحل الصحيح مع الشرائح الرسمية وتوحيده في جميع هذه المواضع لمنع التضارب بين النماذج.
             </p>
             <p style={{ margin: 0 }}>
-              <strong>3. المزامنة الذكية لحماية وقتك:</strong> عند حلك أو تعديلك لأحد السؤالين (س{currNum} أو س{twinNum}) أو إضافة علامة مرجعية له، يقوم النظام تلقائياً وبشكل فوري بمزامنة الحل والعلامة للسؤال التوأم الآخر، وتوحيد النتيجة والإحصائيات دون أي تكرار أو مجهود مضاعف.
+              <strong>3. حالة مزامنة الحلول حالياً:</strong>{" "}
+              {syncTwins ? (
+                <>
+                  المزامنة التلقائية للتوائم <strong style={{ color: "var(--ok)" }}>مفعّلة</strong> — عند حل س{currNum} أو تعديله أو إضافة علامة ملونة له، تتم مزامنة الحل والعلامة تلقائياً في بقية النسخ المتطابقة.
+                </>
+              ) : (
+                <>
+                  المزامنة التلقائية للتوائم <strong style={{ color: "var(--warn)" }}>متوقفة حالياً</strong> من الإعدادات — يمكنك حل كل نسخة على حدة للتدريب، أو تفعيل خيار «مزامنة التوائم» من لوحة الإعدادات لتوحيد الحلول تلقائياً.
+                </>
+              )}
             </p>
           </div>
         </div>
@@ -184,21 +270,23 @@ export const TwinQuestionModal: React.FC<TwinQuestionModalProps> = ({
         )}
 
         {/* أزرار الإجراءات في أسفل النافذة */}
-        <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "flex-end", gap: "10px", borderTop: "1px solid var(--ln)", paddingTop: "12px" }}>
-          {twinQuestion && onJumpToQuestion && (
-            <button
-              type="button"
-              className="btn btn-sm btn-primary"
-              style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}
-              onClick={() => {
-                onClose();
-                onJumpToQuestion(twinQuestion.id);
-              }}
-            >
-              <Icons.Jump size={13} />
-              <span>الانتقال للسؤال التوأم (س{twinNum})</span>
-            </button>
-          )}
+        <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "flex-end", gap: "8px", borderTop: "1px solid var(--ln)", paddingTop: "12px" }}>
+          {onJumpToQuestion &&
+            otherTwins.map((other) => (
+              <button
+                key={other.id}
+                type="button"
+                className="btn btn-sm btn-primary"
+                style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}
+                onClick={() => {
+                  onClose();
+                  onJumpToQuestion(other.id);
+                }}
+              >
+                <Icons.Jump size={13} />
+                <span>الانتقال إلى س{other.orig_q_num}</span>
+              </button>
+            ))}
           <button
             type="button"
             className="btn btn-sm"

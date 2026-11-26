@@ -270,11 +270,15 @@ export const UnifiedQuestionBankView: React.FC<UnifiedQuestionBankViewProps> = (
     return groups;
   }, [questions]);
 
-  const activeTwinTarget = useMemo(() => {
-    if (!activeTwinModalQ || !activeTwinModalQ.twin_group_id) return undefined;
-    const group = twinGroupsMap.get(activeTwinModalQ.twin_group_id) || [];
-    return group.find((q) => q.id !== activeTwinModalQ.id);
+  const activeTwinGroup = useMemo(() => {
+    if (!activeTwinModalQ || !activeTwinModalQ.twin_group_id) return [];
+    return twinGroupsMap.get(activeTwinModalQ.twin_group_id) || [];
   }, [activeTwinModalQ, twinGroupsMap]);
+
+  const activeTwinTarget = useMemo(() => {
+    if (!activeTwinModalQ) return undefined;
+    return activeTwinGroup.find((q) => q.id !== activeTwinModalQ.id);
+  }, [activeTwinModalQ, activeTwinGroup]);
 
   const twinNumberMap = useMemo(() => {
     const map: Record<string, number> = {};
@@ -1470,6 +1474,9 @@ export const UnifiedQuestionBankView: React.FC<UnifiedQuestionBankViewProps> = (
         <TwinQuestionModal
           question={activeTwinModalQ}
           twinQuestion={activeTwinTarget}
+          twinGroup={activeTwinGroup}
+          models={models}
+          syncTwins={_syncTwins}
           onClose={() => setActiveTwinModalQ(null)}
           onJumpToQuestion={(qId) => {
             setActiveTwinModalQ(null);

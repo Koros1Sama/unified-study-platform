@@ -778,12 +778,72 @@ export const App: React.FC = () => {
           showToast("ملف النسخة الاحتياطية غير صالح أو تالف.");
           return;
         }
-        const { importedSubjects, activeProgress } = await DataService.importProgressBackup(
-          parsed,
-          currentSubjectCode
-        );
+        const {
+          importedSubjects,
+          activeProgress,
+          restoredSeenCount,
+          restoredPreferences
+        } = await DataService.importProgressBackup(parsed, currentSubjectCode);
         setUserProgress({ ...activeProgress });
-        showToast(`تم استيراد التقدم بنجاح لـ ${importedSubjects.length} مقرر.`);
+
+        // مزامنة الشرائح المقروءة والتفضيلات المستعادة فوراً في الواجهة
+        const savedSeen = localStorage.getItem(`unified_seen_${currentSubjectCode}`);
+        setSeenSlides(new Set(safeJsonParse<string[]>(savedSeen, [])));
+
+        if (restoredPreferences.unified_theme) setTheme(restoredPreferences.unified_theme);
+        if (restoredPreferences.unified_mode === "light" || restoredPreferences.unified_mode === "dark") {
+          setMode(restoredPreferences.unified_mode);
+        }
+        if (restoredPreferences.unified_font_scale) {
+          const fs = parseInt(restoredPreferences.unified_font_scale, 10);
+          if (Number.isFinite(fs) && fs >= 75 && fs <= 150) setFontScale(fs);
+        }
+        if (
+          restoredPreferences.unified_lang === "smart" ||
+          restoredPreferences.unified_lang === "en" ||
+          restoredPreferences.unified_lang === "ar" ||
+          restoredPreferences.unified_lang === "both"
+        ) {
+          setLanguageMode(restoredPreferences.unified_lang);
+        }
+        if (restoredPreferences.unified_auto_ar !== undefined) {
+          setAutoTranslateSlides(restoredPreferences.unified_auto_ar === "true");
+        }
+        if (restoredPreferences.unified_auto_ex !== undefined) {
+          setAutoExplainSlides(restoredPreferences.unified_auto_ex === "true");
+        }
+        if (restoredPreferences.unified_shuffle_choices !== undefined) {
+          setShuffleChoices(restoredPreferences.unified_shuffle_choices === "true");
+        }
+        if (restoredPreferences.unified_shuffle_questions !== undefined) {
+          setShuffleQuestions(restoredPreferences.unified_shuffle_questions === "true");
+        }
+        if (restoredPreferences.unified_sync_twins !== undefined) {
+          setSyncTwins(restoredPreferences.unified_sync_twins === "true");
+        }
+        if (restoredPreferences.unified_show_bookmarks !== undefined) {
+          setShowBookmarks(restoredPreferences.unified_show_bookmarks !== "false");
+        }
+        if (restoredPreferences.unified_bm_labels) {
+          const parsedLabels = safeJsonParse<BookmarkLabels | null>(
+            restoredPreferences.unified_bm_labels,
+            null
+          );
+          if (parsedLabels) setBmLabels(parsedLabels);
+        }
+        if (
+          restoredPreferences.unified_exp_mode === "always" ||
+          restoredPreferences.unified_exp_mode === "wrong_only" ||
+          restoredPreferences.unified_exp_mode === "manual"
+        ) {
+          setExpMode(restoredPreferences.unified_exp_mode);
+        }
+
+        const extras: string[] = [];
+        if (restoredSeenCount > 0) extras.push(`${restoredSeenCount} شريحة مقروءة`);
+        if (Object.keys(restoredPreferences).length > 0) extras.push("الإعدادات والثيم");
+        const extraText = extras.length > 0 ? ` (+ ${extras.join(" و")})` : "";
+        showToast(`تم استيراد التقدم بنجاح لـ ${importedSubjects.length} مقرر${extraText}.`);
       } catch {
         showToast("فشل استيراد النسخة الاحتياطية.");
       }
@@ -1372,12 +1432,16 @@ export const App: React.FC = () => {
                   <ExamSimulator
                     key={currentSubjectCode}
                     questions={bundle?.questions || []}
+                    slides={bundle?.slides || []}
                     models={bundle?.question_models || []}
                     lectures={bundle?.lectures || []}
                     examHistory={userProgress?.exam_history || []}
                     onRecordResult={handleRecordExamResult}
                     onJumpToSlide={handleJumpToSlide}
                     languageMode={effectiveLanguageMode}
+                    arabicOnly={isArabicOnly}
+                    pageLayout={currentSubjectMeta.page_layout}
+                    shuffleChoices={shuffleChoices}
                     expMode={expMode}
                     expPromptSeen={expPromptSeen}
                     onDismissExpPrompt={handleDismissExpPrompt}

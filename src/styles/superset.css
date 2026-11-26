@@ -2547,22 +2547,24 @@ body.header-hidden .topbar:focus-within {
   transition: filter 0.25s var(--ease), transform 0.22s var(--ease);
 }
 
+.sc-imgwrap:has(.book-paper-night),
 .book-reader-view .book-page-wrap:has(.book-paper-night) {
-  background: #101319;
+  background: #101319 !important;
 }
 
+.sc-imgwrap:has(.book-paper-warm),
 .book-reader-view .book-page-wrap:has(.book-paper-warm) {
-  background: color-mix(in srgb, #e7d9bf 18%, var(--sf2));
+  background: #ebd8b7 !important;
 }
 
-/* فلاتر راحة العين للورق */
+/* فلاتر راحة العين للورق (brightness قبل sepia يمنع قص اللون الأبيض على الصفحات البيضاء) */
 .book-paper-warm {
-  filter: sepia(0.2) brightness(0.95) contrast(1.03);
+  filter: brightness(0.84) sepia(0.55) saturate(1.18) brightness(1.01) contrast(1.04);
 }
 
 .book-paper-night {
-  filter: invert(0.91) hue-rotate(180deg) contrast(1.06);
-  background: #11141b !important;
+  filter: invert(0.9) hue-rotate(180deg) brightness(0.96) contrast(1.05);
+  background: #101319 !important;
 }
 
 /* الوضع 1: الكتاب بجانب الشرح والترجمة (Sticky Split Desk) */
@@ -3827,4 +3829,105 @@ body:has(#pwaInstallBanner):has(#jumpReturnBar) .usp-toast-stack {
 .offline-lang-opt:disabled {
   opacity: 0.48;
   cursor: not-allowed;
+}
+
+
+/* ------------------------------------------------------------------------------
+   S1 & S2: Unified Slides Bar, Slim Progress Strip, and Compact Mobile Zen Button
+   ------------------------------------------------------------------------------ */
+
+.slides-progress-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.slides-progress-txt {
+  font-size: 0.76rem;
+  color: var(--ink-m);
+  white-space: nowrap;
+}
+
+.slides-progress-txt b {
+  color: var(--acc);
+  font-family: var(--fm);
+}
+
+.slides-progress-track {
+  flex: 1 1 auto;
+  height: 5px;
+  background: var(--sf2);
+  border-radius: 999px;
+  overflow: hidden;
+  border: 1px solid var(--ln-s);
+}
+
+.slides-progress-track i {
+  display: block;
+  height: 100%;
+  background: linear-gradient(90deg, var(--acc), var(--acc-b, var(--acc)));
+  border-radius: 999px;
+  transition: width 0.25s ease;
+}
+
+.slides-unified-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.slides-bar-group {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+@media (max-width: 768px) {
+  .slides-unified-bar {
+    gap: 6px;
+    margin-bottom: 10px;
+    justify-content: flex-start;
+  }
+  .slides-unified-bar .slides-bar-group {
+    display: contents;
+  }
+  .slides-unified-bar .fchip {
+    padding: 5px 10px;
+    font-size: 0.74rem;
+  }
+  .slides-unified-bar .tsl-mode-btn {
+    padding: 4px 8px;
+    font-size: 0.72rem;
+  }
+  /* إخفاء شريط الفصول المكرر في الجوال لأن شريط التنقل السفلي يعرضها بشكل دائم */
+  .lec-scroll-strip {
+    display: none !important;
+  }
+}
+
+#globalSearchModal input[type="search"]::-webkit-search-cancel-button {
+  -webkit-appearance: none;
+  appearance: none;
+  display: none;
+}
+
+.mobile-zen-btn {
+  display: none !important;
+}
+
+@media (max-width: 680px) {
+  .zen-toggle-group {
+    display: none !important;
+  }
+  .mobile-zen-btn {
+    display: inline-flex !important;
+    padding: 0 8px !important;
+    min-width: 32px;
+    justify-content: center;
+  }
 }

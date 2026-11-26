@@ -4,7 +4,7 @@
 // Zero Emojis Standard
 // ==============================================================================
 
-import React, { useEffect, useMemo, useRef } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Icons } from "../icons/SvgIcons";
 import type { ActiveView, ExplanatoryTable, QuestionModelInfo } from "../../types";
 
@@ -64,6 +64,68 @@ export const CompanionNavigation: React.FC<CompanionNavigationProps> = ({
   const can = (view: ActiveView) => availableViews?.[view] !== false;
   const showsLectureList = ["slides", "summary", "tables"].includes(activeView);
   const bottomScrollRef = useRef<HTMLDivElement>(null);
+  const [activeEmergencyId, setActiveEmergencyId] = useState<string>("");
+  const [activePatternId, setActivePatternId] = useState<string>("");
+
+  // تتبع المحور النشط في ملخص الملخص والأنماط للسايدبار المكتبي والناف بار السفلي للجوال
+  useEffect(() => {
+    if (activeView === "emergency" && emergencySections.length > 0) {
+      setActiveEmergencyId((prev) =>
+        emergencySections.some((s) => s.id === prev) ? prev : emergencySections[0].id
+      );
+      if (typeof IntersectionObserver === "undefined") return;
+      const obs = new IntersectionObserver(
+        (entries) => {
+          const visible = entries
+            .filter((e) => e.isIntersecting)
+            .sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top);
+          if (visible[0]?.target?.id) {
+            setActiveEmergencyId(visible[0].target.id);
+          }
+        },
+        { rootMargin: "-18% 0px -65% 0px", threshold: 0.05 }
+      );
+      const timer = window.setTimeout(() => {
+        emergencySections.forEach((sec) => {
+          const el = document.getElementById(sec.id);
+          if (el) obs.observe(el);
+        });
+      }, 120);
+      return () => {
+        window.clearTimeout(timer);
+        obs.disconnect();
+      };
+    }
+
+    if (activeView === "patterns" && patternRules.length > 0) {
+      setActivePatternId((prev) =>
+        patternRules.some((r) => r.id === prev) ? prev : patternRules[0].id
+      );
+      if (typeof IntersectionObserver === "undefined") return;
+      const obs = new IntersectionObserver(
+        (entries) => {
+          const visible = entries
+            .filter((e) => e.isIntersecting)
+            .sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top);
+          const id = visible[0]?.target?.id;
+          if (id && id.startsWith("pat-")) {
+            setActivePatternId(id.slice(4));
+          }
+        },
+        { rootMargin: "-18% 0px -65% 0px", threshold: 0.05 }
+      );
+      const timer = window.setTimeout(() => {
+        patternRules.forEach((rule) => {
+          const el = document.getElementById(`pat-${rule.id}`);
+          if (el) obs.observe(el);
+        });
+      }, 120);
+      return () => {
+        window.clearTimeout(timer);
+        obs.disconnect();
+      };
+    }
+  }, [activeView, emergencySections, patternRules]);
 
   const tableLectureIds = useMemo(() => {
     const set = new Set<string>();
@@ -175,9 +237,10 @@ export const CompanionNavigation: React.FC<CompanionNavigationProps> = ({
         id: sec.id,
         label: sec.nav_title || sec.title,
         title: sec.title,
-        active: false,
+        active: activeEmergencyId === sec.id,
         done: reviewedSections.includes(sec.id),
         onClick: () => {
+          setActiveEmergencyId(sec.id);
           const el = document.getElementById(sec.id);
           if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
         }
@@ -221,8 +284,9 @@ export const CompanionNavigation: React.FC<CompanionNavigationProps> = ({
         id: rule.id,
         label: rule.id.toUpperCase(),
         title: rule.title,
-        active: false,
+        active: activePatternId === rule.id,
         onClick: () => {
+          setActivePatternId(rule.id);
           const el = document.getElementById(`pat-${rule.id}`);
           if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
         }
@@ -271,6 +335,8 @@ export const CompanionNavigation: React.FC<CompanionNavigationProps> = ({
     questions,
     answeredQuestions,
     patternRules,
+    activeEmergencyId,
+    activePatternId,
     labSessions,
     activeLabSession,
     onSelectLabSession
@@ -283,7 +349,7 @@ export const CompanionNavigation: React.FC<CompanionNavigationProps> = ({
     if (activeBtn) {
       activeBtn.scrollIntoView({ inline: "center", block: "nearest", behavior: "smooth" });
     }
-  }, [activeView, activeLectureId, selectedModelId, bottomItems.length]);
+  }, [activeView, activeLectureId, selectedModelId, activeEmergencyId, activePatternId, activeLabSession, bottomItems.length]);
   return (
     <>
       {/* Desktop Authentic Sidebar (.side#sideNav) */}
@@ -520,6 +586,106 @@ export const CompanionNavigation: React.FC<CompanionNavigationProps> = ({
                   </button>
                 );
               })}
+            </div>
+          </div>
+        )}
+
+        {/* 3. فهرس محاور ملخص الملخص على اللابتوب (#emergencyNav) */}
+        {activeView === "emergency" && emergencySections.length > 0 && (
+          <div id="emergencyNav">
+            <div className="side-title">محاور ملخص الملخص</div>
+            <div id="emergencyList">
+              {emergencySections.map((sec, idx) => {
+                const isActive = activeEmergencyId === sec.id;
+                const isDone = reviewedSections.includes(sec.id);
+                return (
+                  <button
+                    key={sec.id}
+                    type="button"
+                    className={`lec-btn ${isActive ? "active" : ""}`}
+                    onClick={() => {
+                      setActiveEmergencyId(sec.id);
+                      const el = document.getElementById(sec.id);
+                      if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+                    }}
+                  >
+                    <span className="lt">
+                      <span>{sec.nav_title || sec.title}</span>
+                      <span className="cnt">{isDone ? "تم" : `${idx + 1}`}</span>
+                    </span>
+                    {sec.nav_title && sec.title !== sec.nav_title && (
+                      <span className="le">{sec.title}</span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* 4. فهرس قواعد أنماط الأسئلة على اللابتوب (#patternsNav) */}
+        {activeView === "patterns" && patternRules.length > 0 && (
+          <div id="patternsNav">
+            <div className="side-title">قواعد الأنماط</div>
+            <div id="patternsList">
+              {patternRules.map((rule) => {
+                const isActive = activePatternId === rule.id;
+                return (
+                  <button
+                    key={rule.id}
+                    type="button"
+                    className={`lec-btn ${isActive ? "active" : ""}`}
+                    onClick={() => {
+                      setActivePatternId(rule.id);
+                      const el = document.getElementById(`pat-${rule.id}`);
+                      if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+                    }}
+                  >
+                    <span className="lt">
+                      <span>{rule.title}</span>
+                      <span className="cnt">{rule.id.toUpperCase()}</span>
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* 5. فهرس الجلسات العملية على اللابتوب (#labNav) */}
+        {activeView === "lab" && labSessions.length > 0 && (
+          <div id="labNav">
+            <div className="side-title">الجلسات العملية</div>
+            <div id="labList">
+              <button
+                type="button"
+                className={`lec-btn ${activeLabSession === "all" ? "active" : ""}`}
+                onClick={() => {
+                  onSelectLabSession?.("all");
+                  window.scrollTo({ top: 0, behavior: "smooth" });
+                }}
+              >
+                <span className="lt">
+                  <span>كل الجلسات العملية</span>
+                  <span className="cnt">{labSessions.length}</span>
+                </span>
+              </button>
+              {labSessions.map((s) => (
+                <button
+                  key={s.id}
+                  type="button"
+                  className={`lec-btn ${activeLabSession === s.id ? "active" : ""}`}
+                  onClick={() => {
+                    onSelectLabSession?.(s.id);
+                    window.scrollTo({ top: 0, behavior: "smooth" });
+                  }}
+                >
+                  <span className="lt">
+                    <span>{s.title_ar}</span>
+                    <span className="cnt">{s.id}</span>
+                  </span>
+                </button>
+              ))}
             </div>
           </div>
         )}

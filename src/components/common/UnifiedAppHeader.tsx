@@ -538,21 +538,6 @@ export const UnifiedAppHeader: React.FC<UnifiedAppHeaderProps> = ({
           {activeView === "slides" && (
             <div className="slide-actions-wrap" style={{ display: "inline-flex" }}>
               <span className="nav-divider"></span>
-              {!currentSubject.arabic_only && (
-                <button
-                  type="button"
-                  className={`top-btn slide-action-btn ${autoTranslateSlides ? "on" : ""}`}
-                  onClick={onToggleAutoTranslate}
-                  title="إظهار أو إخفاء ترجمات السلايدات التلقائية"
-                >
-                  <svg className="svg-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <circle cx="12" cy="12" r="10"/>
-                    <line x1="2" y1="12" x2="22" y2="12"/>
-                    <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
-                  </svg>
-                  <span className="txt">عربي</span>
-                </button>
-              )}
               <button
                 type="button"
                 className={`top-btn slide-action-btn ${autoExplainSlides ? "on" : ""}`}
@@ -613,6 +598,17 @@ export const UnifiedAppHeader: React.FC<UnifiedAppHeaderProps> = ({
               <rect x="3" y="14" width="7" height="7"/>
             </svg>
             <span className="txt">المقررات</span>
+          </button>
+
+          {/* زر تبديل التكبير المدمج للهواتف (S2: يحرر مساحة لظهور اسم المادة كاملاً) */}
+          <button
+            type="button"
+            className={`top-btn mobile-zen-btn ${zenLevel > 0 ? "on" : ""}`}
+            onClick={() => onZenChange(zenLevel === 0 ? 2 : 0)}
+            title={zenLevel === 0 ? "تفعيل وضع التكبير الكامل" : "العودة للوضع العادي"}
+            aria-label={zenLevel === 0 ? "تكبير العرض" : "الوضع العادي"}
+          >
+            {zenLevel === 0 ? <Icons.Maximize size={15} /> : <Icons.Minimize size={15} />}
           </button>
 
           {/* كبسولة الأوضاع الثلاثية (Zen Toggle) */}

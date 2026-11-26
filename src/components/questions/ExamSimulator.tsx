@@ -8,21 +8,58 @@ import React, { useState, useEffect, useMemo, useRef, useCallback } from "react"
 import { Icons } from "../icons/SvgIcons";
 import { QuestionCard } from "./QuestionCard";
 import { SmartTranslateTooltip } from "../common/SmartTranslateTooltip";
+import { LightboxModal } from "../slides/LightboxModal";
 import { fisherYatesShuffle } from "../../lib/textUtils";
-import type { ExplanationMode, UnifiedQuestion, UserStudyProgress } from "../../types";
+import { resolveSlideReference } from "../../lib/scrollRestoration";
+import {
+  isSlideTranslationAvailable,
+  loadTranslationManifest,
+  type SlideTranslationManifest
+} from "../../lib/slideTranslation";
+import type {
+  BookPaperFilter,
+  ExplanationMode,
+  SlideImageMode,
+  SlideItem,
+  UnifiedQuestion,
+  UserStudyProgress
+} from "../../types";
 
 interface ExamSimulatorProps {
   questions: UnifiedQuestion[];
+  slides?: SlideItem[];
   models?: Array<{ id: string; title_ar: string; short_label?: string }>;
   lectures?: Array<{ id: string; title_ar: string }>;
   examHistory?: UserStudyProgress["exam_history"];
   onRecordResult: (result: { total: number; score: number; timeSpentSec: number; mode: string }) => void;
   onJumpToSlide?: (ref: string) => void;
   languageMode?: "smart" | "en" | "ar" | "both";
+  arabicOnly?: boolean;
+  pageLayout?: "slides" | "book";
+  shuffleChoices?: boolean;
   expMode?: ExplanationMode;
   expPromptSeen?: boolean;
   onDismissExpPrompt?: () => void;
   onOpenExpSettings?: () => void;
+}
+
+function shuffleQuestionOptions(q: UnifiedQuestion): UnifiedQuestion {
+  if (!Array.isArray(q.options_en) || q.options_en.length <= 2) return q;
+  // تجنب لخبطة أسئلة صح/خطأ أو التي تعتمد على خيار "جميع ما سبق"
+  const hasAllOfAbove = q.options_en.some((o) =>
+    /\b(all of the above|none of the above|both [a-d] and [a-d])\b/i.test(o)
+  );
+  if (hasAllOfAbove) return q;
+  const indices = q.options_en.map((_, idx) => idx);
+  const perm = fisherYatesShuffle(indices);
+  const nextCorrect = perm.indexOf(q.correct_answer);
+  if (nextCorrect < 0) return q;
+  return {
+    ...q,
+    options_en: perm.map((i) => q.options_en[i]),
+    options_ar: Array.isArray(q.options_ar) ? perm.map((i) => q.options_ar![i] ?? "") : q.options_ar,
+    correct_answer: nextCorrect
+  };
 }
 
 type ReviewFilter = "all" | "wrong" | "correct" | "unanswered" | "flagged";
@@ -38,12 +75,16 @@ function gradeFor(percent: number) {
 
 export const ExamSimulator: React.FC<ExamSimulatorProps> = ({
   questions,
+  slides = [],
   models = [],
   lectures = [],
   examHistory = [],
   onRecordResult,
   onJumpToSlide,
   languageMode = "smart",
+  arabicOnly = false,
+  pageLayout = "slides",
+  shuffleChoices = false,
   expMode = "always",
   expPromptSeen = true,
   onDismissExpPrompt,
@@ -67,12 +108,81 @@ export const ExamSimulator: React.FC<ExamSimulatorProps> = ({
   timeSpentRef.current = timeSpent;
   const [reviewFilter, setReviewFilter] = useState<ReviewFilter>("all");
   const submittedRef = useRef<boolean>(false);
+  const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
+  const [translationManifest, setTranslationManifest] = useState<SlideTranslationManifest | null>(null);
+  const [slideImageMode, setSlideImageMode] = useState<SlideImageMode>(() => {
+    if (arabicOnly) return "en";
+    const saved = localStorage.getItem("unified_slide_img_mode_v2");
+    if (saved === "ar" || saved === "hover" || saved === "en") return saved;
+    return "hover";
+  });
+  const [paperFilter, setPaperFilter] = useState<BookPaperFilter>(() => {
+    const saved = localStorage.getItem("unified_book_paper");
+    return saved === "warm" || saved === "night" ? saved : "original";
+  });
+  const [flippedSlides, setFlippedSlides] = useState<Record<string, boolean>>({});
   const [tooltipState, setTooltipState] = useState<{
     visible: boolean;
     text: string;
     pos: { x: number; y: number } | null;
   }>({ visible: false, text: "", pos: null });
   const hoverHideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    if (lightboxIndex === null || arabicOnly || translationManifest) return;
+    let cancelled = false;
+    loadTranslationManifest().then((m) => {
+      if (!cancelled && m) setTranslationManifest(m);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [lightboxIndex, arabicOnly, translationManifest]);
+
+  const handleChangeSlideImageMode = useCallback((nextMode: SlideImageMode) => {
+    setSlideImageMode(nextMode);
+    setFlippedSlides({});
+    try {
+      localStorage.setItem("unified_slide_img_mode_v2", nextMode);
+    } catch {}
+  }, []);
+
+  const handleChangePaperFilter = useCallback((nextFilter: BookPaperFilter) => {
+    setPaperFilter(nextFilter);
+    try {
+      localStorage.setItem("unified_book_paper", nextFilter);
+    } catch {}
+  }, []);
+
+  const canTranslateSlide = useCallback(
+    (slide: SlideItem) =>
+      !arabicOnly && isSlideTranslationAvailable(translationManifest, slide.image_url, arabicOnly),
+    [arabicOnly, translationManifest]
+  );
+
+  const isSlideFlipped = useCallback((ref: string) => Boolean(flippedSlides[ref]), [flippedSlides]);
+
+  const handleToggleSlideFlip = useCallback((ref: string) => {
+    setFlippedSlides((prev) => ({ ...prev, [ref]: !prev[ref] }));
+  }, []);
+
+  // فتح الشريحة المرجعية في Lightbox مباشر فوق صفحة نتائج الاختبار دون فقدان النتيجة
+  const handlePreviewSlideInReview = useCallback(
+    (ref: string) => {
+      if (slides.length > 0) {
+        const resolved = resolveSlideReference(ref, "all", slides);
+        if (resolved) {
+          const idx = slides.findIndex((s) => s.ref === resolved.ref);
+          if (idx >= 0) {
+            setLightboxIndex(idx);
+            return;
+          }
+        }
+      }
+      onJumpToSlide?.(ref);
+    },
+    [slides, onJumpToSlide]
+  );
 
   useEffect(() => {
     return () => {
@@ -143,10 +253,12 @@ export const ExamSimulator: React.FC<ExamSimulatorProps> = ({
     const source = customPool && customPool.length > 0 ? customPool : pool;
     if (source.length === 0) return;
     const shuffled = fisherYatesShuffle(source);
-    const selected = customPool && customPool.length > 0
+    const sliced = customPool && customPool.length > 0
       ? shuffled
       : shuffled.slice(0, Math.min(questionCount, source.length));
+    const selected = shuffleChoices ? sliced.map(shuffleQuestionOptions) : sliced;
     submittedRef.current = false;
+    setLightboxIndex(null);
     setExamQuestions(selected);
     setCurrentIdx(0);
     setUserAnswers({});
@@ -665,7 +777,7 @@ export const ExamSimulator: React.FC<ExamSimulatorProps> = ({
             displayNumber={q.orig_q_num}
             userAnswer={userAnswers[q.id]}
             onAnswer={noopAnswer}
-            onJumpToSlide={onJumpToSlide}
+            onJumpToSlide={handlePreviewSlideInReview}
             onShowTranslate={handleShowTranslate}
             onScheduleHideTranslate={handleScheduleHideTranslate}
             languageMode={languageMode}
@@ -677,6 +789,23 @@ export const ExamSimulator: React.FC<ExamSimulatorProps> = ({
           />
         ))}
       </div>
+
+      <LightboxModal
+        isOpen={lightboxIndex !== null}
+        onClose={() => setLightboxIndex(null)}
+        slides={slides}
+        currentIndex={lightboxIndex ?? 0}
+        onNavigate={(idx) => setLightboxIndex(idx)}
+        isBookMode={pageLayout === "book"}
+        paperFilter={paperFilter}
+        onChangePaperFilter={handleChangePaperFilter}
+        arabicOnly={arabicOnly}
+        slideImageMode={arabicOnly ? "en" : slideImageMode}
+        onChangeSlideImageMode={handleChangeSlideImageMode}
+        canTranslateSlide={canTranslateSlide}
+        isSlideFlipped={isSlideFlipped}
+        onToggleSlideFlip={handleToggleSlideFlip}
+      />
 
       <SmartTranslateTooltip
         visible={tooltipState.visible}

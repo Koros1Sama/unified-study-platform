@@ -82,13 +82,9 @@ export const SlidesViewer: React.FC<SlidesViewerProps> = ({
     return "original";
   });
 
-  const [pageJumpInput, setPageJumpInput] = useState("");
   const [spreadExpanded, setSpreadExpanded] = useState<Record<string, boolean>>({});
   const [isNarrowScreen, setIsNarrowScreen] = useState<boolean>(() =>
     typeof window !== "undefined" ? window.innerWidth < 980 : false
-  );
-  const [lastReadRef, setLastReadRef] = useState<string | null>(() =>
-    localStorage.getItem(`unified_last_page_${subjectCode}`)
   );
 
   const [lightboxOpen, setLightboxOpen] = useState(false);
@@ -109,15 +105,10 @@ export const SlidesViewer: React.FC<SlidesViewerProps> = ({
   const [isSlideSearchOpen, setIsSlideSearchOpen] = useState(false);
   const [copiedSlideRef, setCopiedSlideRef] = useState<string | null>(null);
   const [visibleLimit, setVisibleLimit] = useState(INITIAL_VISIBLE_COUNT);
-  const [pendingResumeRef, setPendingResumeRef] = useState<string | null>(null);
   const sentinelRef = useRef<HTMLDivElement>(null);
   const handledTargetRef = useRef<string | null>(null);
   const prevAutoTranslateRef = useRef(autoTranslate);
   const prevAutoExplainRef = useRef(autoExplain);
-
-  useEffect(() => {
-    setLastReadRef(localStorage.getItem(`unified_last_page_${subjectCode}`));
-  }, [subjectCode, seenSlides]);
 
   useEffect(() => {
     if (arabicOnly) return;
@@ -225,6 +216,12 @@ export const SlidesViewer: React.FC<SlidesViewerProps> = ({
     localStorage.setItem("unified_book_paper", next);
   };
 
+  const cyclePaperFilter = () => {
+    const order: BookPaperFilter[] = ["original", "warm", "night"];
+    const next = order[(order.indexOf(paperFilter) + 1) % order.length];
+    handlePaperFilterChange(next);
+  };
+
   const handleImgLoad = (e: React.SyntheticEvent<HTMLImageElement>) => {
     if (pageLayout !== undefined || detectedPortrait) return;
     const img = e.currentTarget;
@@ -235,7 +232,6 @@ export const SlidesViewer: React.FC<SlidesViewerProps> = ({
 
   const rememberLastPage = useCallback(
     (ref: string) => {
-      setLastReadRef(ref);
       try {
         localStorage.setItem(`unified_last_page_${subjectCode}`, ref);
       } catch {
@@ -328,7 +324,7 @@ export const SlidesViewer: React.FC<SlidesViewerProps> = ({
 
   useEffect(() => {
     const activeJumpRef =
-      pendingResumeRef || (targetSlideRef && handledTargetRef.current !== targetSlideRef ? targetSlideRef : null);
+      targetSlideRef && handledTargetRef.current !== targetSlideRef ? targetSlideRef : null;
     if (activeJumpRef) {
       const resolved = resolveSlideReference(activeJumpRef, activeLectureId, slides);
       const targetRef = resolved ? resolved.ref : activeJumpRef;
@@ -374,24 +370,6 @@ export const SlidesViewer: React.FC<SlidesViewerProps> = ({
     jumpDirectlyToSlide(targetRef);
     onTargetSlideHandled?.();
   }, [targetSlideRef, currentSlides, visibleLimit, activeLectureId, slides, rememberLastPage, onTargetSlideHandled]);
-
-  useEffect(() => {
-    if (!pendingResumeRef) return;
-    const idx = currentSlides.findIndex((s) => s.ref === pendingResumeRef);
-    if (idx < 0) {
-      if (slides.length > 0 && !slides.some((s) => s.ref === pendingResumeRef)) {
-        setPendingResumeRef(null);
-      }
-      return;
-    }
-    if (idx >= visibleLimit) {
-      setVisibleLimit(idx + 15);
-      return;
-    }
-    const refToJump = pendingResumeRef;
-    setPendingResumeRef(null);
-    jumpDirectlyToSlide(refToJump);
-  }, [pendingResumeRef, currentSlides, visibleLimit, slides]);
 
   // تحميل تدريجي تلقائي سلس عند اقتراب المستخدم من نهاية القائمة
   useEffect(() => {
@@ -443,33 +421,6 @@ export const SlidesViewer: React.FC<SlidesViewerProps> = ({
         }
       });
     }
-  };
-
-  const handleJumpToPageNumber = (e: React.FormEvent) => {
-    e.preventDefault();
-    const num = parseInt(pageJumpInput.trim(), 10);
-    if (!num || num < 1 || currentSlides.length === 0) return;
-    const clampedIdx = Math.min(currentSlides.length - 1, Math.max(0, num - 1));
-    const target = currentSlides[clampedIdx];
-    if (!target) return;
-    if (clampedIdx >= visibleLimit) {
-      setVisibleLimit(clampedIdx + 12);
-    }
-    rememberLastPage(target.ref);
-    jumpDirectlyToSlide(target.ref);
-    setPageJumpInput("");
-  };
-
-  const handleResumeLastPage = () => {
-    if (!lastReadRef) return;
-    const target = resolveSlideReference(lastReadRef, activeLectureId, slides);
-    if (!target) return;
-    setSlideSearchQuery("");
-    setSeenFilter("all");
-    if (activeLectureId !== "all" && target.lecture_id && target.lecture_id !== activeLectureId) {
-      selectLecture(target.lecture_id);
-    }
-    setPendingResumeRef(target.ref);
   };
 
   const isArShown = (ref: string) => (localAr[ref] !== undefined ? localAr[ref] : autoTranslate);
@@ -710,201 +661,165 @@ export const SlidesViewer: React.FC<SlidesViewerProps> = ({
         </p>
       </div>
 
-      {/* شريط قارئ الكتاب المرجعي المتقدم (يظهر تلقائياً للمناهج ذات الصفحات العمودية) */}
-      {isBookMode && (
-        <div className="book-studio-bar">
-          <div className="book-bar-row">
-            {/* أوضاع تخطيط القراءة الثلاثة */}
-            <div className="fchip-group" role="group" aria-label="وضع عرض الكتاب">
-              <button
-                type="button"
-                className={`fchip ${bookLayout === "split" ? "on" : ""}`}
-                onClick={() => handleBookLayoutChange("split")}
-                title="عرض الصفحة العمودية بجانب الترجمة والشرح (مثالي للحاسوب)"
-              >
-                <Icons.Columns size={13} />
-                <span>الكتاب + الشرح</span>
-              </button>
-              <button
-                type="button"
-                className={`fchip ${bookLayout === "continuous" ? "on" : ""}`}
-                onClick={() => handleBookLayoutChange("continuous")}
-                title="قراءة عمودية متصلة للصفحات بحجم كبير مع طي الشرح أسفلها"
-              >
-                <Icons.SinglePage size={13} />
-                <span>قراءة متصلة</span>
-              </button>
-              <button
-                type="button"
-                className={`fchip desktop-only ${bookLayout === "spread" ? "on" : ""}`}
-                onClick={() => handleBookLayoutChange("spread")}
-                title="عرض صفحتين متقابلتين ككتاب مفتوح على الشاشات العريضة"
-              >
-                <Icons.BookOpen size={13} />
-                <span>صفحتان</span>
-              </button>
-            </div>
-
-            {/* فلتر راحة العين لورق الكتاب */}
-            <div className="fchip-group" role="group" aria-label="راحة العين لورق الكتاب">
-              <button
-                type="button"
-                className={`fchip ${paperFilter === "original" ? "on" : ""}`}
-                onClick={() => handlePaperFilterChange("original")}
-                title="الورق الأبيض الأصلي للكتاب"
-              >
-                <span>أصلي</span>
-              </button>
-              <button
-                type="button"
-                className={`fchip ${paperFilter === "warm" ? "on" : ""}`}
-                onClick={() => handlePaperFilterChange("warm")}
-                title="ورق دافئ مريح للقراءة الطويلة (Sepia)"
-              >
-                <Icons.Sun size={12} />
-                <span>ورق دافئ</span>
-              </button>
-              <button
-                type="button"
-                className={`fchip ${paperFilter === "night" ? "on" : ""}`}
-                onClick={() => handlePaperFilterChange("night")}
-                title="الوضع الليلي الذكي لعكس بياض الورق دون تشويه ألوان المخططات"
-              >
-                <Icons.Moon size={12} />
-                <span>ليلي ذكي</span>
-              </button>
-            </div>
-
-            {/* القفز السريع لرقم الصفحة */}
-            <form className="book-page-jumper" onSubmit={handleJumpToPageNumber}>
-              <label htmlFor="bookPageJump">صفحة</label>
-              <input
-                id="bookPageJump"
-                type="number"
-                min={1}
-                max={Math.max(1, currentSlides.length)}
-                value={pageJumpInput}
-                onChange={(e) => setPageJumpInput(e.target.value)}
-                placeholder={`1-${currentSlides.length}`}
-                aria-label="رقم الصفحة للانتقال السريع"
-              />
-              <span className="book-page-total">/ {currentSlides.length}</span>
-              <button type="submit" className="mini" title="انتقال فوري للصفحة">
-                انتقال
-              </button>
-            </form>
-
-            {lastReadRef && (
-              <button
-                type="button"
-                className="fchip"
-                onClick={handleResumeLastPage}
-                title={`العودة لآخر صفحة قرأتها (${lastReadRef})`}
-              >
-                <Icons.Jump size={12} />
-                <span>متابعة ({lastReadRef})</span>
-              </button>
-            )}
-          </div>
-
-          {/* شريط تقدم قراءة الكتاب */}
-          <div className="book-progress-strip">
-            <span className="book-progress-txt">
-              أنجزت <b>{seenInScopeCount}</b> من {baseSlides.length} صفحة ({readingPct}%)
-            </span>
-            <div className="book-progress-track">
-              <i style={{ width: `${readingPct}%` }} />
-            </div>
+      {/* شريط التقدم الهادئ أسفل الترويسة مباشرة (مفصول عن الأدوات ليبقى مرتباً وخفيفاً) */}
+      {baseSlides.length > 0 && (
+        <div className="slides-progress-bar">
+          <span className="slides-progress-txt">
+            {isBookMode ? "تقدم القراءة:" : "تقدم المراجعة:"} <b>{seenInScopeCount}</b> / {baseSlides.length} ({readingPct}%)
+          </span>
+          <div className="slides-progress-track">
+            <i style={{ width: `${readingPct}%` }} />
           </div>
         </div>
       )}
 
-      {/* شريط تصفية وبحث السلايدات/الصفحات */}
-      <div className="fchips" style={{ marginBottom: "14px", display: "flex", flexWrap: "wrap", alignItems: "center", gap: "8px" }}>
-        <button
-          type="button"
-          className={`fchip ${seenFilter === "all" ? "on" : ""}`}
-          onClick={() => setSeenFilter("all")}
-        >
-          كل {unitsPlural} ({baseSlides.length})
-        </button>
-        <button
-          type="button"
-          className={`fchip ${seenFilter === "unseen" ? "on" : ""}`}
-          onClick={() => setSeenFilter("unseen")}
-        >
-          المتبقية ({baseSlides.length - seenInScopeCount})
-        </button>
-        <button
-          type="button"
-          className={`fchip ${seenFilter === "seen" ? "on" : ""}`}
-          onClick={() => setSeenFilter("seen")}
-        >
-          <Icons.Check size={12} />
-          {isBookMode ? "المقروءة" : "المراجعة"} ({seenInScopeCount})
-        </button>
-
-        <button
-          type="button"
-          className={`fchip ${isSlideSearchOpen || slideSearchQuery ? "on" : ""}`}
-          onClick={() => setIsSlideSearchOpen(!isSlideSearchOpen)}
-          title={`بحث وتصفية في ${unitsPlural}`}
-        >
-          <Icons.Search size={12} />
-          <span>بحث</span>
-          {slideSearchQuery && <span style={{ opacity: 0.85, marginInlineStart: 4 }}>({currentSlides.length})</span>}
-        </button>
-
-        {!arabicOnly && hasAnyTranslatedSlide ? (
-          <div className="tsl-mode-bar" role="group" aria-label="وضع ترجمة السلايدات">
-            <span className="tsl-mode-label">
-              <Icons.Translate size={12} />
-            </span>
-            {(
-              [
-                { id: "hover", label: "ترجمة ذكية", title: "شريط ترجمة أفقي موازٍ للتمرير أو المؤشر (الافتراضي)" },
-                { id: "ar", label: "عربي", title: "عرض جميع السلايدات مترجمة للعربية مع زر عكس فردي للإنجليزية" },
-                { id: "en", label: "إنجليزي", title: "عرض جميع السلايدات بالإنجليزية مع زر ترجمة فردي للعربية" }
-              ] as const
-            ).map((opt) => (
-              <button
-                key={opt.id}
-                type="button"
-                className={`tsl-mode-btn ${slideImageMode === opt.id ? "active" : ""}`}
-                aria-pressed={slideImageMode === opt.id}
-                title={opt.title}
-                onClick={() => handleSlideImageModeChange(opt.id)}
-              >
-                {opt.label}
-              </button>
-            ))}
-          </div>
-        ) : (
-          !arabicOnly &&
-          onToggleAutoTranslate && (
+      {/* شريط التحكم الموحد والهادئ (تصفية + ترجمة + شرح + راحة العين للجميع + تخطيط الكتاب على الحاسوب فقط) */}
+      <div className="slides-unified-bar">
+        {/* المجموعة 1: تصفية الحالة كبسولة مدمجة + بحث */}
+        <div className="slides-bar-group">
+          <div className="tsl-mode-bar" role="group" aria-label={`تصفية ${unitsPlural}`}>
             <button
               type="button"
-              className={`fchip ${autoTranslate ? "on" : ""}`}
-              onClick={onToggleAutoTranslate}
-              title="تبديل إظهار الترجمة العربية"
+              className={`tsl-mode-btn ${seenFilter === "all" ? "active" : ""}`}
+              onClick={() => setSeenFilter("all")}
             >
-              <Icons.Translate size={12} />
-              <span>ترجمة الكل</span>
+              الكل ({baseSlides.length})
             </button>
-          )
-        )}
+            <button
+              type="button"
+              className={`tsl-mode-btn ${seenFilter === "unseen" ? "active" : ""}`}
+              onClick={() => setSeenFilter("unseen")}
+            >
+              المتبقية ({baseSlides.length - seenInScopeCount})
+            </button>
+            <button
+              type="button"
+              className={`tsl-mode-btn ${seenFilter === "seen" ? "active" : ""}`}
+              onClick={() => setSeenFilter("seen")}
+            >
+              {isBookMode ? "المقروءة" : "المراجعة"} ({seenInScopeCount})
+            </button>
+          </div>
 
-        {onToggleAutoExplain && (
           <button
             type="button"
-            className={`fchip ${autoExplain ? "on" : ""}`}
-            onClick={onToggleAutoExplain}
-            title="تبديل إظهار الشروح والوقفات الامتحانية"
+            className={`fchip ${isSlideSearchOpen || slideSearchQuery ? "on" : ""}`}
+            onClick={() => setIsSlideSearchOpen(!isSlideSearchOpen)}
+            title={`بحث وتصفية في ${unitsPlural}`}
           >
-            <Icons.Tip size={12} />
-            <span>شرح الكل</span>
+            <Icons.Search size={12} />
+            <span>بحث</span>
+            {slideSearchQuery && <span style={{ opacity: 0.85, marginInlineStart: 4 }}>({currentSlides.length})</span>}
           </button>
-        )}
+        </div>
+
+        {/* المجموعة 2: الترجمة + الشرح + فلتر راحة العين (لكل السلايدات العرضية والطولية) + تخطيط الحاسوب */}
+        <div className="slides-bar-group">
+          {!arabicOnly && hasAnyTranslatedSlide ? (
+            <div className="tsl-mode-bar" role="group" aria-label="وضع ترجمة السلايدات">
+              <span className="tsl-mode-label">
+                <Icons.Translate size={12} />
+              </span>
+              {(
+                [
+                  { id: "hover", label: "ذكي", title: "شريط ترجمة أفقي موازٍ للتمرير أو المؤشر (الافتراضي)" },
+                  { id: "ar", label: "عربي", title: "عرض جميع السلايدات مترجمة للعربية مع زر عكس فردي للإنجليزية" },
+                  { id: "en", label: "إنجليزي", title: "عرض جميع السلايدات بالإنجليزية مع زر ترجمة فردي للعربية" }
+                ] as const
+              ).map((opt) => (
+                <button
+                  key={opt.id}
+                  type="button"
+                  className={`tsl-mode-btn ${slideImageMode === opt.id ? "active" : ""}`}
+                  aria-pressed={slideImageMode === opt.id}
+                  title={opt.title}
+                  onClick={() => handleSlideImageModeChange(opt.id)}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+          ) : (
+            !arabicOnly &&
+            onToggleAutoTranslate && (
+              <button
+                type="button"
+                className={`fchip ${autoTranslate ? "on" : ""}`}
+                onClick={onToggleAutoTranslate}
+                title="تبديل إظهار الترجمة العربية"
+              >
+                <Icons.Translate size={12} />
+                <span>ترجمة الكل</span>
+              </button>
+            )
+          )}
+
+          {onToggleAutoExplain && (
+            <button
+              type="button"
+              className={`fchip ${autoExplain ? "on" : ""}`}
+              onClick={onToggleAutoExplain}
+              title="تبديل إظهار الشروح والوقفات الامتحانية"
+            >
+              <Icons.Tip size={12} />
+              <span>شرح الكل</span>
+            </button>
+          )}
+
+          {/* فلتر راحة العين للورق (يعمل على كل السلايدات العرضية والطولية) */}
+          {slides.some((s) => Boolean(s.image_url)) && (
+            <button
+              type="button"
+              className={`fchip ${paperFilter !== "original" ? "on" : ""}`}
+              onClick={cyclePaperFilter}
+              title="تبديل فلتر راحة العين للصور (أصلي ← ورق دافئ ← ليلي ذكي)"
+            >
+              {paperFilter === "warm" ? (
+                <Icons.Sun size={12} />
+              ) : paperFilter === "night" ? (
+                <Icons.Moon size={12} />
+              ) : (
+                <Icons.Contrast size={12} />
+              )}
+              <span>
+                {paperFilter === "warm" ? "ورق دافئ" : paperFilter === "night" ? "ليلي ذكي" : "ورق أصلي"}
+              </span>
+            </button>
+          )}
+
+          {/* تخطيط قارئ الكتاب: يظهر على الحاسوب فقط (على الجوال لا فرق بين الأوضاع) */}
+          {isBookMode && !isNarrowScreen && (
+            <div className="tsl-mode-bar desktop-only" role="group" aria-label="وضع عرض الكتاب">
+              <button
+                type="button"
+                className={`tsl-mode-btn ${bookLayout === "split" ? "active" : ""}`}
+                onClick={() => handleBookLayoutChange("split")}
+                title="عرض الصفحة العمودية بجانب الشرح"
+              >
+                <Icons.Columns size={12} />
+                <span>جنب الشرح</span>
+              </button>
+              <button
+                type="button"
+                className={`tsl-mode-btn ${bookLayout === "continuous" ? "active" : ""}`}
+                onClick={() => handleBookLayoutChange("continuous")}
+                title="قراءة عمودية متصلة بحجم كبير"
+              >
+                <Icons.SinglePage size={12} />
+                <span>متصل</span>
+              </button>
+              <button
+                type="button"
+                className={`tsl-mode-btn ${bookLayout === "spread" ? "active" : ""}`}
+                onClick={() => handleBookLayoutChange("spread")}
+                title="عرض صفحتين متقابلتين ككتاب مفتوح"
+              >
+                <Icons.BookOpen size={12} />
+                <span>صفحتان</span>
+              </button>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* شريط البحث الحي */}
@@ -1154,7 +1069,7 @@ export const SlidesViewer: React.FC<SlidesViewerProps> = ({
                         smartPaused={smartBandPaused}
                         onResumeSmart={() => setSmartBandPaused(false)}
                         onToggleFlip={() => toggleSlideImageFlip(slide.ref)}
-                        imgClassName={isBookMode ? paperFilterClass : undefined}
+                        imgClassName={paperFilterClass || undefined}
                         onLoad={handleImgLoad}
                         onErrorFallback={(e) => {
                           (e.currentTarget as HTMLImageElement).style.display = "none";

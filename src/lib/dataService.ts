@@ -253,7 +253,29 @@ export interface FullProgressBackup {
   backup_version: number;
   exported_at: string;
   subjects: Record<string, UserStudyProgress>;
+  seen_slides?: Record<string, string[]>;
+  preferences?: Record<string, string>;
 }
+
+const BACKUP_PREF_KEYS = [
+  "unified_theme",
+  "unified_mode",
+  "unified_font_scale",
+  "unified_lang",
+  "unified_auto_ar",
+  "unified_auto_ex",
+  "unified_shuffle_choices",
+  "unified_shuffle_questions",
+  "unified_sync_twins",
+  "unified_show_bookmarks",
+  "unified_bm_labels",
+  "unified_exp_mode",
+  "unified_slide_img_mode_v2",
+  "unified_book_layout",
+  "unified_book_paper"
+] as const;
+
+const BACKUP_PREF_KEY_SET = new Set<string>(BACKUP_PREF_KEYS);
 
 type ProgressListField =
   | "memorized_tables"
@@ -839,17 +861,46 @@ export const DataService = {
     for (const row of all) {
       if (row.subject_code) subjects[row.subject_code] = row;
     }
+
+    const seenSlides: Record<string, string[]> = {};
+    const preferences: Record<string, string> = {};
+    try {
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (!key) continue;
+        if (key.startsWith("unified_seen_")) {
+          const code = key.slice("unified_seen_".length).trim();
+          if (!code) continue;
+          const parsed = safeJsonParse<unknown>(localStorage.getItem(key), []);
+          const clean = sanitizeStringList(parsed);
+          if (clean.length > 0) seenSlides[code] = clean;
+        } else if (BACKUP_PREF_KEY_SET.has(key)) {
+          const val = localStorage.getItem(key);
+          if (typeof val === "string") preferences[key] = val;
+        }
+      }
+    } catch {
+      // تجاهل أخطاء التخزين في أوضاع التصفح المقيدة
+    }
+
     return {
-      backup_version: 2,
+      backup_version: 3,
       exported_at: new Date().toISOString(),
-      subjects
+      subjects,
+      seen_slides: seenSlides,
+      preferences
     };
   },
 
   async importProgressBackup(
     raw: unknown,
     fallbackSubjectCode: string
-  ): Promise<{ importedSubjects: string[]; activeProgress: UserStudyProgress }> {
+  ): Promise<{
+    importedSubjects: string[];
+    activeProgress: UserStudyProgress;
+    restoredSeenCount: number;
+    restoredPreferences: Record<string, string>;
+  }> {
     if (!isPlainObject(raw)) {
       throw new Error("ملف النسخة الاحتياطية غير صالح.");
     }
@@ -877,17 +928,46 @@ export const DataService = {
       records.push(normalizeImportedProgress(obj, code));
     }
 
-    if (records.length === 0) {
+    let restoredSeenCount = 0;
+    const restoredPreferences: Record<string, string> = {};
+
+    if (isPlainObject(obj.seen_slides)) {
+      for (const [code, list] of Object.entries(obj.seen_slides)) {
+        const cleanCode = code.trim();
+        if (!cleanCode) continue;
+        const cleanRefs = sanitizeStringList(list);
+        try {
+          localStorage.setItem(`unified_seen_${cleanCode}`, JSON.stringify(cleanRefs));
+          restoredSeenCount += cleanRefs.length;
+        } catch {}
+      }
+    }
+
+    if (isPlainObject(obj.preferences)) {
+      for (const [key, val] of Object.entries(obj.preferences)) {
+        if (!BACKUP_PREF_KEY_SET.has(key) || typeof val !== "string") continue;
+        try {
+          localStorage.setItem(key, val);
+          restoredPreferences[key] = val;
+        } catch {}
+      }
+    }
+
+    if (records.length === 0 && restoredSeenCount === 0 && Object.keys(restoredPreferences).length === 0) {
       throw new Error("لم يتم العثور على بيانات تقدم صالحة داخل الملف.");
     }
 
-    await db.transaction("rw", [db.user_study_progress], async () => {
-      await db.user_study_progress.bulkPut(records);
-    });
+    if (records.length > 0) {
+      await db.transaction("rw", [db.user_study_progress], async () => {
+        await db.user_study_progress.bulkPut(records);
+      });
+    }
     const activeProgress = await this.getUserProgress(fallbackSubjectCode);
     return {
       importedSubjects: records.map((r) => r.subject_code),
-      activeProgress
+      activeProgress,
+      restoredSeenCount,
+      restoredPreferences
     };
   }
 };

@@ -403,12 +403,12 @@ export const LightboxModal: React.FC<LightboxModalProps> = ({
             </button>
           )}
 
-          {isBookMode && onChangePaperFilter && (
+          {onChangePaperFilter && (
             <button
               type="button"
               className={`btn btn-sm lb-ctrl-btn ${paperFilter !== "original" ? "btn-primary" : ""}`}
               onClick={cyclePaperFilter}
-              title="تبديل نمط ورق الكتاب (أصلي / دافئ / ليلي ذكي)"
+              title="تبديل فلتر راحة العين للورق (أصلي / دافئ / ليلي ذكي)"
             >
               <Icons.Contrast size={14} />
               <span>{paperLabel}</span>
