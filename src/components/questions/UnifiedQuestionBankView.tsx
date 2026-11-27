@@ -55,6 +55,7 @@ interface UnifiedQuestionBankViewProps {
   expPromptSeen?: boolean;
   onDismissExpPrompt?: () => void;
   onOpenExpSettings?: () => void;
+  onReportQuestion?: (question: UnifiedQuestion) => void;
   shuffleChoices?: boolean;
   shuffleQuestions?: boolean;
   choicesSeed?: number;
@@ -143,6 +144,7 @@ export const UnifiedQuestionBankView: React.FC<UnifiedQuestionBankViewProps> = (
   expPromptSeen = true,
   onDismissExpPrompt,
   onOpenExpSettings,
+  onReportQuestion,
   shuffleChoices = false,
   shuffleQuestions = false,
   choicesSeed = 1,
@@ -1456,6 +1458,7 @@ export const UnifiedQuestionBankView: React.FC<UnifiedQuestionBankViewProps> = (
                 expPromptSeen={expPromptSeen}
                 onDismissExpPrompt={onDismissExpPrompt}
                 onOpenExpSettings={onOpenExpSettings}
+                onReportQuestion={onReportQuestion ? () => onReportQuestion(q) : undefined}
               />
             );
           })}

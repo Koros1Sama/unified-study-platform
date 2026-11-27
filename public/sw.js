@@ -5,8 +5,8 @@
 
 const RUNTIME_PREFIX = "usp-runtime-";
 const OFFLINE_PREFIX = "usp-offline-";
-const CORE = "usp-core-v32";
-const RUNTIME = "usp-runtime-v32";
+const CORE = "usp-core-v33";
+const RUNTIME = "usp-runtime-v33";
 
 const CORE_ASSETS = [
   "./",
@@ -116,6 +116,9 @@ self.addEventListener("fetch", (e) => {
 
   // عدم اعتراض الطلبات الخارجية عدا سلايدات Cloudflare R2 المعتمدة
   if (url.origin !== self.location.origin && !isR2Slide) return;
+
+  // عدم تخزين طلبات واجهة الـ API أبداً (البلاغات وطلبات المواد ولوحة المشرف)
+  if (url.origin === self.location.origin && url.pathname.startsWith("/api/")) return;
 
   // 0. طلبات Cloudflare R2 (السلايدات الأصلية والمترجمة + manifest الترجمة)
   if (isR2Slide) {

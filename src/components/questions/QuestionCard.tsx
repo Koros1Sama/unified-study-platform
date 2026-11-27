@@ -34,6 +34,7 @@ interface QuestionCardProps {
   expPromptSeen?: boolean;
   onDismissExpPrompt?: () => void;
   onOpenExpSettings?: () => void;
+  onReportQuestion?: (question: UnifiedQuestion) => void;
 }
 
 export function parseDistractorItem(item: DistractorDetail | string | undefined): DistractorDetail {
@@ -85,7 +86,8 @@ const QuestionCardComponent: React.FC<QuestionCardProps> = ({
   isRetestQuestion = false,
   expPromptSeen = true,
   onDismissExpPrompt,
-  onOpenExpSettings
+  onOpenExpSettings,
+  onReportQuestion
 }) => {
   const isEssay = question.type === "essay";
   const isEssayReviewed = isEssay && (userAnswer?.selected_answer ?? -1) >= 0;
@@ -299,18 +301,36 @@ const QuestionCardComponent: React.FC<QuestionCardProps> = ({
         )}
 
 
-        {question.slide_ref && onJumpToSlide && (
-          <button
-            type="button"
-            className="ref-chip q-ref"
-            onClick={() => onJumpToSlide(question.slide_ref!)}
-            title={`الانتقال إلى شريحة ${question.slide_ref}`}
-            style={{ marginInlineStart: "auto" }}
-          >
-            <Icons.Slides size={12} />
-            <span>{question.slide_ref}</span>
-          </button>
-        )}
+        {(question.slide_ref && onJumpToSlide) || onReportQuestion ? (
+          <div className="q-head-end">
+            {question.slide_ref && onJumpToSlide && (
+              <button
+                type="button"
+                className="ref-chip q-ref"
+                onClick={() => onJumpToSlide(question.slide_ref!)}
+                title={`الانتقال إلى شريحة ${question.slide_ref}`}
+              >
+                <Icons.Slides size={12} />
+                <span>{question.slide_ref}</span>
+              </button>
+            )}
+            {onReportQuestion && (
+              <button
+                type="button"
+                className="q-report-btn"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onReportQuestion(question);
+                }}
+                title="الإبلاغ عن خطأ في هذا السؤال أو إجابته أو ترجمته"
+                aria-label="الإبلاغ عن خطأ في هذا السؤال"
+              >
+                <Icons.Flag size={11} />
+                <span>إبلاغ</span>
+              </button>
+            )}
+          </div>
+        ) : null}
       </div>
 
       <div className="q-text" style={{ margin: "10px 0 14px" }}>

@@ -34,6 +34,7 @@ interface SlidesViewerProps {
   onToggleSeenSlide?: (slideRef: string) => void;
   arabicOnly?: boolean;
   pageLayout?: "slides" | "book";
+  onReportSlide?: (slide: SlideItem) => void;
 }
 
 const INITIAL_VISIBLE_COUNT = 30;
@@ -54,7 +55,8 @@ export const SlidesViewer: React.FC<SlidesViewerProps> = ({
   seenSlides = new Set(),
   onToggleSeenSlide,
   arabicOnly = false,
-  pageLayout
+  pageLayout,
+  onReportSlide
 }) => {
   const [internalLectureId, setInternalLectureId] = useState<string>(() => lectures[0]?.id || "L1");
   const activeLectureId = controlledLectureId ?? internalLectureId;
@@ -627,6 +629,20 @@ export const SlidesViewer: React.FC<SlidesViewerProps> = ({
             <Icons.Share size={12} />
             <span>{copiedSlideRef === slide.ref ? "تم النسخ" : "رابط"}</span>
           </button>
+          {onReportSlide && (
+            <button
+              type="button"
+              className="mini report-btn"
+              onClick={(e) => {
+                e.stopPropagation();
+                onReportSlide(slide);
+              }}
+              title="الإبلاغ عن خطأ في الترجمة أو الشرح أو الصورة"
+            >
+              <Icons.Flag size={11} />
+              <span>إبلاغ</span>
+            </button>
+          )}
         </div>
       </div>
     );
@@ -954,6 +970,20 @@ export const SlidesViewer: React.FC<SlidesViewerProps> = ({
                               }}
                             >
                               <Icons.Check size={12} />
+                            </button>
+                          )}
+                          {onReportSlide && (
+                            <button
+                              type="button"
+                              className="mini report-btn"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                onReportSlide(sl);
+                              }}
+                              title="الإبلاغ عن خطأ في هذه الصفحة"
+                              aria-label="الإبلاغ عن خطأ في هذه الصفحة"
+                            >
+                              <Icons.Flag size={11} />
                             </button>
                           )}
                         </div>

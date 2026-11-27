@@ -13,7 +13,7 @@ interface PortalModalProps {
   subjects: SubjectMeta[];
   currentSubjectCode: string;
   onSelectSubject: (code: string) => void;
-  onAddSubject: (subject: SubjectMeta) => void;
+  onRequestSubject?: () => void;
 }
 
 export const PortalModal: React.FC<PortalModalProps> = ({
@@ -22,48 +22,13 @@ export const PortalModal: React.FC<PortalModalProps> = ({
   subjects,
   currentSubjectCode,
   onSelectSubject,
-  onAddSubject
+  onRequestSubject
 }) => {
   const [selectedTerm, setSelectedTerm] = useState<number | "all">("all");
-  const [showAddForm, setShowAddForm] = useState(false);
-
-  // New subject form state
-  const [newCode, setNewCode] = useState("");
-  const [newNameAr, setNewNameAr] = useState("");
-  const [newNameEn, setNewNameEn] = useState("");
-  const [newProfessor, setNewProfessor] = useState("");
-  const [newTerm, setNewTerm] = useState<number>(2);
-  const [newColor, setNewColor] = useState("#f5b13d");
-  const [newLayout, setNewLayout] = useState<"slides" | "book">("slides");
 
   if (!isOpen) return null;
 
   const filtered = subjects.filter((s) => (selectedTerm === "all" ? true : s.term === selectedTerm));
-
-  const handleAddNew = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newCode || !newNameAr) return;
-
-    const subject: SubjectMeta = {
-      code: newCode.trim().toLowerCase(),
-      name_ar: newNameAr.trim(),
-      name_en: newNameEn.trim() || newCode.toUpperCase(),
-      term: newTerm,
-      professor_name: newProfessor.trim() || "غير محدد",
-      accent_color: newColor,
-      page_layout: newLayout,
-      is_active: true
-    };
-
-    onAddSubject(subject);
-    setShowAddForm(false);
-    setNewCode("");
-    setNewNameAr("");
-    setNewNameEn("");
-    setNewProfessor("");
-    setNewColor("#f5b13d");
-    setNewLayout("slides");
-  };
 
   return (
     <div
@@ -136,124 +101,21 @@ export const PortalModal: React.FC<PortalModalProps> = ({
           >
             الفصل الثاني
           </button>
-          <button
-            type="button"
-            className="btn btn-sm"
-            onClick={() => setShowAddForm(!showAddForm)}
-            style={{ marginInlineStart: "auto" }}
-          >
-            {showAddForm ? "إلغاء الإضافة" : "+ إضافة مقرر جديد"}
-          </button>
+          {onRequestSubject && (
+            <button
+              type="button"
+              className="btn btn-sm"
+              onClick={() => {
+                onClose();
+                onRequestSubject();
+              }}
+              style={{ marginInlineStart: "auto", display: "inline-flex", alignItems: "center", gap: "6px" }}
+            >
+              <Icons.Plus size={14} />
+              <span>طلب إضافة مادة / محتوى</span>
+            </button>
+          )}
         </div>
-
-        {/* نموذج إضافة مادة جديدة */}
-        {showAddForm && (
-          <form
-            onSubmit={handleAddNew}
-            style={{
-              background: "var(--sf2)",
-              border: "1px solid var(--ln)",
-              borderRadius: "var(--r-m)",
-              padding: "16px",
-              marginBottom: "20px"
-            }}
-          >
-            <h3 style={{ fontSize: "1rem", fontWeight: 700, marginBottom: "12px" }}>إضافة مقرر دراسي جديد أولاً بأول</h3>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: "12px", marginBottom: "12px" }}>
-              <div>
-                <label style={{ display: "block", fontSize: "0.8rem", color: "var(--ink-m)", marginBottom: "4px" }}>
-                  كود المادة (إنجليزي)
-                </label>
-                <input
-                  type="text"
-                  placeholder="e.g. os, db, web"
-                  value={newCode}
-                  onChange={(e) => setNewCode(e.target.value)}
-                  style={{ width: "100%", padding: "8px", borderRadius: "var(--r-s)", border: "1px solid var(--ln)", background: "var(--sf)", color: "var(--ink)" }}
-                  required
-                />
-              </div>
-              <div>
-                <label style={{ display: "block", fontSize: "0.8rem", color: "var(--ink-m)", marginBottom: "4px" }}>
-                  اسم المادة بالعربية
-                </label>
-                <input
-                  type="text"
-                  placeholder="e.g. نظم التشغيل"
-                  value={newNameAr}
-                  onChange={(e) => setNewNameAr(e.target.value)}
-                  style={{ width: "100%", padding: "8px", borderRadius: "var(--r-s)", border: "1px solid var(--ln)", background: "var(--sf)", color: "var(--ink)" }}
-                  required
-                />
-              </div>
-              <div>
-                <label style={{ display: "block", fontSize: "0.8rem", color: "var(--ink-m)", marginBottom: "4px" }}>
-                  اسم المادة بالإنجليزية
-                </label>
-                <input
-                  type="text"
-                  placeholder="e.g. Operating Systems"
-                  value={newNameEn}
-                  onChange={(e) => setNewNameEn(e.target.value)}
-                  style={{ width: "100%", padding: "8px", borderRadius: "var(--r-s)", border: "1px solid var(--ln)", background: "var(--sf)", color: "var(--ink)" }}
-                />
-              </div>
-              <div>
-                <label style={{ display: "block", fontSize: "0.8rem", color: "var(--ink-m)", marginBottom: "4px" }}>
-                  اسم أستاذ المقرر
-                </label>
-                <input
-                  type="text"
-                  placeholder="e.g. د. فلان الفلاني"
-                  value={newProfessor}
-                  onChange={(e) => setNewProfessor(e.target.value)}
-                  style={{ width: "100%", padding: "8px", borderRadius: "var(--r-s)", border: "1px solid var(--ln)", background: "var(--sf)", color: "var(--ink)" }}
-                />
-              </div>
-              <div>
-                <label style={{ display: "block", fontSize: "0.8rem", color: "var(--ink-m)", marginBottom: "4px" }}>
-                  الفصل الدراسي
-                </label>
-                <select
-                  value={newTerm}
-                  onChange={(e) => setNewTerm(Number(e.target.value))}
-                  style={{ width: "100%", padding: "8px", borderRadius: "var(--r-s)", border: "1px solid var(--ln)", background: "var(--sf)", color: "var(--ink)" }}
-                >
-                  <option value={1}>الفصل الأول</option>
-                  <option value={2}>الفصل الثاني</option>
-                </select>
-              </div>
-              <div>
-                <label style={{ display: "block", fontSize: "0.8rem", color: "var(--ink-m)", marginBottom: "4px" }}>
-                  نمط صفحات المرجع
-                </label>
-                <select
-                  value={newLayout}
-                  onChange={(e) => setNewLayout(e.target.value === "book" ? "book" : "slides")}
-                  style={{ width: "100%", padding: "8px", borderRadius: "var(--r-s)", border: "1px solid var(--ln)", background: "var(--sf)", color: "var(--ink)" }}
-                >
-                  <option value="slides">سلايدات أفقية (16:9)</option>
-                  <option value="book">كتاب مرجعي عمودي (A4 / صفحات طولية)</option>
-                </select>
-              </div>
-              <div>
-                <label style={{ display: "block", fontSize: "0.8rem", color: "var(--ink-m)", marginBottom: "4px" }}>
-                  اللون المميز للمادة
-                </label>
-                <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                  <input
-                    type="color"
-                    value={newColor}
-                    onChange={(e) => setNewColor(e.target.value)}
-                    style={{ width: "42px", height: "34px", padding: "2px", borderRadius: "var(--r-s)", border: "1px solid var(--ln)", background: "var(--sf)", cursor: "pointer" }}
-                  />
-                  <span style={{ fontSize: "0.78rem", fontFamily: "var(--fm)", color: "var(--ink-m)" }}>{newColor}</span>
-                </div>
-              </div>
-            </div>
-            <button type="submit" className="btn btn-primary btn-sm">حفظ وإدراج المقرر</button>
-          </form>
-        )}
 
         {/* قائمة بطاقات المواد */}
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(230px, 1fr))", gap: "14px" }}>

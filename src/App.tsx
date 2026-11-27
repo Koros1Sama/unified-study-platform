@@ -27,6 +27,9 @@ import { BookmarkLabelModal } from "./components/common/BookmarkLabelModal";
 import { GlobalSearchModal } from "./components/common/GlobalSearchModal";
 import { ShortcutsCheatsheetModal } from "./components/common/ShortcutsCheatsheetModal";
 import { OfflineManagerModal } from "./components/common/OfflineManagerModal";
+import { ReportIssueModal } from "./components/common/ReportIssueModal";
+import { RequestSubjectModal } from "./components/common/RequestSubjectModal";
+import type { ReportContext } from "./lib/submissionsService";
 import { SlidesViewer } from "./components/slides/SlidesViewer";
 import { TheoreticalSummaryView } from "./components/summary/TheoreticalSummaryView";
 import { SummaryOfSummaryView } from "./components/emergency/SummaryOfSummaryView";
@@ -60,6 +63,9 @@ const PatternsLabView = lazy(() =>
 );
 const LabAppendixView = lazy(() =>
   import("./components/lab/LabAppendixView").then((m) => ({ default: m.LabAppendixView }))
+);
+const AdminReviewModal = lazy(() =>
+  import("./components/common/AdminReviewModal").then((m) => ({ default: m.AdminReviewModal }))
 );
 
 export const App: React.FC = () => {
@@ -156,6 +162,12 @@ export const App: React.FC = () => {
   const [isGlobalSearchOpen, setIsGlobalSearchOpen] = useState<boolean>(false);
   const [isShortcutsOpen, setIsShortcutsOpen] = useState<boolean>(false);
   const [isOfflineModalOpen, setIsOfflineModalOpen] = useState<boolean>(false);
+  const [reportContext, setReportContext] = useState<ReportContext | null>(null);
+  const [isRequestSubjectOpen, setIsRequestSubjectOpen] = useState<boolean>(false);
+  const [isAdminReviewOpen, setIsAdminReviewOpen] = useState<boolean>(() => {
+    return typeof window !== "undefined" && window.location.hash.toLowerCase() === "#admin";
+  });
+  const adminTapRef = useRef<{ count: number; lastAt: number }>({ count: 0, lastAt: 0 });
 
   // مقياس وحجم الخط العام
   const [fontScale, setFontScale] = useState<number>(() => {
@@ -585,6 +597,10 @@ export const App: React.FC = () => {
 
     const handleHashChange = () => {
       const currentHash = window.location.hash;
+      if (currentHash.toLowerCase() === "#admin") {
+        setIsAdminReviewOpen(true);
+        return;
+      }
       const now = Date.now();
       if (
         lastHandledHashRef.current.hash === currentHash &&
@@ -864,7 +880,17 @@ export const App: React.FC = () => {
         setIsOfflineModalOpen(false);
         setIsPortalOpen(false);
         setIsBmModalOpen(false);
+        setReportContext(null);
+        setIsRequestSubjectOpen(false);
+        setIsAdminReviewOpen(false);
         if (showGuideModal) closeGuideModal();
+        return;
+      }
+
+      // اختصار سري للمشرف: Ctrl+Shift+A لفتح لوحة المراجعة والموافقة
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === "a") {
+        e.preventDefault();
+        setIsAdminReviewOpen((prev) => !prev);
         return;
       }
 
@@ -875,6 +901,9 @@ export const App: React.FC = () => {
         isOfflineModalOpen ||
         isPortalOpen ||
         isBmModalOpen ||
+        Boolean(reportContext) ||
+        isRequestSubjectOpen ||
+        isAdminReviewOpen ||
         showGuideModal ||
         Boolean(document.querySelector('[role="dialog"], #lightboxModal, #lb.open, #setPanel'));
       if (hasOpenOverlay) return;
@@ -949,7 +978,7 @@ export const App: React.FC = () => {
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [zenLevel, isGlobalSearchOpen, isShortcutsOpen, isOfflineModalOpen, isPortalOpen, isBmModalOpen, showGuideModal, closeGuideModal]);
+  }, [zenLevel, isGlobalSearchOpen, isShortcutsOpen, isOfflineModalOpen, isPortalOpen, isBmModalOpen, reportContext, isRequestSubjectOpen, isAdminReviewOpen, showGuideModal, closeGuideModal]);
 
   // القفز إلى استوديو تفاعلي من الملخص
   const handleJumpToInteractive = useCallback((studioId: string, tabId?: string) => {
@@ -1118,13 +1147,43 @@ export const App: React.FC = () => {
     [currentSubjectCode]
   );
 
-  // إضافة مادة جديدة وحفظها محلياً في IndexedDB
-  const handleAddSubject = useCallback(async (subject: SubjectMeta) => {
-    await DataService.saveCustomSubject(subject);
-    setSubjects((prev) => [subject, ...prev.filter((s) => s.code !== subject.code)]);
-    setCurrentSubjectCode(subject.code);
-    showToast(`تمت إضافة وحفظ مقرر «${subject.name_ar}».`);
-  }, [showToast]);
+  // القفز لموضع البلاغ من لوحة المشرف السرية
+  const handleJumpToReportedItem = useCallback(
+    (subjectCode: string, viewType: string, itemRef?: string) => {
+      if (subjectCode && subjectCode !== currentSubjectCode) {
+        setCurrentSubjectCode(subjectCode);
+      }
+      if (viewType === "slides" && itemRef) {
+        setActiveLectureId("all");
+        setActiveView("slides");
+        setTargetSlideRef(itemRef);
+        jumpDirectlyToSlide(itemRef);
+      } else if (viewType === "questions" && itemRef) {
+        setSelectedModelId("all");
+        setFocusQuestionId(itemRef);
+        setActiveView("questions");
+      } else if (
+        ["slides", "summary", "emergency", "tables", "questions", "explorer", "exam", "definitions", "glossary", "patterns", "lab", "interactive"].includes(viewType)
+      ) {
+        setActiveView(viewType as ActiveView);
+      }
+    },
+    [currentSubjectCode]
+  );
+
+  // فتح لوحة المشرف السرية عبر 5 نقرات متتالية على اسم المطوّر في التذييل
+  const handleOwnerCreditTap = useCallback(() => {
+    const now = Date.now();
+    if (now - adminTapRef.current.lastAt > 2000) {
+      adminTapRef.current = { count: 1, lastAt: now };
+    } else {
+      adminTapRef.current = { count: adminTapRef.current.count + 1, lastAt: now };
+    }
+    if (adminTapRef.current.count >= 5) {
+      adminTapRef.current = { count: 0, lastAt: 0 };
+      setIsAdminReviewOpen(true);
+    }
+  }, []);
 
   const currentSubjectMeta =
     bundle?.meta ||
@@ -1345,6 +1404,16 @@ export const App: React.FC = () => {
                     seenSlides={seenSlides}
                     onToggleSeenSlide={handleToggleSeenSlide}
                     arabicOnly={isArabicOnly}
+                    onReportSlide={(slide) =>
+                      setReportContext({
+                        subjectCode: currentSubjectMeta.code,
+                        subjectName: currentSubjectMeta.name_ar,
+                        viewType: "slides",
+                        itemRef: slide.ref,
+                        itemLabel: slide.title || slide.ref,
+                        defaultIssueType: "translation"
+                      })
+                    }
                   />
                 )}
 
@@ -1410,6 +1479,16 @@ export const App: React.FC = () => {
                     expPromptSeen={expPromptSeen}
                     onDismissExpPrompt={handleDismissExpPrompt}
                     onOpenExpSettings={handleOpenExpSettings}
+                    onReportQuestion={(q) =>
+                      setReportContext({
+                        subjectCode: currentSubjectMeta.code,
+                        subjectName: currentSubjectMeta.name_ar,
+                        viewType: "questions",
+                        itemRef: q.id,
+                        itemLabel: `س${q.orig_q_num || ""}${q.slide_ref ? ` · ${q.slide_ref}` : ""}`,
+                        defaultIssueType: "answer"
+                      })
+                    }
                     shuffleChoices={shuffleChoices}
                     shuffleQuestions={shuffleQuestions}
                     choicesSeed={choicesSeed}
@@ -1512,12 +1591,41 @@ export const App: React.FC = () => {
             </ErrorBoundary>
           )}
 
-          {/* التذييل المعتمد (.footer) */}
+          {/* التذييل المعتمد (.footer) مع أزرار الإبلاغ وطلب إضافة مادة بشكل هادئ ومرتب */}
           <footer className="footer">
             <div className="footer-credit">
               <span>Study Viewer · المنصة الأكاديمية الموحدة</span>
               <span>—</span>
-              <span>إعداد وتطوير: <b>عبدالرحمن المخلافي</b></span>
+              <span onClick={handleOwnerCreditTap} style={{ cursor: "default" }}>
+                إعداد وتطوير: <b>عبدالرحمن المخلافي</b>
+              </span>
+            </div>
+            <div className="footer-actions">
+              <button
+                type="button"
+                className="footer-action-btn is-report"
+                onClick={() =>
+                  setReportContext({
+                    subjectCode: currentSubjectMeta.code,
+                    subjectName: currentSubjectMeta.name_ar,
+                    viewType: activeView,
+                    itemRef: activeLectureId !== "all" ? activeLectureId : "",
+                    itemLabel: "",
+                    defaultIssueType: activeView === "questions" ? "answer" : "explanation"
+                  })
+                }
+              >
+                <Icons.Flag size={13} />
+                <span>الإبلاغ عن خطأ في الصفحة</span>
+              </button>
+              <button
+                type="button"
+                className="footer-action-btn"
+                onClick={() => setIsRequestSubjectOpen(true)}
+              >
+                <Icons.Plus size={13} />
+                <span>طلب إضافة مادة أو محتوى (تيليجرام)</span>
+              </button>
             </div>
           </footer>
         </main>
@@ -1623,8 +1731,43 @@ export const App: React.FC = () => {
         subjects={subjects}
         currentSubjectCode={currentSubjectCode}
         onSelectSubject={(code) => setCurrentSubjectCode(code)}
-        onAddSubject={handleAddSubject}
+        onRequestSubject={() => setIsRequestSubjectOpen(true)}
       />
+
+      {/* نافذة الإبلاغ عن خطأ في الترجمة أو الشرح أو الأسئلة */}
+      <ReportIssueModal
+        isOpen={Boolean(reportContext)}
+        onClose={() => setReportContext(null)}
+        context={reportContext}
+        onSuccessToast={showToast}
+      />
+
+      {/* نافذة طلب إضافة مادة جديدة أو محتوى عبر رابط تيليجرام */}
+      <RequestSubjectModal
+        isOpen={isRequestSubjectOpen}
+        onClose={() => setIsRequestSubjectOpen(false)}
+        subjects={subjects}
+        currentSubjectCode={currentSubjectCode}
+        onSuccessToast={showToast}
+      />
+
+      {/* لوحة المراجعة والموافقة السرية للمشرف (تُحمّل عند الطلب فقط) */}
+      {isAdminReviewOpen && (
+        <Suspense fallback={null}>
+          <AdminReviewModal
+            isOpen={isAdminReviewOpen}
+            onClose={() => {
+              setIsAdminReviewOpen(false);
+              if (window.location.hash.toLowerCase() === "#admin") {
+                try {
+                  history.replaceState(null, "", window.location.pathname);
+                } catch {}
+              }
+            }}
+            onJumpToReportedItem={handleJumpToReportedItem}
+          />
+        </Suspense>
+      )}
 
       {/* بانر تثبيت تطبيق المنصة (PWA) عند أول فتح */}
       <PwaInstallBanner
