@@ -84,3 +84,6 @@ CREATE POLICY "Allow anonymous subject request insert"
 
 -- لا توجد سياسات SELECT أو UPDATE للعامة (anon/authenticated)؛
 -- القراءة والموافقة تتم حصراً عبر Vercel Serverless API (/api/admin) باستخدام SUPABASE_SERVICE_ROLE_KEY.
+GRANT USAGE ON SCHEMA public TO anon, authenticated, service_role;
+GRANT INSERT ON public.content_reports, public.subject_requests TO anon, authenticated;
+GRANT ALL ON public.content_reports, public.subject_requests TO service_role;
